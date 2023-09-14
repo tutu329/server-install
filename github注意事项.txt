@@ -39,26 +39,29 @@ git侧
 	c）再将HEAD指向main分支：			git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
 	d）最后删除远程库中旧的master分支即可：	git push origin --delete master
 
+token方式还是会出错，还是要配置SSH
+1、ssh-keygen -t rsa -b 4096 -C "jack.seaver@163.com"
+2、~/.ssh/下会有2个文件：id_rsa和id_rsa.pub
+3、github网页登录，settings->SSH and GPG keys->New SSH key，输入Title（随意）和Key（id_rsa.pub中所有文字），Add SSH key
+4、终端输入ssh -T git@github.com，如果返回You've successfully authenticated, but GitHub does not provide shell access，表示SSH设置成功。
+5、.git/config改为以下内容（即可用ssh进行push等操作，而不需要任何密码或token）
+    a)命令
+        git remote set-url origin git@github.com:tutu329/life-agent
+    b）改.git/config
+        [remote "origin"]
+                url = git@github.com:tutu329/life-agent
+
 【=========================精简总结=========================】
 一、开了vpn且github网页能上的情况下，设置git的代理
 git config --global http.proxy 127.0.0.1:7890
 git config --global https.proxy 127.0.0.1:7890
 二、清理本地项目文件夹
-删除项目根的.git: 			rm -rf .git 
+删除项目根的.git: 			rm -rf .git
 或者递归删除所有子文件夹的.git:	find . -name .git | xargs rm -fr
 二、新建github的repo后的上传流程（github已经新建repo(nps-server)、且在本地项目文件夹里，其中长字符串为github中生成的token）：
 
 (=======！！！这是危险操作，<REPO>一定要正确，不然就把其他repo搞没了=======)
 
-rm -rf .git
-/Users/tutu/bin/git init
-/Users/tutu/bin/git add .
-/Users/tutu/bin/git commit -m "init"
-/Users/tutu/bin/git remote add origin https://$TOKEN@github.com/tutu329/$REPO.git
-/Users/tutu/bin/git push -f origin master
-
-TOKEN=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(所有repo用一个token即可)
-TOKEN=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(所有repo用一个token即可)
 REPO=nps-server
 REPO=nps-client
 REPO=life-agent
@@ -66,25 +69,28 @@ REPO=server-tools
 REPO=server-install
 REPO=server-xls
 
-(=======！！！这是危险操作，<REPO>一定要正确，不然就把其他repo搞没了=======)
+rm -rf .git
+git init
+git add .
+git commit -m "init"
+git remote add origin git@github.com:tutu329/$REPO
+git push -f origin master
+
+# 用了SSH，token就没用了
+# TOKEN=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(所有repo用一个token即可)
+# TOKEN=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(所有repo用一个token即可)
+
+(=======！！！git push -f 是危险操作，<REPO>一定要正确，不然就把其他repo搞没了=======)
 
 （如果有超过100MB的文件，用rar压缩分卷为90MB的多个文件即可）
 三、后续push和pull，如pycham中：
-git config --global credential.helper store
-
-Pycharm新建项目并导入项目文件夹（已经建立了.git）
-老版本pycharm可能有问题，只能命令行下commit并push
-pycharm->git->push（命令行下 git remote set-url origin https://<token>@github.com/tutu329/<repo>.git 后push正常，pycharm可能仍然不行）
+1、Pycharm新建项目并导入项目文件夹（已经建立了.git）
+2、push或pull
+    老版本pycharm可能有问题，只能命令行下:
+    git commit -m "comment"
+    git push origin master
+pycharm->git->push
 pycharm->git->pull
-
-四、token方式还是会出错，还是要配置SSH
-1、ssh-keygen -t rsa -b 4096 -C "jack.seaver@163.com"
-2、~/.ssh/下会有2个文件：id_rsa和id_rsa.pub
-3、github网页登录，settings->SSH and GPG keys->New SSH key，输入Title（随意）和Key（id_rsa.pub中所有文字），Add SSH key
-4、终端输入ssh -T git@github.com，如果返回You've successfully authenticated, but GitHub does not provide shell access，表示SSH设置成功。
-5、.git/config改为以下内容（即可用ssh进行push等操作，而不需要任何密码或token）
-[remote "origin"]
-        url = git@github.com:tutu329/life-agent
 
 
 
