@@ -77,5 +77,14 @@ Pycharm新建项目并导入项目文件夹（已经建立了.git）
 pycharm->git->push（命令行下 git remote set-url origin https://<token>@github.com/tutu329/<repo>.git 后push正常，pycharm可能仍然不行）
 pycharm->git->pull
 
+四、token方式还是会出错，还是要配置SSH
+1、ssh-keygen -t rsa -b 4096 -C "jack.seaver@163.com"
+2、~/.ssh/下会有2个文件：id_rsa和id_rsa.pub
+3、github网页登录，settings->SSH and GPG keys->New SSH key，输入Title（随意）和Key（id_rsa.pub中所有文字），Add SSH key
+4、终端输入ssh -T git@github.com，如果返回You've successfully authenticated, but GitHub does not provide shell access，表示SSH设置成功。
+5、.git/config改为以下内容（即可用ssh进行push等操作，而不需要任何密码或token）
+[remote "origin"]
+        url = git@github.com:tutu329/life-agent
+
 
 
