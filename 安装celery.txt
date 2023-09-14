@@ -1,0 +1,102 @@
+要在 Django 中使用 Celery 来定时检查数据库中的某个数据，你需要遵循以下步骤：
+
+1. ============安装并配置 Celery 和 Django============
+   首先确保安装了celery和django-celery-beat：
+   ```
+   pip install celery django-celery-beat
+   ```
+
+2. ============设定Celery应用============
+    在Django项目的nps/nps目录下创建一个名为 `celery.py` 的文件，并添加如下内容:
+    import os
+    from celery import Celery
+    # 为 'celer' 程序设置默认的Django设置模块。
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'nps.settings')
+
+app = Celery('nps')
+
+# 使用字符串使程序可以不加载任何其他配置模块。
+app.config_from_object('django.conf:settings', namespace='CELERY')
+
+# 加载所有注册过的任务应用。
+app.autodiscover_tasks()
+
+@app.task(bind=True)
+def debug_task(self):
+    print(f'Request: {self.request!r}')
+
+
+3. ============更新nps/nps目录下的__init__.py文件, 以便让Celery自动从定义好的实例里运行。============
+```python
+from .celery import app as celery_app
+__all__ = ('celery_app',)
+```
+
+4. ============创建一个定期任务============
+
+假设我们想每隔一分钟检查数据库中是否有新用户, 我们将首先编写一个简单函数来完成此操作。例如，在您的'app/tasks.py' 中：
+
+``` python
+from datetime import timedelta
+import logging
+from celery import shared_task
+
+logger = logging.getLogger(__name__)
+
+@shared_task
+def output():
+    pass
+```
+
+5. ============配置定时任务============
+
+在你的Django项目的 `settings.py` 文件中：
+
+```python
+from datetime import timedelta
+
+INSTALLED_APPS = [
+    'app_chatgpt',
+    'django_celery_beat',   # 这个似乎不需要（是用django数据库作为存放beat的信息），如果要，setting配置后，要运行python manage.py migrate
+]
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+CELERY_BEAT_SCHEDULE = {
+   'myoutput': {
+       'task': 'app_chatgpt.tasks.output',
+       'schedule': timedelta(minutes=1),
+   }
+}
+
+TIME_ZONE = 'Asia/Shanghai'
+CELERY_TIMEZONE = TIME_ZONE
+
+# 其他如：
+# Celery worker 进程数量。默认是服务器CPU核心数加上一倍，例如：本机为双核四线程，则这里会启动8个进程。
+CELERY_WORKER_CONCURRENCY = 4
+
+# 异步方式处理任务队列
+CELERY_TASK_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ENABLE_UTC = True
+
+
+```
+6. ============开始运行Celery worker和Celery beat服务。============
+
+开启 Celery worker, 在项目根目录执行以下命令：
+```
+celery -A nps worker --loglevel=info
+```
+同时，为了确保定时任务能够按照计划运行，还需开启 celery beat。在一个新的终端窗口中，执行以下命令：
+```
+celeryl -A nps beat --loglevel=info
+
+7、============解决ValueError('not enough values to unpack (expected 3, got 0)'),)。============
+windows下才有的问题
+pip3 install eventlet
+worker.bat改为："celery -A nps worker -l info -P eventlet"

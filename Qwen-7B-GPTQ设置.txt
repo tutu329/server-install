@@ -1,0 +1,54 @@
+1、下载量化数据：git clone https://huggingface.co/openerotica/Qwen-7B-Chat-GPTQ
+2、安装text-gen-webui
+3、安装autogptq的rocm版
+    1）下载：git clone https://github.com/PanQiWei/AutoGPTQ
+    2）安装rocm版（家里是torch1.13+rocm5.2）：ROCM_VERSION=5.2 pip install .
+4、webui下
+    1）python server.py --api --listen-port 8000
+    2）界面Model里选择Qwen-7B-Chat-GPTQ模型，选AutoGPTQ，wbits=4，trust-remote-code=True(这个必须要)；然后Load
+    3）界面Text Generation里用类似下述格式的文本：
+        <|user|>
+        分析一下上述文本，请问，嵊泗负荷是多少
+        <|assistant|>
+5、第4步可能有很多错误
+    1）webui调用autogpt的import问题，可能需要增加目录位置信息，如"import xxx"改为"import gptq文件夹名称.xxx"
+    2）trust-remote-code，2处可能要直接改为True
+    3）eos_token_id = eos_token_id[0]  IndexError: list index out of range 问题：根据Qwen的issue讨论，需要在tokenization_qwen.py 文件86行添加下面2句：
+        self.eos_token_id = self.eod_id
+        self.eos_token = ENDOFTEXT
+6、重启webui，然后Load并对话或者通过api调用（注意，控制台下调用api输出中文时第一个字符可能是乱码，是正常的，原因是只receive到半个字时就显示了，在网页中显示没有这个问题）
+
+*、关于autogptq(目前只有webui调用autogptq可以成功)
+2023-08-06 - (Update) - Support exllama's q4 CUDA kernel to have at least 1.3x speed up for int4 quantized models when doing inference.
+2023-08-04 - (Update) - Support RoCm so that AMD GPU users can use auto-gptq with CUDA extensions.
+因此已经很不错了
+
+*、关于gptq-for-llama
+目前一直报上面的eos_token_id错误，按照上面修正后仍然不行
+
+*、关于exllama
+速度应该最快，但一直报错pad_token的问题
+
+【2023-08-30：关于n卡下的qwen-4bits和api】
+1、qwen运行报稀奇古怪的错，可能是pydantic等库的版本问题，可能api不要按requirements来，pip install pydantic -U更新到最新，注意红色报警的其依赖的库要改到要求的1.9之类的
+2、qwen运行涉及modeling_qwen.py或quantisize_config.josn的，最好去huggingface上下载最新版本。或者debug直接改代码，像类似这样，只要把generation_config参数传进去就行：
+        my_config = {
+          "chat_format": "chatml",
+          "eos_token_id": 151643,
+          "pad_token_id": 151643,
+          "max_window_size": 6144,
+          "max_new_tokens": 512,
+          "do_sample": True,
+          "top_k": 0,
+          "top_p": 0.5,
+          "transformers_version": "4.31.0"
+        }
+        generation_config.chat_format = my_config['chat_format']
+        generation_config.eos_token_id = my_config['eos_token_id']
+        generation_config.pad_token_id = my_config['pad_token_id']
+        generation_config.max_window_size = my_config['max_window_size']
+        generation_config.max_new_tokens = my_config['max_new_tokens']
+        generation_config.do_sample = my_config['do_sample']
+        generation_config.top_k = my_config['top_k']
+        generation_config.top_p = my_config['top_p']
+        generation_config.transformers_version = my_config['transformers_version']

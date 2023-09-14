@@ -1,0 +1,373 @@
+【1、apt源】必须要添加正确的针对ubuntu22.04的源，如科大的：
+# 默认注释了源码仓库，如有需要可自行取消注释
+deb https://mirrors.ustc.edu.cn/ubuntu/ jammy main restricted universe multiverse
+# deb-src https://mirrors.ustc.edu.cn/ubuntu/ jammy main restricted universe multiverse
+
+deb https://mirrors.ustc.edu.cn/ubuntu/ jammy-security main restricted universe multiverse
+# deb-src https://mirrors.ustc.edu.cn/ubuntu/ jammy-security main restricted universe multiverse
+
+deb https://mirrors.ustc.edu.cn/ubuntu/ jammy-updates main restricted universe multiverse
+# deb-src https://mirrors.ustc.edu.cn/ubuntu/ jammy-updates main restricted universe multiverse
+
+deb https://mirrors.ustc.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse
+# deb-src https://mirrors.ustc.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse
+
+# 预发布软件源，不建议启用
+# deb https://mirrors.ustc.edu.cn/ubuntu/ jammy-proposed main restricted universe multiverse
+# deb-src https://mirrors.ustc.edu.cn/ubuntu/ jammy-proposed main restricted universe multiverse
+
+sudo apt-get update
+sudo apt-get upgrade
+
+【2、常用应用】如：
+sudo apt install git 
+sudo apt install plocate 
+
+【3、conda】
+bash Anaconda3-2023.07-1-Linux-x86_64.sh
+重启控制台让conda的path生效
+conda create -n textgen python=3.10.9
+conda activate textgen(注意：重开控制台时，需要重新activate)
+
+【4、amd显卡驱动(与conda和venv无关)】
+下载：https://repo.radeon.com/amdgpu-install/5.4.2/ubuntu/jammy/
+sudo apt install ./xxx.deb
+sudo amdgpu-install -y --usecase=graphics,hiplibsdk,hip,mllib,rocm,dkms(逗号中间不能有空格)
+sudo reboot（必须）
+
+# 设置运行权限
+sudo usermod -a -G render $LOGNAME
+sudo usermod -a -G video $LOGNAME
+用id命令检查是否render和video都有了
+
+【5、pytorch】
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm5.4.2
+sudo reboot（必须）
+(1、可能需要非conda下安装 ,或者两个都装，reboot后available才为True；)
+(2、根据nan问题的解决经验，必须torch1.3才行，因此可能直接全局装pip install torch==1.13.1+rocm5.2 torchvision==0.14.1+rocm5.2 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/rocm5.2比较好)
+
+
+python3
+torch.cuda.is_available() 
+或者运行 . ~/ftp/tt.sh
+
+【6、安装textgen】
+【text-generation-webui】
+git clone https://github.com/oobabooga/text-generation-webui
+cd text-generation-webui
+pip install -r requirements.txt
+
+【bitsandbytes】（这个bnd安装完是增加了bitsandbytes-rocm库而不是bitsandbytes库，如果运行报split错（重复装的bitsandbytes库导致的cuda的错）可以直接pip uninstall bitsandbytes）
+git clone https://github.com/agrocylo/bitsandbytes-rocm
+make hip
+	cmath报错：sudo apt install libstdc++-12-dev
+	hip_runtime_api.h报错：
+		1)ROCM_HOME := /opt/rocm
+		2)HIPCC := /opt/rocm/bin/hipcc
+python setup.py install
+pip install -r requirements.txt
+
+【GPTQ-rocm】
+mkdir repositories
+cd repositories (必须在这个文件夹里，否则运行server.py报错：ModuleNotFoundError: No module named 'llama_inference_offload')
+git clone https://github.com/WapaMario63/GPTQ-for-LLaMa-ROCm
+mv GPTQ-for-LLaMa-ROCm/ GPTQ-for-LLaMa
+python setup_rocm.py install
+pip install -r requirements.txt
+
+再运行textgen的：pip install -r requirements.txt
+
+python server.py
+报错：File "/home/tutu/anaconda3/envs/textgen/lib/python3.10/site-packages/bitsandbytes/cuda_setup/main.py", line 311, in get_cuda_version
+    major, minor = map(int, torch.version.cuda.split("."))
+AttributeError: 'NoneType' object has no attribute 'split'
+处理：把main.py 311行直接增加“return None”
+
+【nan的快速测试】
+pip install timm
+python test_nan.py
+如果：
+Initial Data nan tensor(False)
+Device Data nan tensor(True, device='cuda:0')
+表明就是发生了nan错误
+
+#===================================================test_nan.py===================================================
+import torch
+import torch.nn as nn
+import timm
+
+class ENet(nn.Module):
+    def __init__(self, in_channels, num_classes):
+        super(ENet, self).__init__()
+        
+        self.first_conv = nn.Conv2d(in_channels = in_channels, out_channels = 3, kernel_size = 1)
+        self.backbone = timm.create_model('efficientnet_b0', pretrained = False)
+        self.relu = nn.ReLU()
+        self.classifier = nn.Linear(1000,num_classes)
+        self.softmax = nn.Softmax(dim = -1)
+        
+    def forward(self, x):
+        out = self.first_conv(x)
+        out = self.relu(out)
+        out = self.backbone(out)
+        out = self.relu(out)
+        out = self.classifier(out)
+        out = self.softmax(out)
+        return out
+
+device = torch.device("cuda" if (torch.cuda.is_available()) else "cpu")
+model = ENet(3,2)
+model.to(device)
+criterion = nn.BCELoss()
+opt = torch.optim.Adam(model.parameters(), lr = 1e-4)
+
+for i in range(10):
+
+  data = torch.rand(3,3,512,512).float()
+  print('Initial Data nan', torch.any(torch.isnan(data)))
+  labels =torch.randint(low = 0, high = 2, size = (3,2)).float()
+  data = data.to(device)
+  print('Device Data nan',torch.any(torch.isnan(data)))
+  labels = labels.to(device)
+
+  output = model(data)
+  loss = criterion(output, labels)
+  loss.backward()
+  opt.step()
+  opt.zero_grad()
+  #===================================================test_nan.py===================================================
+
+【nan的torch版本解决】
+如在ChatGLM2-6B下
+
+【后发现venv不行】
+python -m venv venv(删除虚拟环境：deactivate; rm -rf venv)
+source venv/bin/activate
+【改为conda】
+conda create -n torch13_rocm52 python=3.10.9
+conda activate torch13_rocm52
+
+pip install torch==1.13.1+rocm5.2 torchvision==0.14.1+rocm5.2 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/rocm5.2
+python test_nan.py
+如果test通过，则到如ChatGLM2-6B下。
+pip install -r requirements.txt(！！注意,ChatGLM2-6B的这个操作会让pytorch变为2.0.1+cu117,available变为False！！因此再安装torch)
+pip install torch==1.13.1+rocm5.2 torchvision==0.14.1+rocm5.2 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/rocm5.2
+python cli_demo.py
+===Chatglm2-6B实测通过===
+
+（最好升级gfx1030_40.kdb）：MIOpen(HIP): Warning [SQLiteBase] Missing system database file: gfx1030_40.kdb Performance may degrade. Please follow instructions to install: https://github.com/ROCmSoftwarePlatform/MIOpen#installing-miopen-kernels-package
+
+【pycorrector安装】
+0、pycorrector也是要调用模型的
+1、pip install pycorrector(其中kenlm安装很可能报错)
+2、kenlm 安装方案1：pip install -e git+https://github.com/kpu/kenlm.git#egg=kenlm(也需要编译，VC++安装按照下面)
+2、kenlm 安装方案2：下载https://github.com/kpu/kenlm/archive/master.zip，解压后python setup.py install（需要安装VC++build14及以上版本，https://visualstudio.microsoft.com/zh-hans/vs/下搜索Microsoft Visual C++ Build Tools，缺省安装，或者保守安装c++桌面开发、右侧VC++2017xxx工具、右侧windows10sdk）
+3、运行会报错（win下会自动下载klm文件；找不到某个klm文件，有一个链接，下载那个链接的klm文件，把klm文件复制到~/.pycorrector/datasets(win下如c:\users\tutu\.pycorrector\datasets)下即可）
+4、运行下面py程序
+import sys
+sys.path.append("..")
+import pycorrector
+if __name__ == '__main__':
+    corrected_sent, detail = pycorrector.correct('鱼山绿色石化基地一期、二其已经建成，合记设计用电负和达到1927MW。舟山绿色石化基地正在开展高性能树脂、高端新材料、炼化一体化改造提升项目相关前期工作，预计新增用电负荷约1000MW。')
+    print(corrected_sent, detail)
+
+    error_sentences = [
+        '真麻烦你了。希望你们好好的跳无',
+        '机七学习是人工智能领遇最能体现智能的一个分知',
+        '一只小鱼船浮在平净的河面上',
+        '我的家乡是有明的渔米之乡',
+        '这场比赛我甘败下风',
+        '这家伙还蛮格尽职守的',
+        '报应接中迩来',  # 接踵而来
+    ]
+    for line in error_sentences:
+        correct_sent, err = pycorrector.correct(line)
+        print("{} => {} {}".format(line, correct_sent, err))
+
+
+【python下word文件text所在page num的获取】
+1、只有转pdf读取、win下用win32com(pywin32)两种方案
+2、win32com方案：
+def get_text_page_num(doc_name, text):
+    import win32com.client as win32
+    from win32com.client import constants
+    import os
+
+    doc_app = win32.gencache.EnsureDispatch('Word.Application')  # 打开word应用程序
+    doc_app.Visible = True
+    curr_path = os.getcwd()
+    file_path = f'{curr_path}\{doc_name}'
+    doc = doc_app.Documents.Open(file_path)
+
+    search_range = doc.Content
+    search_range.Find.Execute(FindText=text)
+    search_range.Select()  # 这一步必须要有，否则获取的页码不对
+    rng = doc_app.Selection.Range
+    print('绝对页：', rng.Information(constants.wdActiveEndPageNumber))
+    print('用户页：', rng.Information(constants.wdActiveEndAdjustedPageNumber))
+
+【ubuntu下安装n卡驱动】https://blog.csdn.net/qq_45461410/article/details/131605719
+0、sudo ubuntu-drivers devices看系统支持哪几个版本，然后去官网找到匹配的版本
+0、安装前必须更新：
+    sudo apt update
+    sudo apt install g++
+    sudo apt install gcc
+    sudo apt install make
+1、禁用nouveau方法：
+    1）vi /etc/modprobe.d/blacklist-nouveau.conf，新建该文件，并添加
+        blacklist nouveau
+        options nouveau modeset=0
+    2)sudo update-initramfs -u
+        sudo reboot
+        lsmod | grep nouveau，如果为空，表示已经禁用
+    *、如果要恢复nouveau，则
+        1)rm -f /etc/modprobe.d/blacklist-nouveau.conf
+        2)update-initramfs -u
+        3)reboot
+2、卸载原有驱动
+    sudo apt remove nvidia-*
+3、安装
+    1）进入命令行模式：sudo telinit 3
+    2）关闭显示：sudo service gdm3 stop（老版本Ubuntu的显示是lightdm）
+    2）需要把终端改为中文，否则中文报错或要求输入密码都显示为乱码
+        export LANG="UTF-8"
+        export LANGUAGE="UTF-8"
+
+    3)sudo ubuntu-drivers devices
+    3)sudo apt install nvidia-driver-535
+    3)sudo modprobe nvidia
+
+    3）chmod 777 ./NVIDIA-Linux-x86_64-525.89.02.run
+    4）sudo ./NVIDIA-Linux-x86_64-525.89.02.run -no-opengl-files -no-x-check -no-nouveau-check（运行一遍可能没反应，再运行一遍）
+        注：只有禁用opengl这样安装才不会出现循环登陆的问题
+        -no-x-check：安装驱动时关闭X服务
+        -no-nouveau-check：安装驱动时禁用nouveau
+        -no-opengl-files：只安装驱动文件，不安装OpenGL文件
+    5）选项： Install NVIDIA's 32-bit compatibility libraries?（No）
+       选项：Would you like to run the nvidia-xconfig utility to。。。（Yes或者No）
+    6）sudo service gdm3 start打开显示服务
+    7）nvidia-smi
+
+
+【如果ubuntu下安装n卡驱动失败，系统进不去，则高级->recovery下进入root，运行:】
+    sudo apt remove --purge nvidia*
+    sudo reboot
+    也有可能是因为禁用了nouveau这个开源的gpu驱动造成，安装n卡驱动时，确实需要禁用这个nouveau）
+
+【ubuntu驱动没装好，白屏：系统出错且无法恢复】
+    1、重启系统，且关掉GPU，也许就可以
+    2、可能需要处理
+        1）recovery下的网络启用
+            dmesg | grep eth
+            sudo dhclient eth0失败
+            再执行sudo dhclient enp86s0（最下面被rename的那个名字），成功，可以ftp
+        2）处理linux-kernel
+            apt update,
+            apt --fix-broken install,
+            apt upgrade
+
+【关于阿里云ecs廉价服务器(1cpu、512m内存)运行frp】
+1、必须ubuntu，win server远程登录黑屏
+2、https://github.com/fatedier/frp页面右侧的release里面下载对应的frp
+3、server
+    # frps.ini
+    [common]
+    bind_port = 7000
+
+    运行：./frps -c ./frps.ini
+4、client
+    # frpc.ini
+    [common]
+    server_addr = x.x.x.x （注意，这里如果是域名，ip必须是备案过的，或者ip是境外ecs即不用备案）
+    server_port = 7000
+
+    [ssh]
+    type = tcp
+    local_ip = 127.0.0.1
+    local_port = 22
+    remote_port = 6000
+
+    运行：./frpc -c ./frpc.ini
+5、查找进程如frp
+    echo "alias pp='ps -ef | grep'" >> ~/.bashrc
+    . ~/.bashrc
+    pp frp
+
+【animatediff安装与注意事项】
+0、webui启动常用参数设置：
+    set COMMANDLINE_ARGS=--xformers --api --server 0.0.0.0 --port 5000 --enable-insecure-extension-access --ad-no-huggingface --api-server-stop
+1、常用参数：开adetailer、16帧、每秒8帧(一共2秒)或16帧(一共1秒)、采样DPM++2M Karras、steps至少到40左右脸部画质才实用、分辨率至少到768*1024画质才实用（5分钟，512*768大概1分半）、动画模型mm_sd_v14.ckpt(画面动态较多)、动画模型mm_sd_v15.ckpt(画面几乎不动、且有水印)
+2、安装（sd要在14.1以上，15没问题）:
+    1）在安装插件前，需要在webui的webui-user.bat的启动参数中增加"--enable-insecure-extension-access"，才能确保安装插件不报错
+    2）关于重要的脸部修复插件Adetailer（adetailer可以和animatediff配合，但是用一次后需要重启weibu才能用（通过设置启动参数--api-server-stop，通过api调用一次带脸部恢复视频后重启服务即api调用http://localhost:5000/sdapi/v1/server-restart解决））、prompt最好增加look at viewer），Adetailer插件（https://huggingface.co/Bingsu/adetailer/tree/main的pt文件）都下载到webui/models/adetailer/，启动参数增加"--ad-no-huggingface"，避免每次启动访问huggingface
+    3）安装插件：sd的webui的extensions中install from url（https://github.com/continue-revolution/sd-webui-animatediff）
+    4）下载动画模型：https://huggingface.co/guoyww/animatediff，下载mm_sd_v14.ckpt和mm_sd_v15.ckpt到webui的extensions\sd-webui-animatediff\model下
+    5）重启webui：extensions的install中，apply and restart ui
+3、运行注意: 16帧是其训练帧数，其他帧数出图可能有问题；另外prompt据说不要高于75个词，否则似乎要用DDIM采样，以免出图有问题（出2张无关的图，似乎和prompt长度有关，导致当成2张图进行生成）
+4、关于webui中animatediff插件存储mp4的代码
+1）animatediff.py中
+    def postprocess(self, p: StableDiffusionProcessing, res: Processed, enable_animatediff=False, loop_number=0, video_length=16, fps=8, model="mm_sd_v15.ckpt"):
+        if enable_animatediff:
+            self.remove_motion_modules(p)
+            video_paths = []
+            self.logger.info("Merging images into GIF.")
+            from pathlib import Path
+            Path(f"{p.outpath_samples}/AnimateDiff").mkdir(exist_ok=True, parents=True)
+            for i in range(res.index_of_first_image, len(res.images), video_length):
+                video_list = res.images[i:i+video_length]
+                seq = images.get_next_sequence_number(f"{p.outpath_samples}/AnimateDiff", "")
+                filename = f"{seq:05}-{res.seed}"
+                video_path = f"{p.outpath_samples}/AnimateDiff/{filename}.gif"
+                video_paths.append(video_path)
+                imageio.mimsave(video_path, video_list, duration=(1/fps), loop=loop_number)
+            res.images = video_paths
+            self.logger.info("AnimateDiff process end.")
+    改为：
+    def postprocess(self, p: StableDiffusionProcessing, res: Processed, enable_animatediff=False, loop_number=0, video_length=16, fps=8, model="mm_sd_v15.ckpt"):
+        if enable_animatediff:
+            self.remove_motion_modules(p)
+            video_paths = []
+            self.logger.info("Merging images into GIF.")
+            from pathlib import Path
+            Path(f"{p.outpath_samples}/AnimateDiff").mkdir(exist_ok=True, parents=True)
+            for i in range(res.index_of_first_image, len(res.images), video_length):
+                video_list = res.images[i:i+video_length]
+                seq = images.get_next_sequence_number(f"{p.outpath_samples}/AnimateDiff", "")
+                filename = f"{seq:05}-{res.seed}"
+                video_path = f"{p.outpath_samples}/AnimateDiff/{filename}.gif"
+
+                # 增加这一行
+                mp4_video_path = f"{p.outpath_samples}/AnimateDiff/{filename}.mp4"
+
+                video_paths.append(video_path)
+                imageio.mimsave(video_path, video_list, duration=(1/fps), loop=loop_number)
+
+                # 增加这一行
+                imageio.mimsave(mp4_video_path, video_list)
+
+            res.images = video_paths
+            self.logger.info("AnimateDiff process end.")
+
+2）依赖：pip install imageio[ffmpeg]
+5、关于api正确返回animatediff（adetailer修正脸部后）的视频（虽然能返回视频了，但webui下一次任意调用仍然报Expected weight to be a vector...的错误，仍然需要重启才行）
+    将api.py的text2imgapi()中的这一行：
+
+    b64images = list(map(encode_pil_to_base64, processed.images)) if send_images else []
+
+    改为：
+    # adetailer和animatediff冲突的问题（animatediff生成视频且adtailer也处理完成后，api返回gif视频时报错，程序崩溃）如下：
+    # adetailer没对16帧数据做脸部恢复处理时，processed.images输出结果是： [<PIL.Image.Image image mode=RGB size=512x768 at 0x1A304623F40>]
+    # adetailer对16帧数据做了脸部恢复处理后，processed.images输出结果是： ['outputs/txt2img-images/AnimateDiff/00244-1540478359.gif']
+    # 因此，debug结果如下：
+    if type(processed.images)==list and type(processed.images[0])==str and ('gif' in processed.images[0] or 'mp4' in processed.images[0]):
+        # import PIL
+        # with PIL.Image.open(processed.images[0]) as animate_file:
+        #     processed.images = [animate_file]
+        #     b64images = list(map(encode_pil_to_base64, processed.images)) if send_images else []
+        print('=================视频类型==================')
+        with open(processed.images[0], 'rb') as f:
+            video_base64 = base64.b64encode(f.read())
+        return models.TextToImageResponse(images=[video_base64], parameters=vars(txt2imgreq), info=processed.js())
+    else:
+        print('=================其他图片类型==================')
+        b64images = list(map(encode_pil_to_base64, processed.images)) if send_images else []

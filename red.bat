@@ -1,0 +1,1 @@
+C:\Redis\red.bat

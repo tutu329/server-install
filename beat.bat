@@ -1,0 +1,1 @@
+celery -A nps beat -l info

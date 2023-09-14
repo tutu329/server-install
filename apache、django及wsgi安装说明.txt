@@ -1,0 +1,286 @@
+﻿【0】目标是安装apache并通过其mod_wsgi服务调用django的python后台代码（不需要运行django的"python manage.py runserver"）
+【1】复制压缩包的apache24文件夹到c:\
+【2】pip3 install django
+
+# django详见系统性的说明书： http://www.chipscoco.com/?id=101
+【3】如果django工作平台(django project)为c:\server\nps，django项目(django app)为c:\server\nps\app_nps。则到c:\server下
+1）创建django project：C:\Users\Administrator\AppData\Local\Programs\Python\Python310\Scripts\django-admin startproject nps
+2）创建django app：python manage.py startapp app_nps
+3）严格使用上述project和app生成的c:\server\nps的manage.py，c:\server\nps\nps的settings.py、urls.py、wsgi.py，c:\server\nps\app_nps的views.py、models.py
+4）修改settings.py
+a）注意是'app_nps',
+===================settings.py========================
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'app_nps',
+]
+
+# 这里增加static目录，然后执行"python manage.py collectstatic"即可，admin所用静态文件如css就被复制到了c:\server\nps\static下.(注意，setting.py中的static目录要和mod_wsgi中的static目录一致)
+STATIC_URL = 'static/'
+import os
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+===================settings.py========================
+5）修改urls.py
+a）注意是from app_nps import views
+b）注意是path('', views.index)
+===================urls.py===========================
+from django.contrib import admin
+from django.urls import path
+from app_nps import views
+urlpatterns = [
+    path('', views.index),
+    path('admin/', admin.site.urls),
+]
+===================urls.py===========================
+6）修改views.py
+===================views.py==========================
+from django.http import HttpResponse, JsonResponse
+def index(request):
+    return HttpResponse("Hello Django World!")
+===================views.py==========================
+7）创建models.py中的数据库表（如果项目需要持久化对象）(注意必须是models.py，其他py的话，django后面migrate会无效)
+a）严格使用生成的django project和app的配置时，不需要os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'nps.settings')和django.setup()。
+b）直接在models.py中运行main()仍然会报错，但直接运行apache运行（或者运行python manage.py runserver 8080（默认8000端口而非80））就能在浏览器的localhost看见django成功页面或urls.py导入的页面
+c）生成迁移脚本：python manage.py makemigrations app_chatgpt（在migrations目录下生成迁移脚本0001_initial.py）
+d）模型迁移：python manage.py migrate。迁移之后，执行show_migration_result.bat看是想要的表格是否已经迁移（有X的是已经迁移的）,(如果python manage.py makemigrations结果为No changes detected，表明没有找到models.py中的表)
+e）关于重建数据库最简单办法（1、删除db.sqlite3文件以及app_chatgpt下的migration文件夹；2、"migrate.bat"；3、"python manage.py createsuperuser"("administrator":"Jackseaver112279")）
+f）关于数据库读取: 要用"表名.objects()"而不是"表名().objects()"，因为要用表对应的class来访问数据库，而不是用实例来访问数据库。
+===================models.py===========================
+# import os
+import django
+# os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'nps.settings')
+# django.setup()
+from django.db import models
+
+class Persistent_User_Info(models.Model):
+    s_user_id = models.CharField(max_length=128, verbose_name="用户ID")
+    gender_categories = [
+        (True, "男"),
+        (False, "女")
+    ]
+    s_gender = models.BooleanField(choices = gender_categories, default=True, verbose_name="性别")
+===================models.py===========================
+8）在网页管理数据库表：
+a）创建admin账号：python manage.py createsuperuser，这里的用户密码是"administrator":"Jackseaver112279"，（注意：似乎主程序把stdio重定向到文件后，这个操作的输出也被重定向了，关掉才正常）
+b）在admin.py注册model中的模型
+====================admin.py===========================
+# 导出Blog模型
+from .models import Persistent_User_Info
+# Register your models here.
+# 在后台系统中注册Blog模型
+admin.site.register(Persistent_User_Info)
+====================admin.py===========================
+
+【4】pip3 install mod_wsgi
+【5】根据错误提示链接，下载vs_buildtoools并勾选和安装“使用c++的桌面开发"
+【6】复制apache依赖库X64的dll文件到apache24的bin文件夹中
+【7】将apache配置中的apr_perms_set.h复制到apache24的include下，然后pip3 install mod_wsgi
+【8】复制apache配置中到httpd和httpd-ssl到apache24的conf文件夹中
+【9】复制key、public.crt、chain.crt文件到apache24的conf的ssl文件夹中，并修改conf/httpd-ssl以及extra/httpd-ssl对应行，其中Server Certificate对应public.crt、Server Private Key对应key文件、CertificateChainFile对应chain.crt
+1）https访问：完成上述配置一般没问题
+2）微信小程序访问：如果访问不了，用"https://ssltools.digicert.com/checker/views/checkInstallation.jsp" 检测后台的ssl配置，估计会报错：中间证书没有；由于前述3个文件下载名称都很长，因此识别有问题，把文件名都改成最短，重启apache，就可以了！
+【10】django的wsgi配置：把下面配置信息复制到apache24的conf文件夹中httpd.conf的最后面
+【11】用自制的tailf.bat实时监控，如tailf.bat c:\apache24\log\error.log或直接运行apache-error.bat。如有刷新内容问题，把-Tail后面的5改大。
+【12】windows环境变量的系统变量中，增加PYTHONHOME=C:\Users\Administrator\AppData\Local\Programs\Python\Python310，要和WSGIPythonHome一样。如果不设置，就只能直接运行httpd.exe启动，而无法通过httpd -k install以系统服务方式启动apache（因为找不到python）。
+【13】执行“httpd -k install -n Apache”，然后ApacheMonitor.exe中才能start。运行并看日志还存在什么问题。
+【14】如果成功，访问poweryourlife.cn能看见django的debug网页。
+
+========httpd.conf文件最后需要添加的wsgi配置（让apache找到wsgi.py->settings.py->urls.py->views.py->views.py中的index等自定义函数）===========
+# 1.安装完wsgi模块后，控制台调用：mod_wsgi-express module-config，出来的三行字符，直接复制过来
+LoadFile "C:/Users/Administrator/AppData/Local/Programs/Python/Python310/python310.dll"
+LoadModule wsgi_module "C:/Users/Administrator/AppData/Local/Programs/Python/Python310/lib/site-packages/mod_wsgi/server/mod_wsgi.cp310-win_amd64.pyd"
+WSGIPythonHome "C:/Users/Administrator/AppData/Local/Programs/Python/Python310"
+# 2.设置django project的wsgi路径（django project的配置文件单独用了一个文件夹如c:\server\nps\nps）
+WSGIScriptAlias / c:\server\nps\nps\wsgi.py
+# 3.设置django project路径 这里可以添加多个项目目录 空格分开
+WSGIPythonPath c:\server\nps
+# 4.设置wsgi路径
+# 5. 非常重要，通过设置该参数，强制该app使用第一个sub interpreter，从而防止wsgi死锁并拖累apache
+WSGIApplicationGroup %{GLOBAL}
+<Directory c:\server\nps\nps>
+    <Files wsgi.py>
+        Require all granted
+    </Files>
+</Directory>
+#设置静态文件路径
+Alias /static c:\server\nps\static
+<Directory c:\server\nps\static>
+    AllowOverride None  
+    Options None  
+    Require all granted  
+</Directory>
+======================================================================================================
+
+【注意事项】
+端口80（80端口需要备案。apache配置包括基本配置和ssl配置，先按照某一说明来，然后根据自己理解校验，如检查include是否正确）
+    apache和django运行关系：django不需要运行python manage.py runserver（否则只是多了个内网localhost:8000的django网页服务器），只需要运行apache即可（apache是通过mod_wsgi服务调用django的python后台代码）。且python后台代码更新上传后，apache必须restart。
+    【极重要问题的解决】apache的httpd.conf中，一定要增加WSGIApplicationGroup %{GLOBAL}，防止wsgi死锁从而拖累apache从而没发调试问题（如后端执行plt.savefig()却多执行了plt.show()、前端错在onShow()回调中发起POST造成不停调用而拖死服务器，等操作会造成死锁，可以查看apache日志看死锁位置）
+    【ssl】 1、阿里云控制台里购买免费ssl证书，2、阿里云控制台下载apache对应证书，3、apache按照阿里云说明设置ssl配置（copy证书到apache）
+    【极重要问题的解决】apache调用的Python程序，运行时，相对路径为c:\apache24\，因此读写文件不能用相对路径。
+
+【15】关于微信小程序xml中的多个控件通过js的1个bind函数与多个变量进行批量关联
+1）xml：每个控件中通过"data-xxx"传递xxx参数，如data-obj="load_p_max_heat"，即为向js传递具体对象load_p_max_heat
+<i-input-number value="{{ energy_invest_init_data.load_p_max_heat }}" bindchange="on_charge" data-obj="load_p_max_heat"/>
+2）js： js中必须用"on_charge function(e) {}"而不是"on_charge({ detail }) {}"，前置参数中才有currentTarget.dataset，并通过dataset传递xml中"data-"后面的参数
+  on_charge: function(e) {
+    this.setData({
+      ["energy_invest_init_data."+e.currentTarget.dataset.obj]: e.detail.value
+    })
+  },
+
+【16】关于备案后、80端口已通后，外网无法访问django
+1）setting.py中，ALLOWED_HOSTS = []，改为ALLOWED_HOSTS = ["*",]，重启apache即可
+
+【17】ssh需安装，windows serverr下可打开自带的openssh，然后22端口才扫描的到，用termius之类的终端程序连接ssh，方便高效。
+
+【18】微信小程序的uploadFile()，实现并没有那么容易，小程序uploadFile()调用很简单，但需要django侧响应
+0）django响应upload，并不需要apache开DAV之类的上传功能。
+1）django设置urls.py，如path('upload', views.upload_file),并在views.py的upload_file()中响应微信小程序uploadFile()时,有一个跨域问题：Forbidden (Referer checking failed - https://servicewechat.com/wxa0e28d575a0705a1/devtools/page-frame.html does not match any trusted origins.): /upload\r
+2）解决跨域简单的处理方式是，将settings.py 中 MIDDLEWARE 里的 'django.middleware.csrf.CsrfViewMiddleware' 注释掉，这样django就不会报CSRF跨域保护问题
+3）uploadFile()
+    wx.uploadFile({
+      url: "https://www.poweryourlife.cn/upload",
+      filePath: tempFilePaths[0].path,
+      name:"file",  // 交给后台的是一个dict，“file”后台清楚即可
+      formData: {
+      },
+      success(res) {
+        console.log(res)
+      },
+      fail(err) {
+        console.log(err)
+      }
+    })
+4)django的响应
+    # handle_uploaded_file就是获取upload的file后，save到后台上
+    def handle_uploaded_file(f):
+        with open(Global.get("path")+'static/res/1.xlsx', 'wb+') as destination:
+            for chunk in f.chunks():
+                destination.write(chunk)
+
+    # upload_file 就是用来响应微信小程序的uploadFile()中的url: "https://www.poweryourlife.cn/upload"
+    def upload_file(request):
+        if request.method == 'POST':
+            if request.FILES.get("file"):
+                handle_uploaded_file(request.FILES['file'])
+                print("upload success.")
+                return HttpResponse("后台上传成功.")
+            else:
+                print("upload failed.")
+                return HttpResponse("后台上传失败.")
+        else:
+            print("wrong. did not use POST.")
+            return HttpResponse("上传未通过POST.")
+
+【19】mysql
+1）安装 (https://blog.csdn.net/weixin_43605266/article/details/110477391)
+root:Jackseaver112279
+2）解决远程无法登录问题
+a、在装有MySQL的机器上登录MySQL，命令行执行："mysql -u root -p密码"
+b、执行use mysql;
+c、执行update user set host = ‘%’ where user = ‘root’;这一句执行完可能会报错，不用管它。
+d、执行FLUSH PRIVILEGES;
+3)解决'Client does not support authentication protocol requested by server; consider upgrading MySQL client', sqlState: '08004' 的错误
+a、登录mysql，"mysql -u root -p密码"
+b、执行(第一条%为不限制ip的用户，可能会报错）：
+ALTER USER 'root'@'%' IDENTIFIED WITH mysql_native_password BY 'Jackseaver112279';
+ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'Jackseaver112279';
+【安装reldens数据库时mysql相关问题】
+4）解决Unknown database 'reldens' 的错误（要先从https://github.com/damian-pastorini/reldens/tree/master/migrations/production下载reldens数据库sql文件，只下载reldens-install-v4.0.0.sql并安装就可以运行，也可以试试其他update的sql）
+a、执行："mysql -u root -p密码"
+b、CREATE DATABASE reldens;
+c、EXIT;
+d、命令行下c:\server\game\sql下(sql文件所在目录)执行（powershell下不支持<操作，需要其他命令）：mysql -u root -p reldens < "reldens-install-v4.0.0.sql"
+
+【20】reldens安装（https://www.reldens.com/documentation/installation）
+0）安装github账户的ssh key
+powershell下：
+a）ssh-keygen -t ed25519 -C "jack.seaver@163.com"
+b）打开当前目录下的id_ed25519.pub文件，内容复制到github网页的账户的settings的SSH and GPG keys(new SSH key里)
+c)powershell下运行Start-Service ssh-agent，然后运行：ssh-add 'C:\Users\Administrator\.ssh\id_ed25519'
+1）powershell下，到如c:\server下，运行：git clone git@github.com:damian-pastorini/reldens-skeleton.git ./game
+2）cd game, npm install
+3) node ./scripts/reldens-commands.js installSkeleton custom-game-theme-test
+4)关于module找不到的问题：输入node 进入控制台，输入console.log(module.paths)查看当前nodejs查找module的路径，如果没有工程里的node_modules，通过module.paths.push加入
+5）安装mysql，参见前面【19】mysql
+修改".env" and "knexfile.js"文件中mysql的账号密码为root:Jackseaver112279
+6）npm start
+http://localhost:8080/
+http://localhost:8080/reldens-admin
+7）关于admin权限：By default, every registered user is an administrator, you can change this behavior by changing the following environment variables:
+# The role for administrators:
+RELDENS_ADMIN_DEFAULT_ROLE_ID=1
+# The role the users get when they register:
+RELDENS_INITIAL_ROLE_ID=1
+8）修改debug等级
+RELDENS_LOG_LEVEL=9 node .
+9)进去注册玩家，玩家名字好像tutu可以，zy不行
+10）.env的https有关配置
+RELDENS_APP_PORT=8080
+RELDENS_APP_HOST=https://powerai.cc
+# Uncomment to use Express HTTPS server:
+RELDENS_EXPRESS_USE_HTTPS=1
+RELDENS_EXPRESS_HTTPS_PRIVATE_KEY=C:\Apache24\cert\server.key
+RELDENS_EXPRESS_HTTPS_CERT=C:\Apache24\cert\public.crt
+RELDENS_EXPRESS_HTTPS_CHAIN=C:\Apache24\cert\chain.crt
+# RELDENS_EXPRESS_HTTPS_PASSPHRASE=yourPassPhrase
+
+【21】关于redis、celery经常挂掉，如readonly错误
+1)redis.windows-service.conf里的requirepass这一行打开，后面改为自己的密码Jackseaver112279
+2)python redis: _server = redis.StrictRedis(host='powerai.cc', port=6379, db=0, password="Jackseaver112279")
+3)python celery: app = Celery('nps', broker='redis://:Jackseaver112279@127.0.0.1:6379/1', backend='redis://:Jackseaver112279@127.0.0.1:6379/0')
+4)win控制台的redis状态: redis-cli --stat -a Jackseaver112279
+
+【22】关于docker安装rocm docker包，以及pytorch
+*、注：有时候docker里和host里的torch.cuda.is_available()均为false，此时可能需要重装pytorch：pip3 install torch torchvision torchaudio xxx.whl（需下载对应python和rocm版本的。有可能是系统操作中，python版本发生了变化）
+0、docker内不含rocm kernel，rocm kernel必须安装在原系统中，因此要在docker外的本地安装rocm kernel
+1、安装rocm官方的docker
+git clone https://github.com/RadeonOpenCompute/ROCm-docker
+cd ROCm-docker
+sudo docker build -t rocm/rocm-terminal rocm-terminal
+2、运行该docker（增加文件夹的mount，:左侧为系统文件夹可以是相对，:右侧为docker内部文件夹必须是绝对路径）
+sudo docker run -it -v ~/xxxx:/home/rocm-user/xxxx --device=/dev/kfd --device=/dev/dri --security-opt seccomp=unconfined --group-add video rocm/rocm-terminal
+3、在docker的sh里面安装pytorch
+在pytorch官网的https://download.pytorch.org/whl/torch/里下载torch-2.0.1+rocm5.3-cp38-cp38-linux_x86_64.whl（主要是5.3和3.8与docker里的一致）
+sh里运行pip3 install torch-2.0.1+rocm5.3-cp38-cp38-linux_x86_64.whl
+
+【22】【一直没有搞定，有些细节还可供参考】关于ubuntu-22.04.2安装rocm-5.4.2和pytorch2.0.1（所提及版本必须严格对应，对应要求来自于pytorch）
+1、sudo apt update && sudo apt upgrade
+2、下载amd的gpu驱动（这里特别要注意，必须指定5.4.2。如果访问amd官网如根据6900xt找驱动，就会给你5.5.2而不是5.4.2，就会导致torch的is_available失败！）：wget https://repo.radeon.com/amdgpu-install/5.4/ubuntu/jammy/amdgpu-install_5.4.50402-1_all.deb
+3、安装amd的gpu驱动第一步：（注意ubuntu 22.04.2下是"apt install"，不是"apt-get install"或者"dpkg -i"，否则后面运行amdgpu-install(apt)会出现包的依赖错误！）sudo apt install ./amdgpu-install_5.4.50402-1_all.deb
+4、安装amd的gpu驱动第二步：sudo amdgpu-install --usecase=rocm,hip,mllib --no-dkms，运行之后看/opt下是否有rocms-5.4.2 （这里有可能运行amdgpu-install -y --usecase=graphics,rocm更好，dkms内核驱动可能还是要装，可能用docker时才用--no-dkms参数）
+5、sudo usermod -a -G video,render $LOGNAME
+6、gpu的rocm验证（看是否显示gpu状态）：
+rocm-smi
+/opt/rocm/bin/rocminfo
+/opt/rocm/opencl/bin/clinfo
+7、安装pytorch，一定要严格对应版本，即根据pytorch.com的可视化配置得到：pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm5.4.2
+8、torch调用gpu的验证（返回"True"即pytorch可正常使用gpu）：
+import torch
+torch.cuda.is_available()
+9、添加环境（$LOGNAME目前为用户名tutu）
+sudo usermod -a -G video $LOGNAME
+sudo usermod -a -G render $LOGNAME
+*、其他：
+内核状态：dkms status
+
+【23】关于chatglm2-6b
+1）gpu的out of memory问题：一般是程序异常中止后gpu缓存没用清空，系统重启能解决，暂时没找到更好办法
+2）chatglm2-6b runtimeerror: probability tensor contains either 'inf', 'nan'
+cpu运行正常，gpu运行就报这个错误
+
+【24】关于vicuna13b-bit4
+1)由于需要rocm，"git clone https://github.com/oobabooga/GPTQ-for-LLaMa.git -b cuda"之类需要改为"git clone https://github.com/WapaMario63/GPTQ-for-LLaMa-ROCm -b rocm"这样才行
+2）python3 setup_rocm.py install后面需加--user，否则easy_install可能权限不够（运行之前可能要运行pip3 install -r requirements.txt）
+3）编译时：trust/complex.h file not found: 根据gpt4建议，运行sudo apt-get install libtrust -dev解决
+4）编译时：cmath file not found，是因为依赖c++12，运行sudo apt install libstdc++-12-dev即可解决
+5）编译时：cuda_runtime_api.h file not found: 根据gpt4建议，运行sudo apt install nvidia-cuda-toolkit
+
+
+2）开始编译后，
+3）complex.h file not found，

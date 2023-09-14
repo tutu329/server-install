@@ -1,0 +1,1 @@
+c:\apache24\bin\httpd -k stop

@@ -1,0 +1,81 @@
+1、避免DNS污染：https://raw.hellogithub.com/hosts获取hosts文件，复制到C:\Windows\System32\drivers\etc，覆盖原有hosts文件
+
+github侧
+1、tutu329:Jackseaver112279登录github.com
+2、新建repo：life-agent
+
+git侧
+0、项目如需清空原有git内容： find . -name .git | xargs rm -fr
+1、项目git初始化：	git init，或者git init 某个文件夹
+2、项目添加内容：		git add .或者 git add *.py
+3、项目确认内容：		git commit -m "初始化项目版本"
+
+0、查看repo：		git remote -v
+1、添加repo：		git remote add origin https://github.com/tutu329/life-agent.git
+2、上传项目到repo：	
+	1）合并远程和本地（涉及readme）：git pull --rebase origin master(如果这里报错，通常是项目中存在同文件名、不同内容的情况。根据错误提示，删除有问题的文件、删除项目里一些奇怪的隐藏文件如.idea文件夹、.xxx.xls等：find . -name .idea | xargs rm -fr)
+	2）上传：git push -u origin master（新上传时，建议强制：git push -f origin master）	
+	3）涉及token认证(2023-09token: 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 ：
+		a）网页获取token：github网页右上头像的settings->developer settings->personal access tokens->tokens(classic)->generate new token(classic)->获取token（scope可以选repo、workflow、write三项）
+		b）把token关联到git： git remote set-url origin https://<token>@github.com/tutu329/<repo>.git
+	4）git没用使用vpn，也就是github网页能上，但git push总是不行，则需要给git设置代理（本机已经连了vpn，因此关联127.0.0.1即可）：
+		a）git config --global http.proxy 127.0.0.1:7890
+		b）git config --global https.proxy 127.0.0.1:7890
+
+3、pycharm新建项目，并导入刚才的git文件夹
+3、平时上传代码：pycharm->git->commit files，填写commit注释、commit；然后push
+	1)push常见错误：fatal: unable to access 'https://github.com/tutu329/life-agent.git/': Recv failure: Connection was reset，可能需要通过清理DNS
+		a）git config --global --unset http.proxy
+		b）git config --global --unset https.proxy
+		c）ipconfig/flushdns
+4、平时下载代码：pycharm->git->pull
+
+其他：
+0）在 GitHub 上修改默认分支：	https://github.com/settings/repositories下，可以设置默认分支
+1）查看branch分支：	git branch
+2）如果要用main为主、替代master，需要执行：
+	a）首先将master分支移到main分支下：	git branch -m master main
+	b）随后将新命名的分支main推送到远程库中：	git push -u origin main
+	c）再将HEAD指向main分支：			git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+	d）最后删除远程库中旧的master分支即可：	git push origin --delete master
+
+【=========================精简总结=========================】
+一、开了vpn且github网页能上的情况下，设置git的代理
+git config --global http.proxy 127.0.0.1:7890
+git config --global https.proxy 127.0.0.1:7890
+二、清理本地项目文件夹
+删除项目根的.git: 			rm -rf .git 
+或者递归删除所有子文件夹的.git:	find . -name .git | xargs rm -fr
+二、新建github的repo后的上传流程（github已经新建repo(nps-server)、且在本地项目文件夹里，其中长字符串为github中生成的token）：
+
+(=======！！！这是危险操作，<REPO>一定要正确，不然就把其他repo搞没了=======)
+
+rm -rf .git
+/Users/tutu/bin/git init
+/Users/tutu/bin/git add .
+/Users/tutu/bin/git commit -m "init"
+/Users/tutu/bin/git remote add origin https://$TOKEN@github.com/tutu329/$REPO.git
+/Users/tutu/bin/git push -f origin master
+
+TOKEN=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(所有repo用一个token即可)
+TOKEN=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(所有repo用一个token即可)
+REPO=nps-server
+REPO=nps-client
+REPO=life-agent
+REPO=server-tools
+REPO=server-install
+REPO=server-xls
+
+(=======！！！这是危险操作，<REPO>一定要正确，不然就把其他repo搞没了=======)
+
+（如果有超过100MB的文件，用rar压缩分卷为90MB的多个文件即可）
+三、后续push和pull，如pycham中：
+git config --global credential.helper store
+
+Pycharm新建项目并导入项目文件夹（已经建立了.git）
+老版本pycharm可能有问题，只能命令行下commit并push
+pycharm->git->push（命令行下 git remote set-url origin https://<token>@github.com/tutu329/<repo>.git 后push正常，pycharm可能仍然不行）
+pycharm->git->pull
+
+
+
