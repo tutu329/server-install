@@ -85,12 +85,10 @@ git push -f origin master
 （如果有超过100MB的文件，用rar压缩分卷为90MB的多个文件即可）
 三、后续push和pull，如pycham中：
 1、Pycharm新建项目并导入项目文件夹（已经建立了.git）
-2、push或pull
-    老版本pycharm可能有问题，只能命令行下:
+2、pycharm的设置的github中，把clone git repo using ssh勾上即可，就不用密码了
+3、万一pycharm有问题，命令行下:
     git commit -m "comment"
     git push origin master
-pycharm->git->push
-pycharm->git->pull
 
 
 
