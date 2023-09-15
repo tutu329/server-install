@@ -53,9 +53,9 @@ token方式还是会出错，还是要配置SSH（mac下和win下都要这样执
 6、git clone也可以改为 git clone git@github.com:tutu329/life-agent 这样，可以快、稳定很多。
 
 【=========================精简总结=========================】
-一、开了vpn且github网页能上的情况下，设置git的代理（win下除了打开vpn、执行下面2句，还需要在internet设置->连接->局域网设置里，打开代理服务器选项，填上127.0.0.1和7890）（mac下打开vpn、执行下面2句即可）
-git config --global http.proxy 127.0.0.1:7890
-git config --global https.proxy 127.0.0.1:7890
+一、开了vpn且github网页能上的情况下，设置git的代理（win下除了打开vpn、执行下面2句，还需要在internet设置->连接->局域网设置里，打开代理服务器选项，填上127.0.0.1和10809）（mac下打开vpn、执行下面2句即可）
+git config --global http.proxy 127.0.0.1:10809(注意这里10809取决于vpn使用的端口，其实vpn打开其会自动设置这个局域网设置里的代理)
+git config --global https.proxy 127.0.0.1:10809
 二、清理本地项目文件夹
 删除项目根的.git: 			rm -rf .git
 或者递归删除所有子文件夹的.git:	find . -name .git | xargs rm -fr
