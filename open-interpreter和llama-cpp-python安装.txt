@@ -1,0 +1,23 @@
+一、安装gpu版本的llama-cpp-python
+1、安装 NVIDIA CUDA Toolkit：
+echo %CUDA_PATH%
+如果显示：C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2类似，表示安装成功
+2、安装llama-cpp-python
+	1)下载Visual Studio 2022 Community(https://visualstudio.microsoft.com/downloads/)
+		a) During install, choose the following workload.
+		Desktop development for C++ workload
+		b) On the right hand side, ensure that the following optional component is checked.
+		C++ CMake tools for Windows
+		c) Once installed, open the Start menu, search for x64 Native Tools Command Prompt for VS 2022, and open it.
+	2)安装完后，开始菜单中搜索x64 Native Tools Command Prompt for VS 2022，打开：
+		a) conda activate oi
+		b) set FORCE_CMAKE=1 && set CMAKE_ARGS=-DLLAMA_CUBLAS=on
+		c) pip install llama-cpp-python --force-reinstall --upgrade --no-cache-dir -vv(报错：no cuda toolset found，原因居然是只装了Visual Studio 2022 Community而没装VS IDE)
+		d) 把C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.2\extras\visual_studio_integration\MSBuildExtensions下的4个文件，复制到C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\BuildCustomizations下
+	3）python -c "from llama_cpp import GGML_USE_CUBLAS; print(GGML_USE_CUBLAS)"，返回True
+
+二、安装open-interpreter
+1、pip install open-interpreter
+2、interpreter --local或interpreter --model tiiuae/falcon-180B
+
+

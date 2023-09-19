@@ -19,8 +19,8 @@ git侧
 		a）网页获取token：github网页右上头像的settings->developer settings->personal access tokens->tokens(classic)->generate new token(classic)->获取token（scope可以选repo、workflow、write三项）
 		b）把token关联到git： git remote set-url origin https://<token>@github.com/tutu329/<repo>.git
 	4）git没用使用vpn，也就是github网页能上，但git push总是不行，则需要给git设置代理（本机已经连了vpn，因此关联127.0.0.1即可）：
-		a）git config --global http.proxy 127.0.0.1:7890
-		b）git config --global https.proxy 127.0.0.1:7890
+		a）git config --global http.proxy 127.0.0.1:10809
+		b）git config --global https.proxy 127.0.0.1:10809
 
 3、pycharm新建项目，并导入刚才的git文件夹
 3、平时上传代码：pycharm->git->commit files，填写commit注释、commit；然后push
