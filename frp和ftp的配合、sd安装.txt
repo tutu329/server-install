@@ -1,0 +1,64 @@
+一、sd webui安装
+1、必须安装python3.10.6
+2、安装torch：pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+3、然后运行webui的webui-user.bat
+4、codeformer等库安装会出错，要把清华源换成阿里源。
+5、此时可以打开网页。复制所有的embeddings、extensions、models、style.csv
+6、安装完adetail等插件的huggingface模型后在venv下:  python webui.py --xformers --api --server 0.0.0.0 --port 5000 --enable-insecure-extension-access --ad-no-huggingface --api-server-stop
+
+
+一、ftp server设置：
+1、general settings
+	1）listen on these ports: 21
+
+2、passive mode settings
+	1）use custom port range: 8020-8025
+	2）external server ip address for passive mode transfers: use the following ip: 116.62.63.204
+	3）security settings: disable ip check
+3、其他：包括启动后connect to server、general新建user、shared folders新建共享文件夹。
+
+二、windows防火墙设置
+1、新建入规则，允许特定port：6021,8020-8025即可
+
+三、frp client要设置（其中6021端口用于连接，8020-8025用于开6个用于传输的被动端口。因此，ftp客户端是要连6021端口即可）：
+[ftp 6021]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 21
+remote_port = 6021
+
+[ftp 8020]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 8020
+remote_port = 8020
+
+[ftp 8021]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 8021
+remote_port = 8021
+
+[ftp 8022]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 8022
+remote_port = 8022
+
+[ftp 8023]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 8023
+remote_port = 8023
+
+[ftp 8024]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 8024
+remote_port = 8024
+
+[ftp 8025]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 8025
+remote_port = 8025
