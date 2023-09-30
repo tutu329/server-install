@@ -29,3 +29,4 @@ pip install einops
     1）向量库抽样次数:
         a)config.yml的library:strategy: "calc:2 rtst:2 agents:0"，rtst的2即为查询向量库的抽样次数，可以改为5
         b)librarys的rtst的count也要改为5
+    2）向量库构建时，分块重叠长度overlap，默认为0，也许可以调整为较大值，从而优化搜寻完整性能力。
