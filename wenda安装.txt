@@ -25,3 +25,7 @@ pip install einops
     python plugins/gen_data_st.py
 2、运行wenda
     python wenda.py -t qwen
+3、根据应用需要修改参数
+    1）向量库抽样次数:
+        a)config.yml的library:strategy: "calc:2 rtst:2 agents:0"，rtst的2即为查询向量库的抽样次数，可以改为5
+        b)librarys的rtst的count也要改为5
