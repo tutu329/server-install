@@ -1,0 +1,27 @@
+一、安装conda环境和基础库
+1、conda create -n wenda python=3.10
+2、conda activate wenda
+3、pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+4、pip install auto-gptq --extra-index-url https://huggingface.github.io/autogptq-index/whl/cu118/
+5、pip install optimum
+
+二、安装wenda（知识库采用m3e-base这一embedding(对标openai的text-embedding-ada-002)）
+1、git clone https://github.com/wenda-LLM/wenda
+2、cd wenda
+3、pip install -r requirements/requirements.txt
+4、wenda下新建model文件夹
+5、wenda下新建txt文件夹
+6、把example.config.yml重命名为config.yml
+    1）llm配置：llm_type改为qwen，qwen的path改为"model\Qwen-14B-Chat-Int4"，并将qwen模型copy到这里
+    2）rtst配置：model_path即为"model/m3e-base"，并下载模型：git clone https://huggingface.co/moka-ai/m3e-base
+
+三、可能存在的缺失库和版本更新
+pip install transformers -U
+pip install python-docx
+pip install einops
+
+四、运行
+1、根据txt下的pdf等文档切片、存储为知识库
+    python plugins/gen_data_st.py
+2、运行wenda
+    python wenda.py -t qwen
