@@ -1,7 +1,7 @@
 1、启动(本地简单启动)
 jupyter lab --port=7861
 2、远程登录
-    1）生成配置文件：jupyter --generate-config
+    1）生成配置文件：jupyter lab --generate-config
     2）找到配置文件：.jupyter/下的jupyter_lab_config.py
     3）编辑配置文件：
         a）c.ServerApp.allow_remote_access = True
