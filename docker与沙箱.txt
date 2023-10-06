@@ -1,0 +1,37 @@
+一、windows下docker安装
+1、www.docker.com下载docker
+2、安装，采用默认选项（安装WSL2替代Hyper-V）
+
+二、关于容器、镜像、repo
+1、docker服务器可以运行多个容器，一个容器通常就运行一个程序，但容器里可以有多个镜像（如python、jupyterlab等）
+2、镜像是只读的，将镜像运行起来就成为了容器，容器比镜像多了一个读写层，容器还可以绑定volume和宿主机的文件夹关联
+3、容器可以设置根目录、port、网络，限制硬盘空间、硬盘读写速度、cpu资源、内存资源等
+4、镜像可以到hub.docker.com下载
+5、假设有一个文件夹my_docker1，可以在该文件夹下放一个dockfile文件，然后在该文件夹下运行docker build，就能生成对应的镜像文件，dockfile可以是这样的：
+FROM python:3.10
+WORKDIR /xxx
+COPY requirements.txt requirements.txt
+RUN pip install -r requirements.txt	# RUN为docker build时运行内容
+COPY . .
+CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常更能理顺子文件夹中py文件之间的依赖关系）	# CMD为docker run时运行内容
+或 CMD ["python", "your_python_module.py", "your_module_para"]
+
+三、下载和运行现成镜像
+1、下载：docker pull codeocean/jupyterlab
+2、运行docker：docker run -p 7861:7861 -v /d/jupyter_temp:/usr/local/jupyter_temp -it codeocean/jupyterlab
+1）-p为端口
+2）-v为装载宿主机文件夹（如共享编辑好的配置文件等），其中注意宿主机d：盘的表达，注意docker目录中必须用绝对路径不能用~。另外-it必须放最后。
+3、配置jupyterlab（docker可能没有vi，从volume中把config文件copy过来方便）
+    1）生成配置文件：jupyter lab --generate-config
+    2）找到配置文件：.jupyter/下的jupyter_lab_config.py
+    3）编辑配置文件：
+        a）c.ServerApp.allow_remote_access = True
+        b）c.ServerApp.open_browser = False
+        c）c.ServerApp.port = 7861
+        d）c.ServerApp.terminals_enabled = False (注意：这样做很大程度上提高了安全性，但是python中仍然能够获取本地任何文件夹的访问和操作权限）
+        e）c.ServerApp.token = 'Jackseaver112279'
+        f）c.ServerApp.ip = '0.0.0.0'    （这样局域网其他ip可以访问）
+    4）远程登录：http://116.62.63.204:7861
+4、docker中运行jupyterlab(已进入docker的linux中)
+jupyter lab --allow-root --port 7861
+5、
