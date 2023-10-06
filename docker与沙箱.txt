@@ -1,6 +1,7 @@
 一、docker常用命令
 1）下载镜像（docker pull codeocean/jupyterlab）
 2）运行容器（docker run -p 7861:7861 -v /d/jupyter_temp:/usr/local/jupyter_temp -it codeocean/jupyterlab）
+    容器中运行jupyter：jupyter lab --allow-root --port 7861
 3）查看所有运行的容器（docker ps）
 4）查看所有的image（docker images）
 5）停止容器（docker stop 容器id）
