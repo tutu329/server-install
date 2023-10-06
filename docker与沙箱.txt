@@ -1,8 +1,15 @@
-一、windows下docker安装
+一、docker常用命令
+1）下载镜像（docker pull codeocean/jupyterlab）
+2）运行容器（docker run -p 7861:7861 -v /d/jupyter_temp:/usr/local/jupyter_temp -it codeocean/jupyterlab）
+3）查看所有运行的容器（docker ps）
+4）查看所有的image（docker images）
+5）停止容器（docker stop 容器id）
+
+二、windows下docker安装
 1、www.docker.com下载docker
 2、安装，采用默认选项（安装WSL2替代Hyper-V）
 
-二、关于容器、镜像、repo
+三、关于容器、镜像、repo
 1、docker服务器可以运行多个容器，一个容器通常就运行一个程序，但容器里可以有多个镜像（如python、jupyterlab等）
 2、镜像是只读的，将镜像运行起来就成为了容器，容器比镜像多了一个读写层，容器还可以绑定volume和宿主机的文件夹关联
 3、容器可以设置根目录、port、网络，限制硬盘空间、硬盘读写速度、cpu资源、内存资源等
@@ -16,11 +23,11 @@ COPY . .
 CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常更能理顺子文件夹中py文件之间的依赖关系）	# CMD为docker run时运行内容
 或 CMD ["python", "your_python_module.py", "your_module_para"]
 
-三、下载和运行现成镜像
+四、下载和运行现成镜像
 1、下载：docker pull codeocean/jupyterlab
 2、运行docker：docker run -p 7861:7861 -v /d/jupyter_temp:/usr/local/jupyter_temp -it codeocean/jupyterlab
-1）-p为端口
-2）-v为装载宿主机文件夹（如共享编辑好的配置文件等），其中注意宿主机d：盘的表达，注意docker目录中必须用绝对路径不能用~。另外-it必须放最后。
+    1）-p为端口
+    2）-v为装载宿主机文件夹（如共享编辑好的配置文件等），其中注意宿主机d：盘的表达，注意docker目录中必须用绝对路径不能用~。另外-it必须放最后。
 3、配置jupyterlab（docker可能没有vi，从volume中把config文件copy过来方便）
     1）生成配置文件：jupyter lab --generate-config
     2）找到配置文件：.jupyter/下的jupyter_lab_config.py
@@ -33,5 +40,5 @@ CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常�
         f）c.ServerApp.ip = '0.0.0.0'    （这样局域网其他ip可以访问）
     4）远程登录：http://116.62.63.204:7861
 4、docker中运行jupyterlab(已进入docker的linux中)
-jupyter lab --allow-root --port 7861
+    jupyter lab --allow-root --port 7861
 5、浏览器中：116.62.63.204:7681打开jupyter，输入token（Jackseaver112279）登录即可。
