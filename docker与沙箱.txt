@@ -34,4 +34,4 @@ CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常�
     4）远程登录：http://116.62.63.204:7861
 4、docker中运行jupyterlab(已进入docker的linux中)
 jupyter lab --allow-root --port 7861
-5、
+5、浏览器中：116.62.63.204:7681打开jupyter，输入token（Jackseaver112279）登录即可。
