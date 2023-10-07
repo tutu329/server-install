@@ -1,0 +1,12 @@
+1、修改引导文件的main()：
+    1）增加命令行参数--gpu：
+        from argparse import ArgumentParser
+        parser = ArgumentParser()
+        parser.add_argument(
+            "--gpu", type=int, default=0, help="指定的GPU ID: 0、1等"
+        )
+    2）将 --gpu 转为 CUDA_VISIBLE_DEVICES即可指定可见GPU
+        import os
+        os.environ["CUDA_VISIBLE_DEVICES"] = f'{args.gpu}'
+2、命令行启动：
+    python openai_api.py --gpu=0 或 --gpu01
