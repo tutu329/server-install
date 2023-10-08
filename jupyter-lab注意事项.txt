@@ -1,13 +1,14 @@
-1、启动(本地简单启动)
-jupyter lab --port=7861
-2、远程登录
+1、启动服务
+    jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --no-browser --ip=7862
+2、通过配置文件改变启动参数
     1）生成配置文件：jupyter lab --generate-config
     2）找到配置文件：.jupyter/下的jupyter_lab_config.py
     3）编辑配置文件：
         a）c.ServerApp.allow_remote_access = True
         b）c.ServerApp.open_browser = False
-        c）c.ServerApp.port = 7861
+        c）c.ServerApp.port = 7862
         d）c.ServerApp.terminals_enabled = False (注意：这样做很大程度上提高了安全性，但是python中仍然能够获取本地任何文件夹的访问和操作权限）
         e）c.ServerApp.token = 'Jackseaver112279'
         f）c.ServerApp.ip = '0.0.0.0'    （这样局域网其他ip可以访问）
-    4）远程登录：http://116.62.63.204:7861
+3、远程登录：
+    http://116.62.63.204:7862
