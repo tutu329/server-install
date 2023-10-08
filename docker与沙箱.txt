@@ -1,11 +1,11 @@
 一、docker常用命令
 1）下载镜像（docker pull codeocean/jupyterlab）
-2）运行容器（docker run -p 7861:7861 -v /d/jupyter_temp:/usr/local/jupyter_temp -it codeocean/jupyterlab）
+2）运行容器（docker run -p 7862:7862 -v /d/jupyter_temp:/usr/local/jupyter_temp -it codeocean/jupyterlab）
     容器中运行：
     a）jupyter lab --generate-config
     b）cp /usr/local/jupyter_temp/jupyter_lab_config.py ~/.jupyter/
     c）cd /usr/local/jupyter_temp
-    d）jupyter：jupyter lab --allow-root --port 7861
+    d）jupyter：jupyter lab --allow-root --port 7862
 3）查看所有运行的容器（docker ps）
 4）查看所有的image（docker images）
 5）停止容器（docker stop 容器id）
@@ -30,7 +30,7 @@ CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常�
 
 四、下载和运行现成镜像
 1、下载：docker pull codeocean/jupyterlab
-2、运行docker：docker run -p 7861:7861 -v /d/jupyter_temp:/usr/local/jupyter_temp -it codeocean/jupyterlab
+2、运行docker：docker run -p 7862:7862 -v /d/jupyter_temp:/usr/local/jupyter_temp -it codeocean/jupyterlab
     1）-p为端口
     2）-v为装载宿主机文件夹（如共享编辑好的配置文件等），其中注意宿主机d：盘的表达，注意docker目录中必须用绝对路径不能用~。另外-it必须放最后。
 3、配置jupyterlab（docker可能没有vi，从volume中把config文件copy过来方便）
@@ -39,11 +39,34 @@ CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常�
     3）编辑配置文件：
         a）c.ServerApp.allow_remote_access = True
         b）c.ServerApp.open_browser = False
-        c）c.ServerApp.port = 7861
+        c）c.ServerApp.port = 7862
         d）c.ServerApp.terminals_enabled = False (注意：这样做很大程度上提高了安全性，但是python中仍然能够获取本地任何文件夹的访问和操作权限）
         e）c.ServerApp.token = 'Jackseaver112279'
         f）c.ServerApp.ip = '0.0.0.0'    （这样局域网其他ip可以访问）
-    4）远程登录：http://116.62.63.204:7861
+    4）远程登录：http://116.62.63.204:7862
 4、docker中运行jupyterlab(已进入docker的linux中)
-    jupyter lab --allow-root --port 7861
-5、浏览器中：116.62.63.204:7681打开jupyter，输入token（Jackseaver112279）登录即可。
+    jupyter lab --allow-root --port 7862
+5、浏览器中：116.62.63.204:7862打开jupyter，输入token（Jackseaver112279）登录即可。
+
+五、建立自定义的jupyter的image
+1、准备文件：dockerfile（docker build需要的默认名字）
+FROM codeocean/jupyterlab		# 基于该image的内容
+WORKDIR /usr/local/jupyter_temp/	# 设置容器运行的当前目录
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install pip -U			# RUN为docker build时运行内容
+RUN pip install matplotlib
+RUN pip install pandas
+RUN pip install numpy
+RUN jupyter lab --generate-config	# 生成/root/.jupyter/文件夹及默认jupyter_lab_config.py文件
+COPY jupyter_lab_config.py /root/.jupyter/	# 将"docker build -t jupyter_with_common_python_libs ." 中指定的目录(.)下的jupyter_lab_config.py复制到jupyter配置文件夹中
+EXPOSE 7862
+CMD ["jupyter", "lab", "--allow-root", "--port", "7862"]	# CMD为容器运行后执行的代码
+2、准备文件：修改后的jupyter_lab_config.py，和dockerfile文件放在一个文件夹下
+3、dockerfile所在文件夹下，编译image
+docker build -t jupyter_with_common_python_libs .
+    a)-t 参数用于指定新镜像的名称和可选的 tag
+    b). 表示 Dockerfile 文件所在的当前目录，Docker 将从这个目录开始构建镜像。
+3、在宿主机的d:/jupyter_temp准备好jupyter_lab_config.py文件
+4、新建批处理并运行image
+    docker run -p 7862:7862 -v /d/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs
+5、关闭容器：需要在docker desktop中关闭
