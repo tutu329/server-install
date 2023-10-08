@@ -50,23 +50,19 @@ CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常�
 
 五、建立自定义的jupyter的image
 1、准备文件：dockerfile（docker build需要的默认名字）
-FROM codeocean/jupyterlab		# 基于该image的内容
-WORKDIR /usr/local/jupyter_temp/	# 设置容器运行的当前目录
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
-RUN pip install pip -U			# RUN为docker build时运行内容
-RUN pip install matplotlib
-RUN pip install pandas
-RUN pip install numpy
-RUN jupyter lab --generate-config	# 生成/root/.jupyter/文件夹及默认jupyter_lab_config.py文件
-COPY jupyter_lab_config.py /root/.jupyter/	# 将"docker build -t jupyter_with_common_python_libs ." 中指定的目录(.)下的jupyter_lab_config.py复制到jupyter配置文件夹中
-EXPOSE 7862
-CMD ["jupyter", "lab", "--allow-root", "--port", "7862"]	# CMD为容器运行后执行的代码
-2、准备文件：修改后的jupyter_lab_config.py，和dockerfile文件放在一个文件夹下
-3、dockerfile所在文件夹下，编译image
-docker build -t jupyter_with_common_python_libs .
+    FROM codeocean/jupyterlab
+    WORKDIR /usr/local/jupyter_temp/
+    RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+    RUN pip install pip -U			# RUN为docker build时运行内容
+    RUN pip install matplotlib
+    RUN pip install pandas
+    RUN pip install numpy
+    EXPOSE 7862
+    CMD ["jupyter", "lab", "--allow-root", "--ServerApp.allow_remote_access=True",  "--ServerApp.token=Jackseaver112279", "--no-browser", "--ip='*'", "--port=7862"]
+2、dockerfile所在文件夹下，编译image
+    docker build -t jupyter_with_common_python_libs .
     a)-t 参数用于指定新镜像的名称和可选的 tag
     b). 表示 Dockerfile 文件所在的当前目录，Docker 将从这个目录开始构建镜像。
-3、在宿主机的d:/jupyter_temp准备好jupyter_lab_config.py文件
-4、新建批处理并运行image
+3、新建批处理并运行image（装载d:/jupyter_temp为docker下的/usr/local/jupyter_temp，用作数据交换）
     docker run -p 7862:7862 -v /d/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs
-5、关闭容器：需要在docker desktop中关闭
+4、关闭容器：需要在docker desktop中关闭
