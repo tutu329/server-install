@@ -12,3 +12,7 @@
         f）c.ServerApp.ip = '0.0.0.0'    （这样局域网其他ip可以访问）
 3、远程登录：
     http://116.62.63.204:7862
+
+4、jupyter lab更换conda的kernel
+    1）对应conda环境下：pip install ipython ipykernel
+    2）对应conda环境下：python -m ipykernel install --user --name 需要显示的kernel名字
