@@ -1,5 +1,5 @@
 1、启动服务
-    jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --no-browser --ip='*' --port=7862
+    jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --no-browser --ip=* --port=7862
 2、通过配置文件改变启动参数
     1）生成配置文件：jupyter lab --generate-config
     2）找到配置文件：.jupyter/下的jupyter_lab_config.py
