@@ -58,7 +58,7 @@ CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常�
     RUN pip install pandas
     RUN pip install numpy
     EXPOSE 7862
-    CMD ["jupyter", "lab", "--allow-root", "--ServerApp.allow_remote_access=True",  "--ServerApp.token=Jackseaver112279", "--no-browser", "--ip='*'", "--port=7862"]
+    CMD ["jupyter", "lab", "--allow-root", "--ServerApp.allow_remote_access=True",  "--ServerApp.token=Jackseaver112279", "--no-browser", "--ip=*", "--port=7862"]
 2、dockerfile所在文件夹下，编译image
     docker build -t jupyter_with_common_python_libs .
     a)-t 参数用于指定新镜像的名称和可选的 tag
