@@ -30,3 +30,6 @@ super().__init__(
 # self.add_eos_token = add_eos_token
 # self.sp_model = spm.SentencePieceProcessor(**self.sp_model_kwargs)
 # self.sp_model.Load(vocab_file)
+
+10、模型目录都改为 "D:/models/Baichuan2-13B-Chat-4bits"
+11、streamlit run web_demo.py
