@@ -1,0 +1,32 @@
+1、conda create -n baichuan python=3.10
+2、conda activate baichuan
+3、pip install -r requirement.txt
+4、pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+5、安装win下的triton：下载 https://huggingface.co/r4ziel/xformers_pre_built/blob/main/triton-2.0.0-cp310-cp310-win_amd64.whl
+6、安装win下的triton：python -m pip install triton-2.0.0-cp310-cp310-win_amd64.whl
+7、重新安装bitsandbytes：下载https://github.com/jllllll/bitsandbytes-windows-webui/releases/download/wheels/bitsandbytes-0.41.1-py3-none-win_amd64.whl
+8、重新安装bitsandbytes：python -m pip install --force-reinstall bitsandbytes-0.41.1-py3-none-win_amd64.whl
+
+9、报错：AttributeError: 'BaichuanTokenizer' object has no attribute 'sp_model'
+修改下 tokenization_baichuan.py 也可以，把 super() 修改到最后执行(原来是在self.vocab_file = vocab_file这一行前面)
+self.vocab_file = vocab_file
+self.add_bos_token = add_bos_token
+self.add_eos_token = add_eos_token
+self.sp_model = spm.SentencePieceProcessor(**self.sp_model_kwargs)
+self.sp_model.Load(vocab_file)
+super().__init__(
+    bos_token=bos_token,
+    eos_token=eos_token,
+    unk_token=unk_token,
+    pad_token=pad_token,
+    add_bos_token=add_bos_token,
+    add_eos_token=add_eos_token,
+    sp_model_kwargs=self.sp_model_kwargs,
+    clean_up_tokenization_spaces=clean_up_tokenization_spaces,
+    **kwargs,
+)
+# self.vocab_file = vocab_file
+# self.add_bos_token = add_bos_token
+# self.add_eos_token = add_eos_token
+# self.sp_model = spm.SentencePieceProcessor(**self.sp_model_kwargs)
+# self.sp_model.Load(vocab_file)
