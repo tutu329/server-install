@@ -1,0 +1,2 @@
+用playwright启动chrome浏览器而不是chromium(playwright默认启动chromium，需要git并且编译很麻烦)，python代码改为如下即可：
+    browser = p.chromium.launch(channel="chrome", headless=False)   # 启动chrome
