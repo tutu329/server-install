@@ -35,6 +35,26 @@
         a）新建vc.cmd:"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
         b）新建qwen_server.cmd: cmd /K "vc.cmd && conda activate qwen && set CUDA_VISIBLE_DEVICES=0 && d: && cd d:\server\life-agent && start python -m gpu_server.qwen_client_webui && cd d:\qwen && python openai_api.py"
         c）qwen_server.cmd和vc.cmd放在一起，运行qwen_server.cmd即可启动qwen服务
+    5）但是开启kvcache的量化后，回答质量下降！！！！
+
+3、2080ti安装flash-attention（源码编译会报错，用pip编译）
+1）安装flash-attention 1.09
+    a）运行"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+    b）conda activate qwen
+    c）set DISTUTILS_USE_SDK=1
+    d）set include=C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Tools\MSVC\14.37.32822\include;C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\ucrt;C:\Program Files (x86)\Windows Kits\10\Include\10.0.22621.0\shared
+    e）pip install flash-attn==1.0.9 --no-build-isolation
+    f）成功。
+2）安装flash-attention rotary （可选）
+    a）下载flash-attention 1.09源码
+    b）flash-attention 1.09的rotary目录下：
+        pip install .
+    c）成功
+3）安装flash-attention rms_norm （可选）
+    a）下载flash-attention 1.09源码
+    b）flash-attention 1.09的layer_norm目录下：
+        pip install .
+    c）报错
 
 
 
