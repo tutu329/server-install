@@ -15,7 +15,7 @@
 2、RuntimeError: Ninja is required to load C++ extensions
     1）git clone https://github.com/ninja-build/ninja
     2）git checkout release
-    3）win搜索vs，执行开始菜单中visual studio 2022下的x64 native tools command prompt（注意不是x86！）
+    3）win搜索vs，执行开始菜单中visual studio 2022下的x64 native tools command prompt（注意不是x86！，其实就是运行vcvars64.bat）
         4）进入ninja文件夹
         5）conda activate qwen(也可能不需要)
         6）python ./configure.py --bootstrap
@@ -29,6 +29,14 @@
              c）然后qwen下，运行python openai_api.py
         报错：error: invalid redeclaration of type name "size_t"（这个错误就是因为误用了x86 native tools command prompt，要改用x64）
         然后运行正常！
+    4）以后运行qwen的openai_api.py之前，要在控制台运行：
+        "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+        靠谱做法：
+        a）新建vc.cmd:"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+        b）新建qwen_server.cmd: cmd /K "vc.cmd && conda activate qwen && set CUDA_VISIBLE_DEVICES=0 && d: && cd d:\server\life-agent && start python -m gpu_server.qwen_client_webui && cd d:\qwen && python openai_api.py"
+        c）qwen_server.cmd和vc.cmd放在一起，运行qwen_server.cmd即可启动qwen服务
+
+
 
 
 
