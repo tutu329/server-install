@@ -1,0 +1,31 @@
+1、关于kvcache的量化
+    1）下载最新qwen和model
+    2）model下的cache_autogptq_cuda_256.cpp和cache_autogptq_cuda_kernel_256.cu复制到qwen目录下
+    3）修改openai_api.pyRuntimeError: Ninja is required to load C++ extensions
+        model = AutoModelForCausalLM.from_pretrained(
+            args.checkpoint_path,
+            device_map=device_map,
+            trust_remote_code=True,
+            use_cache_quantization=True,
+            use_cache_kernel=True,
+            use_flash_attn=False,
+            resume_download=True,
+        ).eval()
+
+2、RuntimeError: Ninja is required to load C++ extensions
+    1）git clone https://github.com/ninja-build/ninja
+    2）git checkout release
+    3）win搜索vs，打开x86 native tools command prompt
+    4）进入ninja文件夹
+    5）conda activate qwen(也可能不需要)
+    6）python ./configure.py --bootstrap
+    7）运行ninja： ninja: no work to do.
+    8）qwen下，运行python openai_api.py
+    报错：
+    无法打开包括文件: “assert.h”
+    无法打开包括文件: “corecrt.h”
+    解决：visual studio installer中，安装windows 11 sdk和 MSVC生成工具
+    ====>仍然报错。。。
+
+
+
