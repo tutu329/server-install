@@ -1,6 +1,39 @@
-一、下载最新n卡驱动程序
-0）根据https://forums.developer.nvidia.com/t/rtx-3090-nvlink-cuda-p2p-not-working-on-linux-or-windows-in-different-ways/232673/8
+一、下载最新n卡驱动程序（运行nvidia-smi可以查看驱动版本、WDDM还是TCC(专门为计算任务优化的模式，也就是nvlink需要的。但tcc不支持显示输出)模式）
+1）根据https://forums.developer.nvidia.com/t/rtx-3090-nvlink-cuda-p2p-not-working-on-linux-or-windows-in-different-ways/232673/8
 似乎驱动程序用新的，就能解决2个3090的nvlink问题，即使主板不支持sli
+
+二、nvidia-smi nvlink -c（如果Link is supported: true，则表明nvlink可以用了（驱动更新前可能是false））
+GPU 0: NVIDIA GeForce RTX 2080 Ti (UUID: GPU-5aefdb0f-c6eb-c650-3d75-a39890645b4a)
+         Link 0, P2P is supported: true
+         Link 0, Access to system memory supported: true
+         Link 0, P2P atomics supported: true
+         Link 0, System memory atomics supported: true
+         Link 0, SLI is supported: true
+         Link 0, Link is supported: true
+         Link 1, P2P is supported: true
+         Link 1, Access to system memory supported: true
+         Link 1, P2P atomics supported: true
+         Link 1, System memory atomics supported: true
+         Link 1, SLI is supported: true
+         Link 1, Link is supported: true
+GPU 1: NVIDIA GeForce RTX 2080 Ti (UUID: GPU-ea2717a6-276a-f454-d0d6-8ac16738a1aa)
+         Link 0, P2P is supported: true
+         Link 0, Access to system memory supported: true
+         Link 0, P2P atomics supported: true
+         Link 0, System memory atomics supported: true
+         Link 0, SLI is supported: true
+         Link 0, Link is supported: true
+         Link 1, P2P is supported: true
+         Link 1, Access to system memory supported: true
+         Link 1, P2P atomics supported: true
+         Link 1, System memory atomics supported: true
+         Link 1, SLI is supported: true
+         Link 1, Link is supported: true
+
+三、切换TCC模式（2080ti不支持tcc模式，titan、tesla显卡支持）
+以管理员身份运行CMD：
+切换至WDDM 模式命令：nvidia-smi -dm 0 -i 显卡id
+切换至TCC模式命令：nvidia-smi -dm 1 -i 显卡id
 
 一、nvidia-smi -q
 1）查看以下这一块的信息，判断显卡的pcie代数和倍速：
