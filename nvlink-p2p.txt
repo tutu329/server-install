@@ -1,0 +1,34 @@
+一、下载最新n卡驱动程序
+0）根据https://forums.developer.nvidia.com/t/rtx-3090-nvlink-cuda-p2p-not-working-on-linux-or-windows-in-different-ways/232673/8
+似乎驱动程序用新的，就能解决2个3090的nvlink问题，即使主板不支持sli
+
+一、nvidia-smi -q
+1）查看以下这一块的信息，判断显卡的pcie代数和倍速：
+    PCI
+        Bus                               : 0x01
+        Device                            : 0x00
+        Domain                            : 0x0000
+        Device Id                         : 0x1E0710DE
+        Bus Id                            : 00000000:01:00.0
+        Sub System Id                     : 0x877D1043
+        GPU Link Info
+            PCIe Generation
+                Max                       : 3
+                Current                   : 3
+                Device Current            : 3
+                Device Max                : 3
+                Host Max                  : 5
+            Link Width
+                Max                       : 16x
+                Current                   : 8x
+2）
+
+1、win下编译
+1）下载源码：https://github.com/NVIDIA/cuda-samples/releases/tag/v11.8
+2）运行x64 native tools command prompt for vs 2022那个bat，然后把cuda-samples-11.8\cuda-samples-11.8\Samples\5_Domain_Specific\p2pBandwidthLatencyTest里的sln拖进去运行（这样就不会因为没有path运行不了）
+
+1）复制：C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v11.8\extras\visual_studio_integration\MSBuildExtensions 里的文件
+到：C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Microsoft\VC\v170\BuildCustomizations 里
+2）
+
+
