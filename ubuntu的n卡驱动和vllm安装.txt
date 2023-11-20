@@ -1,0 +1,75 @@
+一、ubuntu安装
+1、必须要有个u盘，如果只是把准备装系统的移动硬盘分一个区用来放ubuntu镜像，则会在ubuntu安装时需要重新分区移动硬盘而导致安装失败（移动硬盘包含安装数据）
+2、分区配置：
+	a）efi分区：逻辑分区、efi、2.5g
+	b）swap分区：逻辑分区、64G
+	c）/：主分区、ext4、若干
+	d）/home：逻辑分区、ext4、若干
+3、n卡驱动安装：
+1）千万不要参照网上的流程（关nouveau之类），会导致重启后系统黑屏无法用、必须重装，而是直接在图形界面的“附加驱动”中用如第一行的较新nvidia驱动，重启即可
+2）nvidia-smi测试是否成功。nvlink可以通过nvidia-smi topo -m测试
+4、根据要求安装cuda-toolkit，如需要cuda12.1,则按照https://developer.nvidia.com/cuda-12-1-1-download-archive的要求安装即可（主要用于vllm的编译）
+5、安装anaconda，安装时注意要让其执行conda init，不然有些问题（如conda找不到、conda activate报错等，安装后执行也可以）
+6、在conda环境中安装pytorch2.1.1+cuda12.1: pip install torch torchvision torchaudio
+
+二、安装gcc
+sudo apt update
+sudo apt install g++
+sudo apt install gcc
+sudo apt install make
+
+三、安装llm
+1、conda create -n vllm python=3.10
+2、conda activate vllm
+3、git clone https://github.com/vllm-project/vllm.git
+4、vllm文件夹里：pip install -e .  # This may take 5-10 minutes.
+5、运行vllm应用主要问题：
+	a)vllm版本有些乱，from vllm import LLM可能要改为from vllm.entrypoint... import ...这类，具体可以翻源码结构就行
+	b)参数如多gpu：
+		from vllm.engine.arg_utils import AsyncEngineArgs
+	    	engine_args = AsyncEngineArgs(model_path)
+	    	engine_args.trust_remote_code = True
+	    	engine_args.tensor_parallel_size = 2（即使用2个gpu）
+	c)之后运行vllm应用，可能会报错(Failed to start the dashboard)，可以pip install -r requirement.txt即可
+	d)运行server(openai)： 
+		python -m vllm.entrypoints.openai.api_server --model ~/models/Qwen-14B-Chat --tensor-parallel-size 2 --trust-remote-code
+		http://localhost:8001/docs查看api
+	e)fastchat的安装：
+		按照官网要求：pip install "fschat[model_worker,webui]"
+	f)运行client.py:
+		import openai
+
+		# Modify OpenAI's API key and API base to use vLLM's API server.
+		openai.api_key = "EMPTY"
+		openai.api_base = "http://localhost:8001/v1"
+
+		print('------------------------------------------1-------------------------------------------------')
+		# List models API
+		models = openai.Model.list()
+		print("Models:", models)
+		print('------------------------------------------2-------------------------------------------------')
+		model = models["data"][0]["id"]
+		print(f'model: {model}')
+		print('------------------------------------------3-------------------------------------------------')
+		# Chat completion API
+		chat_completion = openai.ChatCompletion.create(
+		    model=model,
+		    messages=[{
+			"role": "system",
+			"content": "You are a helpful assistant."
+		    }, {
+			"role": "user",
+			"content": "Who won the world series in 2020?"
+		    }, {
+			"role":
+			"assistant",
+			"content":
+			"The Los Angeles Dodgers won the World Series in 2020."
+		    }, {
+			"role": "user",
+			"content": "Where was it played?"
+		    }])
+		print('------------------------------------------4-------------------------------------------------')
+		print("Chat completion results:")
+		print(chat_completion)
+
