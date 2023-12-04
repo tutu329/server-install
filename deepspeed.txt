@@ -1,0 +1,17 @@
+一、widows11下安装deepspeed
+1、conda create -n ds python=3.10，
+2、conda activate ds
+3、安装pytorch: pip install torch==2.0.0 torchvision==0.15.1 torchaudio==2.0.1 --index-url https://download.pytorch.org/whl/cu118 （注意pytorch2.1.1、cu121会失败）
+4、按照https://github.com/microsoft/DeepSpeed/issues/4729，下载deepspeed的0.83版本
+5、修改build_win.bat，增加
+    set DS_BUILD_EVOFORMER_ATTN=0
+    set DS_BUILD_CUTLASS_OPS=0（如果有必要）
+    set DS_BUILD_RAGGED_DEVICE_OPS=0（如果有必要）
+    set DISTUTILS_USE_SDK=1（如果有必要）
+6、用管理员权限，打开x64 native tools command prompt for vs 2022(2)
+7、conda activate ds, 运行build_win.bat，进行编译
+这个错误不用管：LINK : fatal error LNK1181: 无法打开输入文件“aio.lib”
+8、编译成功后：
+pip uninstall -y deepspeed
+cd dist
+pip install deepspeed-0.8.3+unknown-cp310-cp310-win_amd64.whl
