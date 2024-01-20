@@ -1,0 +1,85 @@
+https://blog.csdn.net/qq_53454383/article/details/128687544
+
+1、根据这个网页一步一步来就行
+2、就对添加user这里修改一下即可
+    useradd -d /var/ftproot -s /sbin/nologin ftpuser
+    改为
+    sudo useradd -d /home/tutu/server -s /sbin/nologin ftpuser
+
+
+一、安装vsftp和ftp
+yum install -y vsftpd ftp
+
+二、配置user（虚拟user，一个linux的user("ftpuser")对应多个vsftp的虚拟user）
+1、虚拟user的配置
+cd /etc/vsftpd/
+vi sky.txt(奇数行为用户，偶数行为密码)
+tutu329
+jackseaver79
+admin
+jackseaver79
+ftp
+jackseaver79
+
+2、虚拟user的配置文件转换为数据库
+db_load -T -t hash -f sky.txt sky.db
+chmod 600 sky.db
+rm -rf sky.txt
+
+3、创建linux的user与虚拟user的映射
+useradd -d /home/tutu/server -s /sbin/nologin ftpuser
+chmod -Rf 755 /var/ftproot/ （home设置为/home/tutu/server时，这一行不需要了）
+
+4、创建PAM文件，直接进入vsftpd更改，或创建vsftpd.vu文件进行编写
+vi /etc/pam.d/vsftpd.vu
+auth required pam_userdb.so db=/etc/vsftpd/sky
+account required pam_userdb.so db=/etc/vsftpd/sky
+
+三、修改vsftp的配置文件
+vi /etc/vsftpd/vsftpd.conf
+anonymous_enable=NO
+local_enable=YES
+write_enable=YES
+local_umask=022
+最下面添加
+guest_enable=YES
+guest_username=ftpuser
+pam_service_name=vsftpd.vu
+user_config_dir=/etc/vsftpd/user
+allow_writeable_chroot=YES
+pasv_enable=YES                         允许服务器被动模式
+listen_address=IP地址                    设置要监听的IP地址
+listen_port=21                          设置FTP服务的监听端口
+download_enable=YES                     是否允许下载文件
+max_clients=0                           设置最大连接数，0为不限制
+max_per_ip=0                            同一IP的最大连接数，0为不限制
+local_root=/home                        限制本地用户活动目录
+anon_root=/home                         限制匿名用户活动目录
+
+
+四、创建虚拟user的文件夹
+mkdir /etc/vsftpd/user
+vi /etc/vsftpd/user/tutu329 (可以上传文件，创建、修改、删除目录，如果下面几行为空，就是什么权限都不给)
+anon_upload_enable=YES
+anon_mkdir_write_enable=YES
+anon_other_write_enable=YES
+
+cp /etc/vsftpd/user/tutu329 /etc/vsftpd/user/admin
+cp /etc/vsftpd/user/tutu329 /etc/vsftpd/user/ftp
+
+五、防火墙设置
+iptables -F
+iptables-save
+firewall-cmd --permanent --zone=public --add-service=ftp
+firewall-cmd --reload
+getsebool -a | grep ftp
+setsebool -P ftpd_full_access=on
+
+六、vsftp服务的自启动设置
+systemctl restart vsftpd
+systemctl enable vsftpd
+
+七、测试
+ftp localhost
+
+八、其他参数
