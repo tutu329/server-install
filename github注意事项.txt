@@ -91,5 +91,17 @@ git push -f origin master
     git commit -m "comment"
     git push origin master
 
+四、出现git commit时一直报错:ssh: connect to host github.com port 22: Connection timed out
+1、测试：ssh -T git@github.com
+如果还是同样错误，则将22改为443
+2、在c:/users/tutu文件夹下，新建config文件
+    Host github.com
+    User jack.seaver@163.com
+    Hostname ssh.github.com
+    PreferredAuthentications publickey
+    IdentityFile ~/.ssh/id_rsa
+    Port 443
+3、然后，ssh -T git@github.com，选择yes即可
+
 
 

@@ -66,3 +66,66 @@ CMD ["python", "-m", "your_python_module", "your_module_para"](该方式通常�
 3、新建批处理并运行image（装载d:/jupyter_temp为docker下的/usr/local/jupyter_temp，用作数据交换）
     docker run -p 7862:7862 -v /d/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs
 4、关闭容器：需要在docker desktop中关闭
+
+#------------------------------------------------------------------------------------------------------------
+六、centos8下建立自定义沙箱：基于python基础库和jupyter的image(jupyter_with_common_python_libs, 2024-01-08)
+0、centos8下安装docker
+    一、安装yum-utils
+        sudo yum install -y yum-utils device-mapper-persistent-data lvm2
+    二、为yum源添加docker仓库位置：
+        sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+    三、安装docker
+        解决podman和docker的冲突：
+            1.查看是否安装 Podman
+                rpm -q podman
+            2.删除之后在重新yum install docker-ce下载
+                sudo dnf remove podman
+                yum erase podman buildah
+        sudo yum install docker-ce
+    四、启动docker
+        systemctl start docker
+    五、查看docker是否启动成功
+        sudo systemctl status docker(出现如下方： active running表示运行成功)
+    六、可以根据自己需求修改docker安装路径
+        6.1 查看本机用户安装docker的路径
+        sudo docker info | grep "Docker Root Dir"
+        6.2 修改安装路径
+        # 停止docker
+        systemctl stop docker.socket
+        systemctl stop docker
+        # 移动docker所有文件 /data/docker 是自己打算修改的路径
+        mv /var/lib/docker /data/docker     
+        # 建立软连接
+        ln -s /data/docker /var/lib/docker
+        # 重启docker
+        systemctl restart docker
+        设置自动启动：sudo systemctl enable docker
+1、准备文件：dockerfile（docker build需要的默认名字）
+    FROM codeocean/jupyterlab
+    WORKDIR /usr/local/jupyter_temp/
+    RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+    RUN pip install pip -U			# RUN为docker build时运行内容
+    RUN pip install matplotlib
+    RUN pip install scikit-learn
+    RUN pip install pandas
+    RUN pip install tabulate
+    RUN pip install statsmodels
+    RUN pip install numpy
+    EXPOSE 7863
+    CMD ["jupyter", "lab", "--allow-root", "--ServerApp.allow_remote_access=True",  "--ServerApp.token=Jackseaver112279", "--no-browser", "--ip=*", "--port=7863"]
+2、dockerfile所在文件夹下，编译image
+    docker build -t jupyter_with_common_python_libs .
+    a)-t 参数用于指定新镜像的名称和可选的 tag
+    b). 表示 Dockerfile 文件所在的当前目录，Docker 将从这个目录开始构建镜像。
+3、新建批处理并运行image（装载/home/tutu/jupyter_temp为docker下的/usr/local/jupyter_temp，用作数据交换）
+    mkdir ~/jupyter_temp
+    docker run -p 7863:7863 -v /home/tutu/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs(这个image运行时)
+4、python安装docker库，并且增加docker权限（否则报错：Error while fetching server API version: ('Connection aborted.', PermissionError(13, 'Permission denied'))）
+    安装：
+        pip install docker
+    允许tutu(如远程jupyter下)连接docker:
+        sudo groupadd docker
+        sudo usermod -aG docker $USER
+        newgrp docker(更新组)
+        测试（python里可以直接调用指定image，不需要docker运行如jupyter_with_common_python_libs镜像）：python life-agent/tools/exec_code/exec_python_linux.py
+#------------------------------------------------------------------------------------------------------------
