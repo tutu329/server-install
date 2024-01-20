@@ -64,6 +64,7 @@ anon_root=/home                         # 限制匿名用户活动目录
 四、创建虚拟user的文件夹
 mkdir /etc/vsftpd/user
 vi /etc/vsftpd/user/tutu329 (可以上传文件，创建、修改、删除目录，如果下面几行为空，就是什么权限都不给)
+local_root=/home/tutu/server
 anon_upload_enable=YES
 anon_mkdir_write_enable=YES
 anon_other_write_enable=YES
