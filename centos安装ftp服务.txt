@@ -87,3 +87,6 @@ systemctl enable vsftpd
 七、测试
 ftp localhost
 重启服务：sudo service vsftpd restart
+
+八、关于pycharm里的ftp设置test通不过
+如果filezilla连得上，说明pycharm有问题，换成最新版即可。
