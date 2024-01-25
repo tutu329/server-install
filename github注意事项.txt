@@ -95,13 +95,27 @@ git push -f origin master
 1、测试：ssh -T git@github.com
 如果还是同样错误，则将22改为443
 2、在c:/users/tutu文件夹下，新建config文件
-    Host github.com
-    User jack.seaver@163.com
-    Hostname ssh.github.com
-    PreferredAuthentications publickey
-    IdentityFile ~/.ssh/id_rsa
-    Port 443
+Host github.com
+User jack.seaver@163.com
+Hostname ssh.github.com
+PreferredAuthentications publickey
+IdentityFile ~/.ssh/id_rsa
+Port 443
 3、然后，ssh -T git@github.com，选择yes即可
 
+五、parallels desktop虚拟机中pycharm正常pull和push（虚拟机用mac的vpn：https://zhuanlan.zhihu.com/p/630383777?utm_id=0）
+1、虚拟机开vpn
+    1）mac下运行： ifconfig | grep inet ，找到第四个出现的inet"inet 10.211.55.2 netmask 0xffffff00 broadcast 10.211.55.255"，10.211.55.2即为虚拟机中用的代理ip
+    2）parallels desktop控制中心的硬件的网络，打开“共享网络”
+    3）mac的clash主菜单中，打开“运行局域网连接”
+    4）虚拟机win中，网络和internet的代理中，打开“使用代理服务”，代理ip地址为10.211.55.2，port为7890，“请勿对以下条目...”为空，“请勿将代理服务器用于...”不选。保存
+    此时，虚拟机win的网页可以连上github等外网
+2、git命令行设置：
+    git config --global http.proxy 10.211.55.2:7890（git config --global --unset http.proxy）
+    git config --global https.proxy 10.211.55.2:7890（git config --global --unset https.proxy）
+3、pycharm设置：
+    a）github：选上"clone git repositories using ssh"
+    b）如果git pull或push报错：unsafe repository（通常是mac下clone的库，虚拟机win下pusll或push）
+        可以命令行运行：git config --global --add safe.directory "*"
 
 
