@@ -114,7 +114,7 @@ Port 443
     git config --global http.proxy 10.211.55.2:7890（git config --global --unset http.proxy）
     git config --global https.proxy 10.211.55.2:7890（git config --global --unset https.proxy）
 3、pycharm设置：
-    a）ssh和git push设置
+    a）ssh和git push设置（这步可能可以跳过，先尝试b)和c) ）
         1、ssh-keygen -t rsa -b 4096 -C "jack.seaver@163.com"
         2、~/.ssh/下会有2个文件：id_rsa和id_rsa.pub
         3、github网页登录，settings->SSH and GPG keys->New SSH key，输入Title（随意）和Key（id_rsa.pub中所有文字），Add SSH key
@@ -125,9 +125,9 @@ Port 443
             b）改.git/config
                 [remote "origin"]
                         url = git@github.com:tutu329/life-agent
-6、git clone也可以改为 git clone git@github.com:tutu329/life-agent 这样，可以快、稳定很多。
-    a）github：选上"clone git repositories using ssh"，然后新增一个用户via github(tutu329:Jackseaver112279)
-    b）如果git pull或push报错：unsafe repository（通常是mac下clone的库，虚拟机win下pusll或push）
+        6、git clone也可以改为 git clone git@github.com:tutu329/life-agent 这样，可以快、稳定很多。
+    b）github：选上"clone git repositories using ssh"，然后新增一个用户via github(tutu329:Jackseaver112279)
+    c）如果git pull或push报错：unsafe repository（通常是mac下clone的库，虚拟机win下pusll或push）
         可以命令行运行：git config --global --add safe.directory "*"
 
 
