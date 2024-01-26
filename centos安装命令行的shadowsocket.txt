@@ -1,0 +1,61 @@
+官网：https://github.com/shadowsocks/shadowsocks-libev
+
+准备工作：
+sudo yum install epel-release -y
+sudo yum install gcc gettext autoconf libtool automake make pcre-devel asciidoc xmlto c-ares-devel libev-devel libsodium-devel mbedtls-devel -y
+
+一、centos安装snap
+yum install snapd
+systemctl enable --now snapd.socket
+
+二、安装shadowsocket
+snap install shadowsocks-libev
+
+三、建立ss的配置文件
+vi /var/lib/snapd/snap/bin/config.json
+{
+    "server":"node-1504.yh82l3dsytxzf8.com",
+    "server_port":30030,
+    "local_port":7890,
+    "password":"jackseaver79",
+    "timeout":300,
+    "method":"aes-256-cfb"
+}
+
+四、建立shadowsocks-libev的service单元配置文件
+vi /lib/systemd/system/ss.service
+[Unit]
+Description=Shadowsocks Server
+After=network.target
+
+[Service]
+Restart=on-abnormal
+ExecStart=/var/lib/snapd/snap/bin/shadowsocks-libev.ss-server -c /var/lib/snapd/snap/bin/config.json > /dev/null 2>&1
+
+[Install]
+WantedBy=multi-user.target
+
+五、设置开机启动shadowsocks-libev
+systemctl daemon-reload
+systemctl start ss.service
+systemctl enable ss.service
+
+六、防火墙开放shadowsocks-libev服务端口
+sudo firewall-cmd --permanent --add-port=7890/tcp
+sudo firewall-cmd --permanent --add-port=7890/udp
+sudo firewall-cmd --reload
+
+七、常用命令
+查看日志：journalctl -u shadowsocks-libev
+重启服务：systemctl restart ss.service
+查看服务器的端口占用情况：netstat -autn
+查看状态：systemctl status ss.service
+查看ss占用那个端口:  ps ax |grep ss-server
+
+
+查看日志：journalctl -u shadowsocks-libev
+重启：systemctl restart shadowsocks-libev
+停止shadowsocks-libev服务：systemctl stop ss.service
+取消shadowsocks-libev开机自启：systemctl disable ss.service
+升级shadowsocks-libev版本：snap refresh shadowsocks-libev
+移除shadowsocks-libev应用（还需要手工清理上文第四节第五节涉及的配置文件）：snap remove shadowsocks-libev
