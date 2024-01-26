@@ -52,7 +52,6 @@ sudo firewall-cmd --reload
 查看状态：systemctl status ss.service
 查看ss占用那个端口:  ps ax |grep ss-server
 
-
 查看日志：journalctl -u shadowsocks-libev
 重启：systemctl restart shadowsocks-libev
 停止shadowsocks-libev服务：systemctl stop ss.service
