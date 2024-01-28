@@ -1,3 +1,12 @@
+【v2ray】
+1、下载： https://github.com/v2fly/fhs-install-v2ray/blob/master/install-release.sh
+2、conda create -n vpn python=3.10, conda create vpn
+3、sudo bash install-release.sh (等待下载安装完成)
+
+
+
+
+
 官网：https://github.com/shadowsocks/shadowsocks-libev
 
 【注意，这个是在自己服务器上开一个shadowsocks服务，而不是作为client开梯子】
