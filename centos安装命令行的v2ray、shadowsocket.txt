@@ -1,14 +1,82 @@
-【v2ray】
+【v2ray客户端】
 1、下载： https://github.com/v2fly/fhs-install-v2ray/blob/master/install-release.sh
 2、conda create -n vpn python=3.10, conda create vpn
 3、sudo bash install-release.sh (等待下载安装完成)
+4、根据安装成功的信息查看配置文件位置：/usr/local/etc/v2ray/config.json
+注意：
+1）第五行（"protocol": "http",）指定"http"或者"socks"，指定socks时，后面设置要改为如：'socks5://127.0.0.1:7890'
+2）这里只放了一个美国4节点。
+【v2ray配置文件如下】
+{
+    "inbounds": [
+        {
+            "port": 7890,
+            "protocol": "http",
+            "settings": {
+                "auth": "noauth",
+                "udp": false
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "vmess",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": "node-1504.yh82l3dsytxzf8.com",
+                        "port": 30030,
+                        "users": [
+                            {
+                                "id": "6e812e27-24df-37a5-98b2-adbba6633c34",
+                                "alterId": 0,
+                                "security": "auto"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "freedom",
+            "settings": {},
+            "tag": "direct"
+        }
+    ],
+    "routing": {
+        "domainStrategy": "AsIs",
+        "rules": [
+            {
+                "type": "field",
+                "ip": [
+                    "geoip:private"
+                ],
+                "outboundTag": "direct"
+            }
+        ]
+    }
+}
+
+5、常用命令
+设置自启动：sudo systemctl enable v2ray
+启动：sudo systemctl start v2ray
+关闭：sudo systemctl stop v2ray
+
+export http_proxy="http://127.0.0.1:7890"
+export https_proxy="http://127.0.0.1:7890"
+
+git config --global http.proxy 'http://127.0.0.1:7890'
+git config --global https.proxy 'http://127.0.0.1:7890'
+
+git config --global --unset http.proxy
+git config --global --unset https.proxy
 
 
 
 
 
+【shadowsocks服务端（暂时没什么用）】
 官网：https://github.com/shadowsocks/shadowsocks-libev
-
 【注意，这个是在自己服务器上开一个shadowsocks服务，而不是作为client开梯子】
 准备工作：
 sudo yum install epel-release -y
