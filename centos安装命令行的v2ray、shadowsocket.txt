@@ -14,7 +14,7 @@
             "protocol": "http",
             "settings": {
                 "auth": "noauth",
-                "udp": false
+                "udp": true
             }
         }
     ],
@@ -61,6 +61,7 @@
 设置自启动：sudo systemctl enable v2ray
 启动：sudo systemctl start v2ray
 关闭：sudo systemctl stop v2ray
+查看端口情况：netstat -autn | grep 7890
 
 export http_proxy="http://127.0.0.1:7890"
 export https_proxy="http://127.0.0.1:7890"
