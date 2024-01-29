@@ -3,13 +3,17 @@
     0）sudo systemctl start v2ray
     1）curl -x http://localhost:7890 https://www.google.com
     2）curl -x http://localhost:7890 https://huggingface.co
-    3）测试git clone
-        a)直接设置代理：sudo git -c http.proxy=http://localhost:7890 -c https.proxy=http://localhost:7890 clone https://huggingface.co/TheBloke/deepseek-coder-33B-instruct-AWQ
-        b)利用git config --global设置代理（注意：git clone用了sudo后，代理设置信息丢失！因此，要么用方式a，要么设置文件夹权限使得不需要sudo）
+    3）测试git clone(GIT_CURL_VERBOSE=1 git clone ... 可以打印详细信息)
+        a)直接指定代理：sudo git -c http.proxy=http://localhost:7890 -c https.proxy=http://localhost:7890 clone https://huggingface.co/TheBloke/deepseek-coder-33B-instruct-AWQ
+        b)global设置代理（注意：git clone用了sudo后，代理设置信息丢失！因此，要么用方式a，要么不要在ntfs这类mnt文件夹里git clone）
             git config --global http.proxy http://localhost:7890
             git config --global https.proxy http://localhost:7890
             查看git config：git config --global -l
-            GIT_CURL_VERBOSE=1 git clone https://huggingface.co/TheBloke/deepseek-coder-33B-instruct-AWQ
+            在权限足够的文件夹如在~/下执行：git clone https://huggingface.co/TheBloke/deepseek-coder-33B-instruct-AWQ
+    4）设置git的lfs
+        sudo yum install git-lfs
+        git lfs install
+
 
 【v2ray安装】
 1、下载： https://github.com/v2fly/fhs-install-v2ray/blob/master/install-release.sh
