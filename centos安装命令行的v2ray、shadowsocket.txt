@@ -1,4 +1,10 @@
 【v2ray客户端】
+【测试v2ray客户端是否可以连接外网】
+    0）sudo systemctl start v2ray
+    1）curl -x http://localhost:7890 https://www.google.com
+    2）curl -x http://localhost:7890 https://huggingface.co
+
+【v2ray安装】
 1、下载： https://github.com/v2fly/fhs-install-v2ray/blob/master/install-release.sh
 2、conda create -n vpn python=3.10, conda create vpn
 3、sudo bash install-release.sh (等待下载安装完成)
@@ -66,8 +72,8 @@
 export http_proxy="http://127.0.0.1:7890"
 export https_proxy="http://127.0.0.1:7890"
 
-git config --global http.proxy 'http://127.0.0.1:7890'
-git config --global https.proxy 'http://127.0.0.1:7890'
+git config --global http.proxy http://localhost:7890
+git config --global https.proxy http://localhost:7890
 
 git config --global --unset http.proxy
 git config --global --unset https.proxy
