@@ -1,6 +1,6 @@
 【v2ray客户端】
 【测试v2ray客户端是否可以连接外网】
-    0）sudo systemctl start v2ray
+    0）sudo systemctl start v2ray，sudo systemctl status v2ray
     1）curl -x http://localhost:7890 https://www.google.com
     2）curl -x http://localhost:7890 https://huggingface.co
     3）测试git clone(GIT_CURL_VERBOSE=1 git clone ... 可以打印详细信息)
