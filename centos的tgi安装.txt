@@ -1,0 +1,16 @@
+主要参考tgi官网
+1、添加vpn后安装rustup（增加-x http://localhost:7890）：curl -x http://localhost:7890 --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+2、conda create -n tgi python=3.11
+2、conda activate tgi
+3、安装protoc
+PROTOC_ZIP=protoc-21.12-linux-x86_64.zip
+curl -OL https://github.com/protocolbuffers/protobuf/releases/download/v21.12/$PROTOC_ZIP
+sudo unzip -o $PROTOC_ZIP -d /usr/local bin/protoc
+sudo unzip -o $PROTOC_ZIP -d /usr/local 'include/*'
+rm -f $PROTOC_ZIP
+4、安装tgi
+git clone https://github.com/huggingface/text-generation-inference
+cd text-generation-inference
+BUILD_EXTENSIONS=True make install
+
+make成功后的安装可能卡在cargo(rustup)、clippy、rust-docs等的下载（因为没有-x http://localhost:7890），要耐心等待
