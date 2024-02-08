@@ -14,3 +14,7 @@ cd text-generation-inference
 BUILD_EXTENSIONS=True make install
 
 make成功后的安装可能卡在cargo(rustup)、clippy、rust-docs等的下载（因为没有-x http://localhost:7890），要耐心等待
+
+5、安装vllm0.2.0
+pip install vllm==0.2.0
+6、安装flash-attention1.0.9

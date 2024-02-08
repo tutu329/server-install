@@ -1,0 +1,12 @@
+1、安装docker对gpu的支持：sudo yum install nvidia-container-runtime
+2、conda activate tgi（主要就是用到torch）
+3、运行hf的tgi docker（/model为模型所在文件夹映射到docker的位置）：
+docker run --gpus all --shm-size 1g -p 8001:8001 -v /home/tutu/models/Phind-CodeLlama-34B-v2-GPTQ:/model ghcr.io/huggingface/text-generation-inference:1.4 --model-id /model --quantize gptq --hostname 0.0.0.0 --port 8001
+
+4、客户端测试：
+1）新建curl.sh, chmod +x curl.sh
+curl 127.0.0.1:8080/generate \
+    -X POST \
+    -d '{"inputs":"你是谁?","parameters":{"max_new_tokens":512}}' \
+    -H 'Content-Type: application/json'
+2)运行: ./curl.sh
