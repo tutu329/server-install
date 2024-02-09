@@ -1,0 +1,21 @@
+一、安装exllama v2
+    conda create -n ex2 python=3.10
+    conda activate ex2
+    git clone https://github.com/turboderp/exllamav2
+    cd exllamav2
+    pip install .
+
+二、安装tabbyAPI(支持exllama v2)
+1、git clone https://github.com/theroyallab/tabbyAPI
+2、jinja文件
+    1）修改jinja文件为:
+        {{ bos_token }}{% for message in messages %}{% if message['role'] == 'user' %}{{ '[INST] ' + message['content'] + ' [/INST]' }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token}}{% endif %}{% endfor %}
+    2）将jinja文件复制到template文件夹下
+3、根据模板新建config.yml文件，其中关键修改是：
+    host: 127.0.0.1
+    port: 8001
+    model_dir: /home/tutu/models/
+    model_name: miqu-1-70b-sf-GPTQ
+    prompt_template: mixtral （mixtral指mixtral.jinja，且mixtral前面必须有个空格。另外prompt_template如果不设置，api启动后chat.completion无法用）
+4、运行.start.sh，注意启动中显示的Your API key is: b1ad5dac212f563be4765b646543ca1b，将其复制到api_client中
+
