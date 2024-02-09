@@ -1,14 +1,38 @@
 1、安装docker对gpu的支持：sudo yum install nvidia-container-runtime
 2、conda activate tgi（主要就是用到torch）
-3、运行hf的tgi docker（/model为模型所在文件夹映射到docker的位置）：
-docker run --gpus all --shm-size 1g -p 8001:8001 -v /home/tutu/models/Phind-CodeLlama-34B-v2-GPTQ:/model ghcr.io/huggingface/text-generation-inference:1.4 --model-id /model --quantize gptq --hostname 0.0.0.0 --port 8001
+3、运行hf的tgi docker（/model为模型所在文件夹映射到docker的位置; num-shard是关键参数，没有会oom）：
+docker run --gpus all --shm-size 1g -p 8001:8001 -v /home/tutu/models/miqu-1-70b-sf-GPTQ:/model ghcr.io/huggingface/text-generation-inference:1.4 --model-id /model --quantize gptq --hostname 0.0.0.0 --port 8001 --num-shard 4
 
-4、客户端测试：
+4、tgi运行router(openai的chat的template)
+cd text-generation-inference/router
+cargo run -- --tokenizer-name upstage/SOLAR-10.7B-Instruct-v1.0
+
+5、客户端测试：
+0）查看api文档：http://116.62.63.204:8001/docs
 1）新建curl.sh, chmod +x curl.sh
-curl 127.0.0.1:8080/generate \
+curl 127.0.0.1:8001/generate_stream \
     -X POST \
     -d '{"inputs":"你是谁?","parameters":{"max_new_tokens":512}}' \
     -H 'Content-Type: application/json'
+
+curl localhost:8001/v1/chat/completions \
+    -X POST \
+    -d '{
+  "model": "tgi",
+  "messages": [
+    {
+      "role": "system",
+      "content": "You are a helpful assistant."
+    },
+    {
+      "role": "user",
+      "content": "你是谁?"
+    }
+  ],
+  "stream": true,
+  "max_tokens": 512
+}' \
+    -H 'Content-Type: application/json'
+
 2)运行: ./curl.sh
 
-docker run --gpus all --shm-size 1g -p 8001:8001 -v /home/tutu/models/miqu-1-70b-sf-GPTQ:/model ghcr.io/huggingface/text-generation-inference:1.4 --model-id /model --quantize gptq --hostname 0.0.0.0 --port 8001 --num-shard 4
