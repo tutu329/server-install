@@ -17,16 +17,16 @@ npm -v
 
 然后就可以正常使用yarn和yarn dev之类的命令
 
-关于yarn dev报错：could not find system library 'javascriptcoregtk-4.0'
+【关于yarn dev报错】：could not find system library 'javascriptcoregtk-4.0'
 运行：sudo dnf install webkit2gtk3-devel
 
-关于yarn dev报错（图形界面没有）：unable to init server: Could not connect: Connection refused
+【关于yarn dev报错（图形界面没有）】：unable to init server: Could not connect: Connection refused
 1、安装xvfb：sudo dnf install -y Xvfb
 2、使用xvfb（写一个sh脚本）：
 Xvfb :99 -screen 0 1280x1024x24 &
 export DISPLAY=:99
 
-关于修改yarn dev的ip和port：
+【关于修改yarn dev的ip和port】：
 1、在vite.config.js中增加:
 export default defineConfig({
   server: {
