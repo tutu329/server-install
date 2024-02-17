@@ -42,6 +42,29 @@ rs.initiate({
 # 检查状态。如果提示 rs0 状态，则代表运行成功
 rs.status()
 
-6、访问fastgpt
+6、修改config.json中llmModels的模型（"model"值必须和vllm启动参数中的served-model-name一致）
+  "llmModels": [
+    {
+      "model": "qwen72",
+      "name": "qwen72",
+      "maxContext": 13000,
+      "maxResponse": 10000,
+      "quoteMaxToken": 10000,
+      "maxTemperature": 1,
+      "inputPrice": 0,
+      "outputPrice": 0,
+      "censor": false,
+      "vision": false,
+      "datasetProcess": false,
+      "toolChoice": true,
+      "functionCall": false,
+      "customCQPrompt": "",
+      "customExtractPrompt": "",
+      "defaultSystemChatPrompt": "",
+      "defaultConfig": {}
+    },
+
+7、访问fastgpt
 目前可以通过 ip:3000 直接访问(注意防火墙)。登录用户名为 root，密码为docker-compose.yml环境变量里设置的 DEFAULT_ROOT_PSW。
+
 
