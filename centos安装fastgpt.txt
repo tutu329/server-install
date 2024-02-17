@@ -44,4 +44,3 @@ rs.status()
 
 6、访问fastgpt
 目前可以通过 ip:3000 直接访问(注意防火墙)。登录用户名为 root，密码为docker-compose.yml环境变量里设置的 DEFAULT_ROOT_PSW。
-
