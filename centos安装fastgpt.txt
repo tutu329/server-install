@@ -1,0 +1,46 @@
+【采用docker-compose安装：https://doc.fastgpt.in/docs/development/docker/】
+
+1、参照centos安装docker-compose.txt安装docker-compose
+
+2、下载docker-compose配置
+mkdir fastgpt
+cd fastgpt
+curl -O https://raw.githubusercontent.com/labring/FastGPT/main/files/deploy/fastgpt/docker-compose.yml
+curl -O https://raw.githubusercontent.com/labring/FastGPT/main/projects/app/data/config.json
+
+3、修改docker-compose配置
+1）（这一条可以不考虑；如果改动需要重新docker-compose pull）docker-compose.yml 配置文件中 Mongo 为 5.x，部分服务器不支持，需手动更改其镜像版本为 4.4.24
+2）修改docker-compose.yml中的OPENAI_BASE_URL（API 接口的地址，需要加/v1）和CHAT_API_KEY（API 接口的凭证）。
+
+4、启动docker容器
+# 进入项目目录
+cd 项目目录
+# 创建 mongo 密钥
+openssl rand -base64 756 > ./mongodb.key
+chmod 600 ./mongodb.key
+chown 999:root ./mongodb.key
+# 启动容器
+docker-compose pull
+docker-compose up -d
+
+5、初始化 Mongo 副本集(4.6.8以前可忽略)
+# 查看 mongo 容器是否正常运行
+docker ps
+# 进入容器
+docker exec -it mongo bash
+
+# 连接数据库
+mongo -u myname -p mypassword --authenticationDatabase admin
+
+# 初始化副本集。如果需要外网访问，mongo:27017 可以改成 ip:27017。但是需要同时修改 FastGPT 连接的参数（MONGODB_URI=mongodb://myname:mypassword@mongo:27017/fastgpt?authSource=admin => MONGODB_URI=mongodb://myname:mypassword@ip:27017/fastgpt?authSource=admin）
+rs.initiate({
+  _id: "rs0",
+  members: [
+    { _id: 0, host: "mongo:27017" }
+  ]
+})
+# 检查状态。如果提示 rs0 状态，则代表运行成功
+rs.status()
+
+6、访问fastgpt
+目前可以通过 ip:3000 直接访问(注意防火墙)。登录用户名为 root，密码为docker-compose.yml环境变量里设置的 DEFAULT_ROOT_PSW。
