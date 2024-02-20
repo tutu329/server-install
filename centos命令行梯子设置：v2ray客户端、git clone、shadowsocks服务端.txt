@@ -82,7 +82,7 @@
 
 export http_proxy="http://127.0.0.1:7890"
 export https_proxy="http://127.0.0.1:7890"
-（如果python程序中需要访问外网，上述变量可能不起作用，需采用以下方式在程序里写入：
+（如果python程序中需要访问外网，上述变量可能不起作用，需采用以下方式在程序里写入这些，用于测试：
     import requests
 
     proxies = {
