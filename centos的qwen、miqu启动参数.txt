@@ -1,0 +1,12 @@
+【qwen15.sh】
+export CUDA_VISIBLE_DEVICES=0,1,3,2
+python -m vllm.entrypoints.openai.api_server --served-model-name=qwen72 --model=/home/tutu/models/Qwen1.5-72B-Chat-GPTQ-Int4 --gpu-memory-utilizatio=1 quantization=gptq --max-model-len=13000 --max-num-seqs=4 --tensor-parallel-size=4 --trust-remote-code --chat-template=/home/tutu/models/template_chatml.jinja --host=0.0.0.0 --port=8001
+【chat.jinja】
+{% for message in messages %}{{'<|im_start|>' + message['role'] + '\n' + message['content']}}{% if (loop.last and add_generation_prompt) or not loop.last %}{{ '<|im_end|>' + '\n'}}{% endif %}{% endfor %}
+{% if add_generation_prompt and messages[-1]['role'] != 'assistant' %}{{ '<|im_start|>assistant\n' }}{% endif %}
+
+【miqu.sh】
+export CUDA_VISIBLE_DEVICES=0,1,3,2
+python -m vllm.entrypoints.openai.api_server --model=/home/tutu/models/MiquMaid-v2-70B-DPO-GPTQ --port 8001 --served-model-name=miqu --max-context-len-to-capture 8192 --max-model-len 8192 --max-num-batched-tokens 8192 -tp 4 --gpu-memory-utilization 0.95 --quantization gptq --max-num-seqs 64 --chat-template=/home/tutu/models/template_miqu.jinja
+【miqu.jinja】
+{{ bos_token }}{% for message in messages %}{% if message['role'] == 'user' %}{{ '[INST] ' + message['content'] + ' [/INST]' }}{% elif message['role'] == 'assistant' %}{{ message['content'] + eos_token}}{% endif %}{% endfor %}
