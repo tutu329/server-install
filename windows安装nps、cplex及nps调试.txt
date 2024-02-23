@@ -15,4 +15,6 @@ pip  install openpyxl -i http://pypi.doubanio.com/simple/ --trusted-host pypi.do
 1）运行cplex安装包（路径必须全英文如c:\cplex，一路确认到底）
 2）crack文件夹中的三个文件夹，复制覆盖cplex安装目录中对应文件
 
+
 3、pycharm中nps项目的解析器换为conda的nps
+如果pycharm运行nps项目找不到cplex，重启电脑即可（如果还不行，也许可以这样：conda的nps下，在C:\cplex\cplex\python\x86_win32运行python setup.py install）
