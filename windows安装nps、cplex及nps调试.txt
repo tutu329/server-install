@@ -11,6 +11,9 @@ pip install seaborn
 pip install python-docx==0.8.11
 pip  install openpyxl -i http://pypi.doubanio.com/simple/ --trusted-host pypi.doubanio.com
 
+pip install uvicorn
+pip install fastapi
+
 2、安装cplex
 1）运行cplex安装包（路径必须全英文如c:\cplex，一路确认到底）
 2）crack文件夹中的三个文件夹，复制覆盖cplex安装目录中对应文件
