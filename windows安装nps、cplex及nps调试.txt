@@ -13,6 +13,7 @@ pip  install openpyxl -i http://pypi.doubanio.com/simple/ --trusted-host pypi.do
 
 pip install uvicorn
 pip install fastapi
+pip install requests
 
 2、安装cplex
 1）运行cplex安装包（路径必须全英文如c:\cplex，一路确认到底）
@@ -31,5 +32,9 @@ pip install fastapi
 5、在C:/server/nps-server/下
 新建static文件夹，并在static下新建pic和docx两个文件夹
 
-6、运行(case3)
+6、简单运行(case3)
 python NPS_Case_2024.py
+
+7、运行api server
+python NPS_Invest_Opt_Server.py
+python NPS_Case_2024.py(api_server_test())
