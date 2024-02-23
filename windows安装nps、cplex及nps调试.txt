@@ -18,3 +18,15 @@ pip  install openpyxl -i http://pypi.doubanio.com/simple/ --trusted-host pypi.do
 
 3、pycharm中nps项目的解析器换为conda的nps
 如果pycharm运行nps项目找不到cplex，重启电脑即可（如果还不行，也许可以这样：conda的nps下，在C:\cplex\cplex\python\x86_win32运行python setup.py install）
+
+4、Global.py中将路径改为对应路径
+    if platform.system()=="Windows" :
+        _dict["path"]= "C:/server/nps-server/"
+    else:
+        _dict["path"] = ""
+
+5、在C:/server/nps-server/下
+新建static文件夹，并在static下新建pic和docx两个文件夹
+
+6、运行(case3)
+python NPS_Case_2024.py
