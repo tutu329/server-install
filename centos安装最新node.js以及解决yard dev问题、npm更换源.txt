@@ -67,6 +67,8 @@ export default defineConfig({
     sudo rm -rf /mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/flowise
     sudo npm cache clean --force
     sudo npm install -g flowise
+4、如果二进制文件下载一直搞不定，可以改为build：
+    sudo npm install -g flowise --fallback-to-build
 
 
 
