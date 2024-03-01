@@ -43,7 +43,7 @@ export default defineConfig({
   "distDir": "../dist"
 }
 
-【npm更换源、设置代理】
+【npm更换源、设置代理（安装flowise）】
 1、更换源：npm config set registry https://registry.npmmirror.com
 2、代理：npm config set proxy http://127.0.0.1:7890
 3、多次安装造成的rename错误，如：
