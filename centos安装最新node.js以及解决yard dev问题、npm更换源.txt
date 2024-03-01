@@ -69,7 +69,7 @@ export default defineConfig({
             sudo npm install -g flowise
         4、如果二进制文件下载一直搞不定，可以改为build：
             sudo npm install -g flowise --fallback-to-build
-3、改用yard build安装(按上述npm安装成功后，运行仍然出错)
+3、(仍然报错)改用yard build安装(按上述npm安装成功后，运行仍然出错)
     1）npm i -g yarn
         a)yarn降级到1.22.19: sudo npm install yarn@1.22.19 -g
         b)yarn版本查看: yarn --version
