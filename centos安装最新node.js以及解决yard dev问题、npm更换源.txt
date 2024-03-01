@@ -51,24 +51,32 @@ export default defineConfig({
     sudo n stable
 1、更换源：npm config set registry https://registry.npmmirror.com
 2、代理：npm config set proxy http://127.0.0.1:7890
-3、多次安装造成的rename错误，如：
-    (base) [tutu@localhost ~]$ sudo npm install -g flowise
-    [sudo] password for tutu:
-    npm WARN ERESOLVE overriding peer dependency
-    npm ERR! code ENOTEMPTY
-    npm ERR! syscall rename
-    npm ERR! path /mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/flowise
-    npm ERR! dest /mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/.flowise-wolzo3A5
-    npm ERR! errno -39
-    npm ERR! ENOTEMPTY: directory not empty, rename '/mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/flowise' -> '/mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/.flowise-wolzo3A5'
-    npm ERR! A complete log of this run can be found in: /root/.npm/_logs/2024-03-01T06_43_10_742Z-debug-0.log
-    (base) [tutu@localhost ~]$
-[解决]
-    sudo rm -rf /mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/flowise
-    sudo npm cache clean --force
-    sudo npm install -g flowise
-4、如果二进制文件下载一直搞不定，可以改为build：
-    sudo npm install -g flowise --fallback-to-build
+        3、多次安装造成的rename错误，如：
+            (base) [tutu@localhost ~]$ sudo npm install -g flowise
+            [sudo] password for tutu:
+            npm WARN ERESOLVE overriding peer dependency
+            npm ERR! code ENOTEMPTY
+            npm ERR! syscall rename
+            npm ERR! path /mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/flowise
+            npm ERR! dest /mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/.flowise-wolzo3A5
+            npm ERR! errno -39
+            npm ERR! ENOTEMPTY: directory not empty, rename '/mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/flowise' -> '/mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/.flowise-wolzo3A5'
+            npm ERR! A complete log of this run can be found in: /root/.npm/_logs/2024-03-01T06_43_10_742Z-debug-0.log
+            (base) [tutu@localhost ~]$
+        [解决]
+            sudo rm -rf /mnt/ubuntu_tutu/node-v20.11.1-linux-x64/lib/node_modules/flowise
+            sudo npm cache clean --force
+            sudo npm install -g flowise
+        4、如果二进制文件下载一直搞不定，可以改为build：
+            sudo npm install -g flowise --fallback-to-build
+3、改用yard build安装(按上述npm安装成功后，运行仍然出错)
+    1）npm i -g yarn
+    2）git clone https://github.com/FlowiseAI/Flowise.git
+    3）cd Flowise
+    4）yarn install
+    5）yarn build
+    6）Create .env file and specify the PORT (refer to .env.example) in packages/ui， Create .env file and specify the PORT (refer to .env.example) in packages/server
+    7）yarn dev
 
 
 
