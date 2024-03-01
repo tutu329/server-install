@@ -71,12 +71,16 @@ export default defineConfig({
             sudo npm install -g flowise --fallback-to-build
 3、改用yard build安装(按上述npm安装成功后，运行仍然出错)
     1）npm i -g yarn
-    2）git clone https://github.com/FlowiseAI/Flowise.git
-    3）cd Flowise
-    4）yarn install
-    5）yarn build
-    6）Create .env file and specify the PORT (refer to .env.example) in packages/ui， Create .env file and specify the PORT (refer to .env.example) in packages/server
-    7）yarn dev
+        a)yarn降级到1.22.19: sudo npm install yarn@1.22.19 -g
+        b)yarn版本查看: yarn --version
+        c)重新编译:
+            删除git下来的Flowise文件夹
+            git clone https://github.com/FlowiseAI/Flowise.git
+            cd Flowise
+            yarn install
+            yarn build-force
+    2）Create .env file and specify the PORT (refer to .env.example) in packages/ui， Create .env file and specify the PORT (refer to .env.example) in packages/server
+    3）yarn dev
 
 
 
