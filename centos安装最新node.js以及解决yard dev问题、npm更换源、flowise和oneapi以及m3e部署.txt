@@ -82,6 +82,11 @@ export default defineConfig({
     2）Create .env file and specify the PORT (refer to .env.example) in packages/ui， Create .env file and specify the PORT (refer to .env.example) in packages/server
     3）yarn dev
 
+【安装flowise：最后发现只能docker-compose up -d运行成功】
+
+【安装one-api】
+1、git clone https://github.com/songquanpeng/one-api.git
+2、docker-compose up -d
 
 
 
