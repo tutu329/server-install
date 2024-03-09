@@ -40,3 +40,8 @@
     sudo apt install git-lfs
     git lfs install
     这样就可以下载了
+
+6、安装frp
+
+7、安装agent用的chrome
+    playwright install chrome
