@@ -1,0 +1,42 @@
+1、显卡驱动
+    安装535专用版(tested)，暂不考虑server版
+    nvidia-smi后显示: NVDIA-SMI: 535.161.07 Driver Version: 535.161.07, CUDA Version: 12.2
+
+2、安装gcc
+    sudo apt update
+    sudo apt install g++
+    sudo apt install gcc
+    sudo apt install make
+
+2、cudatoolkit安装
+    https://developer.nvidia.com/cuda-downloads选择runfile(local)
+    wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda_12.4.0_550.54.14_linux.run
+    sudo sh cuda_12.4.0_550.54.14_linux.run
+        1)等一段时间，选择continue，选择accept
+        2)把Driver的选择去掉，然后选择install
+    安装完成后: vi .bashrc
+        export PATH="/home/tutu/anaconda3/bin:$PATH"
+        export LD_LIBRARY_PATH=/usr/local/cuda-12.4/lib64:/usr/local/cuda-12.4/extras/CUPTI/lib64
+        export CUDA_HOME=/usr/local/cuda-12.4/bin
+        export PATH=$PATH:$LD_LIBRARY_PATH:$CUDA_HOME
+    source .bashrc
+    nvcc -V
+    安装成功
+
+3、安装vllm
+    conda create -n v1 python=3.11
+    conda activate v1
+    pip install torch torchvision torchaudio
+    pip install vllm(似乎前面cudatoolkit选择12.4也可以)
+
+4、exfat安装
+    安装exfat支持: sudo apt install exfatprogs
+    mount移动硬盘: sudo mount -t exfat /dev/sda2 /mnt/disk_1t/
+    复制模型文件等
+
+5、安装git
+    sudo apt install git
+    ssh -T git@github.com, 如果看到Warning: Permanently added 'github.com' ...Permission denied..., 表面可以连接
+    sudo apt install git-lfs
+    git lfs install
+    这样就可以下载了
