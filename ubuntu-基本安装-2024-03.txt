@@ -45,3 +45,72 @@
 
 7、安装agent用的chrome
     playwright install chrome
+
+8、安装与/home/tutu/server/关联的ftp服务
+    安装: sudo apt install vsftpd
+    查询状态: service vsftpd status
+    sudo service vsftpd start
+    sudo service vsftpd restart
+    sudo service vsftpd stop
+
+    用户设置（虚拟user，一个linux的user("ftpuser")对应多个vsftp的虚拟user）:
+        sudo useradd -d /home/tutu/server -s /sbin/nologin ftpuser  # ftpuser为新增的user，而虚拟用户对应/etc/vsftpd_user_conf/的tutu329等文件
+        sudo chmod -Rf 777 /home/tutu/server    # 这一行很关键，不然filezilla上传下载会报错：严重文件传输错误
+    conf配置
+        sudo vi /etc/vsftpd.conf
+        write_enable=YES
+        local_enable=YES
+        # chroot_local_user最好还是关闭
+        local_umask=022 # 这个打开才能上传
+        pasv_enable=YES
+        pasv_min_port=8020
+        pasv_max_port=8025
+        pasv_address=116.62.63.204
+        allow_writeable_chroot=YES  # 这行很关键，不然就连不上
+
+        注: cat /etc/ftpusers为禁止作为ftp用户的用户列表
+    创建虚拟用户
+        sudo apt install db-util
+        vi login_users (增加第一行: tutu329，第二行密码: jackseaver79)
+        sudo db_load -T -t hash -f /home/tutu/login_users /etc/vsftpd_login.db
+        sudo chmod 600 /etc/vsftpd_login.db
+
+
+    配置PAM验证
+        sudo vi /etc/pam.d/vsftpd (增加如下两行，其余注释掉:
+            auth required /lib/x86_64-linux-gnu/security/pam_userdb.so db=/etc/vsftpd_login
+            account required  /lib/x86_64-linux-gnu/security/pam_userdb.so  db=/etc/vsftpd_login
+        )
+        sudo vi /etc/vsftpd.conf (改为:
+            pam_service_name=vsftpd
+        )
+
+    创建本地用户映射
+        sudo vi /etc/vsftpd.conf (增加:
+            guest_enable=YES
+            guest_username=ftpuser
+        )
+
+    设置用户目录和权限
+        sudo chown ftpuser /home/tutu/server/   # 注意这里是ftpuser
+        sudo mkdir /etc/vsftpd_user_conf
+        sudo vi /etc/vsftpd.conf (增加:
+            user_config_dir=/etc/vsftpd_user_conf
+        )
+
+    新建某个虚拟user(如tutu329)的配置: 在/etc/vsftpd_user_conf/下创建文本文件tutu329:
+        write_enable=YES
+        anon_upload_enable=YES
+        anon_mkdir_write_enable=YES
+
+        anon_world_readable_only=NO
+        anon_upload_enable=YES
+        anon_mkdir_write_enable=YES
+        anon_other_write_enable=YES
+        local_root=/home/tutu/server/
+
+    sudo service vsftpd restart
+    windows下如果filezilla报未知错，可以在控制台下:
+        1）进入ftp
+        2）然后输入open 116.62.63.204 6021
+        3）视版本输入quote pasv或者passive
