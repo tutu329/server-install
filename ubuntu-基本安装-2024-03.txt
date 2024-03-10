@@ -110,7 +110,4 @@
         local_root=/home/tutu/server/
 
     sudo service vsftpd restart
-    windows下如果filezilla报未知错，可以在控制台下:
-        1）进入ftp
-        2）然后输入open 116.62.63.204 6021
-        3）视版本输入quote pasv或者passive
+    此时用filezilla可以成功登录、下载、上传，116.62.63.204:6021 tutu329:jackseaver79
