@@ -166,8 +166,32 @@
     git clone https://github.com/songquanpeng/one-api
     cd one-api
     设置端口: docker-compose.yml中one-api的第一个3000改为8002
-    sudo docker-compose up -d, 报错: invalid interpolation format for services.one-api.healthcheck.test.[]: "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' | awk -F: '{print $2}'". You may need to escape any $ with another $
+    启动one-api: sudo docker-compose up -d, 报错: invalid interpolation format for services.one-api.healthcheck.test.[]: "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' | awk -F: '{print $2}'". You may need to escape any $ with another $
         解决: docker-compose.yml中test这行改为, test: ["CMD-SHELL", "curl -s http://localhost:3000/api/status | tee /dev/stderr | grep '\"success\":\\s*true' || exit 1"]
+    设置one-api:
+        1)登录和密码修改: root:123456登录，然后修改为root:jackseaver79
+        2)增加渠道(增加llm):
+            类型:         自定义渠道
+            Base URL:    http://192.168.124.32:7862/lab
+            名称:         qwen72
+            模型:         qwen72, gpt-4(通过"输入自定义模型名称"依次输入)
+            模型重定向(必须严格，否则报错):
+{
+  "gpt-4": "qwen72",
+  "qwen72": "qwen72"
+}
+            密钥:         empty
+        3)增加令牌:
+            名称: aiServer
+            过期时间: 永不过期
+            额度: 无限额度
+        4)渠道界面中点击"测试"
+        5)令牌界面中点击"复制", 获取api-key
+        6)flowise中，ChatOpenAI参数为:
+            Connect Credential: aiServer (令牌名称)
+            Model Name: gpt-4 (模型名称)
+            BasePath: http://116.62.63.204:8002/v1  (注意这里是8002)
+
 
 11、安装梯子
 
