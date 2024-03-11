@@ -165,6 +165,7 @@
 10、安装one-api
     git clone https://github.com/songquanpeng/one-api
     cd one-api
+    设置端口: docker-compose.yml中one-api的第一个3000改为8002
     sudo docker-compose up -d, 报错: invalid interpolation format for services.one-api.healthcheck.test.[]: "wget -q -O - http://localhost:3000/api/status | grep -o '\"success\":\\s*true' | awk -F: '{print $2}'". You may need to escape any $ with another $
         解决: docker-compose.yml中test这行改为, test: ["CMD-SHELL", "curl -s http://localhost:3000/api/status | tee /dev/stderr | grep '\"success\":\\s*true' || exit 1"]
 
