@@ -141,3 +141,4 @@
 
     sudo service vsftpd restart
     此时用filezilla可以成功登录、下载、上传，116.62.63.204:6021 tutu329:jackseaver79
+    如果外网filezilla可以成功登录、下载、上传，而pycharm连接不了ftp，应该是pycharm版本问题、需要用新版本
