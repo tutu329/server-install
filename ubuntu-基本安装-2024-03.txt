@@ -106,7 +106,6 @@
         sudo db_load -T -t hash -f /home/tutu/login_users /etc/vsftpd_login.db
         sudo chmod 600 /etc/vsftpd_login.db
 
-
     配置PAM验证
         sudo vi /etc/pam.d/vsftpd (增加如下两行，其余注释掉:
             auth required /lib/x86_64-linux-gnu/security/pam_userdb.so db=/etc/vsftpd_login
