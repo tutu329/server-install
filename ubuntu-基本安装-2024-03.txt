@@ -13,6 +13,7 @@
         a)重启
         b)运行llm前，先运行gpu.sh设置持久模式、控制功率、控制频率
 
+【超微4029GR服务器的ubuntu系统安装】
 1、显卡驱动
     安装535专用版(tested)，暂不考虑server版
     nvidia-smi后显示: NVDIA-SMI: 535.161.07 Driver Version: 535.161.07, CUDA Version: 12.2
