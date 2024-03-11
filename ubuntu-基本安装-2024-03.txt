@@ -13,6 +13,21 @@
         a)重启
         b)运行llm前，先运行gpu.sh设置持久模式、控制功率、控制频率
 
+【超微4029GR服务器的ipmi的bios配置，目前服务器ipmi的ip为192.168.124.125，用户名为admin，密码为jackseaver79】
+1、让商家交货时，确保服务器的bios中设置如下:
+    1) 已经打开远程登录ipmi的设置
+    2) ipmi的ip最好设置为192.168.124.125这样，也就是和家里的网段前三个数字一致，省的家里机器为了访问同网段的ipmi要改ip
+    3) 风扇模式已经设置为优化(optimize)模式
+2、ubuntu中安装ipmitool
+    安装ipmitool: sudo apt install ipmitool
+    浏览器远程登录ipmi(如有问题，要进入服务器bios设置):
+        将网线接入服务器的单独的那个impi网口
+        浏览器打开192.168.124.125
+        用户名为：admin，密码为：jackseaver79
+    查看服务器电源情况:
+        将网线接入服务器的单独的那个impi网口
+        ipmitool -I lanplus -H 192.168.124.125 -U admin -P jackseaver79 sdr type "Power Supply"
+
 【超微4029GR服务器的ubuntu系统安装】
 1、显卡驱动
     安装535专用版(tested)，暂不考虑server版
