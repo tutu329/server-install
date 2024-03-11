@@ -142,3 +142,28 @@
     sudo service vsftpd restart
     此时用filezilla可以成功登录、下载、上传，116.62.63.204:6021 tutu329:jackseaver79
     如果外网filezilla可以成功登录、下载、上传，而pycharm连接不了ftp，应该是pycharm版本问题、需要用新版本
+
+9、安装docker(生产环境中不要用非root账户运行docker)
+    1)安装必要的证书并允许apt包管理器使用以下命令通过https使用存储库: sudo apt install apt-transport-https ca-certificates curl software-properties-common gnupg lsb-release
+    2)添加Docker的官方GPG密钥: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    3)添加Docker官方库: sudo echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    4)更新Ubuntu源列表: sudo apt update
+    5)安装Docker: sudo apt install docker-ce docker-ce-cli containerd.io docker-compose-plugin
+    6)验证docker状态: systemctl status docker
+    7)配置使Docker服务开机自启动: sudo systemctl enable docker
+    8)查看docker版本: sudo docker version
+    9)docker测试:
+        sudo docker run hello-world
+        sudo docker ps -a
+    10)安装docker-compose:
+        从github上下载docker-compose二进制文件安装:
+            sudo curl -L "https://github.com/docker/compose/releases/download/v2.6.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        加可执行权限并移动到bin目录下:
+            sudo chmod +x /usr/local/bin/docker-compose
+            docker-compose -v
+            此时docker-compose已经可用，可以在如Flowise/docker/下运行: sudo docker-compose up -d 或 sudo docker-compose stop
+
+10、安装梯子
+
+
+
