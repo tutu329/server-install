@@ -1,3 +1,18 @@
+【关于ubuntu系统突然掉显卡/突然无故重启的问题】
+    1)突然掉显卡(nvidia-smi报错: unable to determine the device handle for GPU 0000.1A.00.0):
+        查看gpu的总线情况lspci | grep NVIDIA
+            如果像这样, rev a1结尾为正常, rev ff结尾为错误。     (1a:00.0 VGA compatible controller: NVIDIA Corporation TU102 [GeForce RTX 2080 Ti Rev. A] (rev a1))
+        查看gpu id和bus_id的对应关系: nvidia-smi --query-gpu=index,pci.bus_id,uuid --format=csv
+        查看报错日志(一般也不需要): sudo nvidia-bug-report.sh
+    2)突然无故重启
+        a)应该是功率问题，解决方式(gpu.sh):
+            sudo nvidia-smi -pm 1 # 设置显卡持久模式
+            sudo nvidia-smi -lgc 1400 # 固定显卡频率
+            sudo nvidia-smi -pl 200 # 设置显卡最大功率
+    3) 1和2的解决手段:
+        a)重启
+        b)运行llm前，先运行gpu.sh设置持久模式、控制功率、控制频率
+
 1、显卡驱动
     安装535专用版(tested)，暂不考虑server版
     nvidia-smi后显示: NVDIA-SMI: 535.161.07 Driver Version: 535.161.07, CUDA Version: 12.2
