@@ -195,9 +195,24 @@
 11、启动所有docker-compose的sh(-d是指后台运行)
     sudo docker-compose -f /home/tutu/Flowise/docker/docker-compose.yml up -d
     sudo docker-compose -f /home/tutu/one-api/docker-compose.yml up -d
+    sudo docker run -p 8000:6008 --name m3e-large-api -d registry.cn-hangzhou.aliyuncs.com/fastgpt_docker/m3e-large-api
 
 12、安装带api的m3e
-
+    参考https://doc.fastgpt.in/docs/development/custom-models/m3e/
+    1)拉取: sudo docker pull registry.cn-hangzhou.aliyuncs.com/fastgpt_docker/m3e-large-api
+    2)运行: sudo docker run -p 8000:6008 --name m3e-large-api -d registry.cn-hangzhou.aliyuncs.com/fastgpt_docker/m3e-large-api
+    3)one-api中添加渠道(注意one-api点击测试不行，因为one-api会调用/v1/chat/completions而不是/v1/embeddings):
+        类型: 自定义渠道
+        Base Url: http://116.62.63.204:8000 (注意这里是m3e的api的端口8000)
+        名称: m3e_api
+        模型: m3e
+        密钥: sk-aaabbbcccdddeeefffggghhhiiijjjkkk
+    4)在flowise中添加flow测试：
+        a)添加OpenAI Embeddings Custom:
+            Connect Credential: aiServer
+            Model Name: m3e
+            BasePath: http://116.62.63.204:8002/v1  (注意这里是one-api的端口8002)
+        b)测试: 点击 Usert Vector Database
 
 13、安装梯子
 
