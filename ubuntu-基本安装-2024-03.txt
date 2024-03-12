@@ -192,8 +192,14 @@
             Model Name: gpt-4 (模型名称)
             BasePath: http://116.62.63.204:8002/v1  (注意这里是8002)
 
+11、启动所有docker-compose的sh(-d是指后台运行)
+    sudo docker-compose -f /home/tutu/Flowise/docker/docker-compose.yml up -d
+    sudo docker-compose -f /home/tutu/one-api/docker-compose.yml up -d
 
-11、安装梯子
+12、安装带api的m3e
+
+
+13、安装梯子
 
 
 
