@@ -84,7 +84,7 @@ Wants=network.target
 
 [Service]
 Type=simple
-Restart=on-failure
+Restart=always
 RestartSec=5s
 ExecStart=/home/tutu/frp/frpc -c /home/tutu/frp/frpc.ini
 
