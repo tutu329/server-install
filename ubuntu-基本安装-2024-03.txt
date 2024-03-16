@@ -39,7 +39,7 @@
     sudo apt install gcc
     sudo apt install make
 
-2、cudatoolkit安装
+3、cudatoolkit安装
     https://developer.nvidia.com/cuda-downloads选择runfile(local)
     wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda_12.4.0_550.54.14_linux.run
     sudo sh cuda_12.4.0_550.54.14_linux.run
@@ -54,30 +54,38 @@
     nvcc -V
     安装成功
 
-3、安装vllm
+4、安装vllm
     conda create -n v1 python=3.11
     conda activate v1
     pip install torch torchvision torchaudio
     pip install vllm(似乎前面cudatoolkit选择12.4也可以)
 
-4、exfat安装
+5、exfat安装
     安装exfat支持: sudo apt install exfatprogs
     mount移动硬盘: sudo mount -t exfat /dev/sda2 /mnt/disk_1t/
     复制模型文件等
 
-5、安装git
+6、安装git
     sudo apt install git
     ssh -T git@github.com, 如果看到Warning: Permanently added 'github.com' ...Permission denied..., 表面可以连接
     sudo apt install git-lfs
     git lfs install
     这样就可以下载了
 
-6、安装frp
+7、安装frp、打开ssh
+    frp参照life-agent中的frpc配置来即可
+    打开ssh(注意frp中22端口映射到了6000):
+        sudo apt install openssh-server
+        sudo service ssh start (sudo service ssh status)
+        sudo systemctl enable ssh (sudo systemctl is-enabled ssh)
+        sudo ufw allow ssh (如果需要专门打开防火墙的话)
+        sudo apt install net-tools (用于ifconfig)
+        其他电脑上可以(端口为6000, 密码为jackseaver79): ssh -p 6000 tutu@116.62.63.204
 
-7、安装agent用的chrome
+8、安装agent用的chrome
     playwright install chrome
 
-8、安装与/home/tutu/server/关联的ftp服务
+9、安装与/home/tutu/server/关联的ftp服务
     安装: sudo apt install vsftpd
     查询状态: service vsftpd status
     sudo service vsftpd start
@@ -143,7 +151,7 @@
     此时用filezilla可以成功登录、下载、上传，116.62.63.204:6021 tutu329:jackseaver79
     如果外网filezilla可以成功登录、下载、上传，而pycharm连接不了ftp，应该是pycharm版本问题、需要用新版本
 
-9、安装docker(生产环境中不要用非root账户运行docker)
+10、安装docker(生产环境中不要用非root账户运行docker)
     1)安装必要的证书并允许apt包管理器使用以下命令通过https使用存储库: sudo apt install apt-transport-https ca-certificates curl software-properties-common gnupg lsb-release
     2)添加Docker的官方GPG密钥: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
     3)添加Docker官方库: sudo echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -162,7 +170,7 @@
             sudo chmod +x /usr/local/bin/docker-compose
             docker-compose -v
             此时docker-compose已经可用，可以在如Flowise/docker/下运行: sudo docker-compose up -d 或 sudo docker-compose stop
-10、安装one-api
+11、安装one-api
     git clone https://github.com/songquanpeng/one-api
     cd one-api
     设置端口: docker-compose.yml中one-api的第一个3000改为8002
@@ -192,12 +200,12 @@
             Model Name: gpt-4 (模型名称)
             BasePath: http://116.62.63.204:8002/v1  (注意这里是8002)
 
-11、启动所有docker-compose的sh(-d是指后台运行)
+12、启动所有docker-compose的sh(-d是指后台运行)
     sudo docker-compose -f /home/tutu/Flowise/docker/docker-compose.yml up -d
     sudo docker-compose -f /home/tutu/one-api/docker-compose.yml up -d
     sudo docker run -p 8000:6008 --name m3e-large-api -d registry.cn-hangzhou.aliyuncs.com/fastgpt_docker/m3e-large-api
 
-12、安装带api的m3e
+13、安装带api的m3e
     参考https://doc.fastgpt.in/docs/development/custom-models/m3e/
     1)拉取: sudo docker pull registry.cn-hangzhou.aliyuncs.com/fastgpt_docker/m3e-large-api
     2)运行: sudo docker run -p 8000:6008 --name m3e-large-api -d registry.cn-hangzhou.aliyuncs.com/fastgpt_docker/m3e-large-api
@@ -214,7 +222,7 @@
             BasePath: http://116.62.63.204:8002/v1  (注意这里是one-api的端口8002)
         b)测试: 点击 Usert Vector Database
 
-13、安装梯子
+14、安装梯子
 
 
 
