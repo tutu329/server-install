@@ -72,8 +72,30 @@
     git lfs install
     这样就可以下载了
 
-7、安装frp、打开ssh
-    frp参照life-agent中的frpc配置来即可
+7、安装frpc及其自启动、打开ssh(决定了impi让机器重启后, 外网能否ssh连接到机器)
+    frpc参照life-agent中的frpc配置来即可(详细可以参考: https://blog.csdn.net/ludan1991/article/details/129397133)
+    frpc在系统启动时自动启动:
+        sudo vi /etc/systemd/system/frpc.service
+
+[Unit]
+Description=frpc Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5s
+ExecStart=/home/tutu/frp/frpc -c /home/tutu/frp/frpc.ini
+
+[Install]
+WantedBy=multi-user.target
+
+        sudo systemctl daemon-reload
+        sudo systemctl start frpc.service
+        sudo systemctl status frpc.service
+        sudo systemctl enable frpc.service
+
     打开ssh(注意frp中22端口映射到了6000):
         sudo apt install openssh-server
         sudo service ssh start (sudo service ssh status)
