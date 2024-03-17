@@ -84,9 +84,11 @@ Wants=network.target
 
 [Service]
 Type=simple
+User=tutu
 Restart=always
 RestartSec=5s
 ExecStart=/home/tutu/frp/frpc -c /home/tutu/frp/frpc.ini
+ExecReload=/home/tutu/frp/frpc -c /home/tutu/frp/frpc.ini
 
 [Install]
 WantedBy=multi-user.target
@@ -103,6 +105,40 @@ WantedBy=multi-user.target
         sudo ufw allow ssh (如果需要专门打开防火墙的话)
         sudo apt install net-tools (用于ifconfig)
         其他电脑上可以(端口为6000, 密码为jackseaver79): ssh -p 6000 tutu@116.62.63.204
+
+8、安装jupyterlab及其自启动
+    安装:
+        conda create -n ju python=3.11
+        pip install jupyterlab
+    启动sh:
+        source /home/tutu/anaconda3/etc/profile.d/conda.sh
+        conda activate ju
+        jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=7862
+    自启动:
+        找到jupyter:
+            conda activate ju
+            whereis jupyter-lab ( /home/tutu/anaconda3/envs/ju/bin/jupyter )
+        sudo vi /etc/systemd/system/jupyter.service
+
+[Unit]
+Description=jupyter lab
+After=network.target
+[Service]
+Type=simple
+User=tutu
+ExecStart=/home/tutu/anaconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=7862
+ExecReload=/home/tutu/anaconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=7862
+ExecStop=/usr/bin/pkill /home/tutu/anaconda3/envs/ju/bin/jupyter
+KillMode=process
+Restart=on-failure
+RestartSec=15s
+[Install]
+WantedBy=multi-user.target
+
+        sudo systemctl daemon-reload
+        sudo systemctl start jupyter.service
+        sudo systemctl status jupyter.service
+        sudo systemctl enable jupyter.service
 
 8、安装agent用的chrome
     playwright install chrome
