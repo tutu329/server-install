@@ -280,7 +280,33 @@ WantedBy=multi-user.target
             BasePath: http://116.62.63.204:8002/v1  (注意这里是one-api的端口8002)
         b)测试: 点击 Usert Vector Database
 
-14、安装梯子
+14、安装运行 milvus-2.0.2 (确保frp已经打开8003端口)
+    1)下载yml: wget https://github.com/milvus-io/milvus/releases/download/v2.0.2/milvus-standalone-docker-compose.yml -O docker-compose.yml
+    2)mkdir milvus && cp docker-compose.yml milvus/ && cd milvus
+    3)编辑yml:
+        standalone的ports改为: "8003:19530"
+    4)sudo docker-compose up -d (sudo docker-compose down)
+    5)用pymilvus测试:
+        conda create -n milvus python=3.10
+        conda activate milvus
+        pip install pymilvus==2.0.2 (pymilvus版本要和milvus版本一致)
+        新建connect_milvus.py:
+            from pymilvus import connections
+            host = "116.62.63.204"
+            port = 8003
+            rtn=connections.connect(
+              alias="default",
+              host=host,
+              port=port
+            )
+            print(f'pymilvus connect {host}:{port} : "{rtn}"')
+
+            connections.disconnect("default")
+        python connect_milvus.py
+
+
+
+15、安装梯子
 
 
 
