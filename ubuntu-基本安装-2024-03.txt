@@ -295,6 +295,9 @@ WantedBy=multi-user.target
     5)查看docker容器flowise和chroma的输出:
         sudo docker attach 162a5f83ec60 (这是flowise的docker container ID)
         sudo docker attach 376b547be7e6 (这是chroma的docker container ID)
+    6）查看chroma的docker容器的ip:
+        sudo docker inspect 376b547be7e6 | grep "IPAddress" ("IPAddress": "192.168.16.2")
+    7)flowise中, chroma卡的url填写: http://192.168.16.2:8000
 
 15、(flowise+milvus尚未成功)安装运行 milvus-2.0.2 (确保frp已经打开8003端口)
     1)下载yml: wget https://github.com/milvus-io/milvus/releases/download/v2.0.2/milvus-standalone-docker-compose.yml -O docker-compose.yml
