@@ -232,6 +232,9 @@ WantedBy=multi-user.target
             sudo chmod +x /usr/local/bin/docker-compose
             docker-compose -v
             此时docker-compose已经可用，可以在如Flowise/docker/下运行: sudo docker-compose up -d 或 sudo docker-compose stop
+    11)查看某个docker容器的实时输出:
+        sudo docker attach 162a5f83ec60 (这是某个docker容器的ID)
+
 11、安装one-api
     git clone https://github.com/songquanpeng/one-api
     cd one-api
@@ -289,6 +292,9 @@ WantedBy=multi-user.target
     2)cd chroma
     3)修改docker-compose.yml的services的ports为8004:8000
     4)sudo docker-compose up -d --build (网络不太好，多运行几次就行)
+    5)查看docker容器flowise和chroma的输出:
+        sudo docker attach 162a5f83ec60 (这是flowise的docker container ID)
+        sudo docker attach 376b547be7e6 (这是chroma的docker container ID)
 
 15、(flowise+milvus尚未成功)安装运行 milvus-2.0.2 (确保frp已经打开8003端口)
     1)下载yml: wget https://github.com/milvus-io/milvus/releases/download/v2.0.2/milvus-standalone-docker-compose.yml -O docker-compose.yml
