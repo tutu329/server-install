@@ -212,6 +212,10 @@ WantedBy=multi-user.target
 10、安装docker(生产环境中不要用非root账户运行docker)
     1)安装必要的证书并允许apt包管理器使用以下命令通过https使用存储库: sudo apt install apt-transport-https ca-certificates curl software-properties-common gnupg lsb-release
     2)添加Docker的官方GPG密钥: curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    2)添加阿里的镜像源GPG密钥
+        curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+        echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
     3)添加Docker官方库: sudo echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     4)更新Ubuntu源列表: sudo apt update
     5)安装Docker: sudo apt install docker-ce docker-ce-cli containerd.io docker-compose-plugin
@@ -280,7 +284,13 @@ WantedBy=multi-user.target
             BasePath: http://116.62.63.204:8002/v1  (注意这里是one-api的端口8002)
         b)测试: 点击 Usert Vector Database
 
-14、安装运行 milvus-2.0.2 (确保frp已经打开8003端口)
+14、安装chroma
+    1)git clone https://github.com/chroma-core/chroma.git
+    2)cd chroma
+    3)修改docker-compose.yml的services的ports为8004:8000
+    4)sudo docker-compose up -d --build (网络不太好，多运行几次就行)
+
+15、(flowise+milvus尚未成功)安装运行 milvus-2.0.2 (确保frp已经打开8003端口)
     1)下载yml: wget https://github.com/milvus-io/milvus/releases/download/v2.0.2/milvus-standalone-docker-compose.yml -O docker-compose.yml
     2)mkdir milvus && cp docker-compose.yml milvus/ && cd milvus
     3)编辑yml:
@@ -306,7 +316,7 @@ WantedBy=multi-user.target
 
 
 
-15、安装梯子
+16、安装梯子
 
 
 
