@@ -233,7 +233,9 @@ WantedBy=multi-user.target
             docker-compose -v
             此时docker-compose已经可用，可以在如Flowise/docker/下运行: sudo docker-compose up -d 或 sudo docker-compose stop
     11)查看某个docker容器的实时输出:
+        sudo docker logs -f m3e-large-api (这个退出不会导致容器退出)
         sudo docker attach 162a5f83ec60 (这是某个docker容器的ID)
+
 
 11、安装one-api
     git clone https://github.com/songquanpeng/one-api
@@ -293,6 +295,7 @@ WantedBy=multi-user.target
     3)修改docker-compose.yml的services的ports为8004:8000
     4)sudo docker-compose up -d --build (网络不太好，多运行几次就行)
     5)查看docker容器flowise和chroma的输出:
+        sudo docker logs -f m3e-large-api (这个退出不会导致容器退出，attach会导致容器退出)
         sudo docker attach 162a5f83ec60 (这是flowise的docker container ID)
         sudo docker attach 376b547be7e6 (这是chroma的docker container ID)
     6）查看chroma的docker容器的ip:
@@ -323,9 +326,20 @@ WantedBy=multi-user.target
             connections.disconnect("default")
         python connect_milvus.py
 
+16、安装xinference(支持embeddings和openai api)
+    1)下载m3e
+        git clone https://www.modelscope.cn/Jerry0/M3E-large.git
+        infinity_emb --model-name-or-path ~/models/M3E-large
+    2)安装xinference并运行m3e
+        conda create -n m3e python=3.10
+        conda activate m3e
+        pip install "xinference[all]"
+        xinference-local -p 7870 (xinference-local --help解释很全)
+            1）注册下自定义模型m3e，/home/tutu/models/M3E-large
+            2）运行自定义模型m3e，模型名称为m3e (此时已经运行了openai格式的m3e的嵌入api)
+            3）外部如flowise可以正常访问: http://116.62.63.204:7870/v1
 
-
-16、安装梯子
+17、安装梯子
 
 
 
