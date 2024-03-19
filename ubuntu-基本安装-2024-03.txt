@@ -329,7 +329,6 @@ WantedBy=multi-user.target
 16、安装xinference(支持embeddings和openai api)
     1)下载m3e
         git clone https://www.modelscope.cn/Jerry0/M3E-large.git
-        infinity_emb --model-name-or-path ~/models/M3E-large
     2)安装xinference并运行m3e
         conda create -n m3e python=3.10
         conda activate m3e
