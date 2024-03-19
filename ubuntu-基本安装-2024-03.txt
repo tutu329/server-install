@@ -340,7 +340,3 @@ WantedBy=multi-user.target
             3）外部如flowise可以正常访问: http://116.62.63.204:7870/v1
 
 17、安装梯子
-
-
-
-
