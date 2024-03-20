@@ -361,7 +361,7 @@ WantedBy=multi-user.target
             2）运行自定义模型m3e，模型名称为m3e (此时已经运行了openai格式的m3e的嵌入api)
             3）外部如flowise可以正常访问: http://116.62.63.204:7870/v1
 
-17、安装最新node.js
+17、安装最新node.js (node.js官网的download里找即可)
     1、curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
     2、新开一个控制台 (或者)
     3、nvm install 20
