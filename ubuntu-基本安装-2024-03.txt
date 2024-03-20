@@ -107,21 +107,18 @@ WantedBy=multi-user.target
         其他电脑上可以(端口为6000, 密码为jackseaver79): ssh -p 6000 tutu@116.62.63.204
 
 8、安装jupyterlab及其自启动
-    安装:
+    1)安装:
         conda create -n ju python=3.11
         pip install jupyterlab
-    启动sh:
+    2)启动sh:
         source /home/tutu/anaconda3/etc/profile.d/conda.sh
         conda activate ju
         jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=7862
-    自启动:
+    3)自启动:
         找到jupyter:
             conda activate ju
             whereis jupyter-lab ( /home/tutu/anaconda3/envs/ju/bin/jupyter )
         sudo vi /etc/systemd/system/jupyter.service
-    notebook更换conda对应的kernel
-        1）对应conda环境下：pip install ipython ipykernel
-        2）对应conda环境下：python -m ipykernel install --user --name ju_kernel (需要显示的kernel名字)
 
 [Unit]
 Description=jupyter lab
@@ -142,6 +139,29 @@ WantedBy=multi-user.target
         sudo systemctl start jupyter.service
         sudo systemctl status jupyter.service
         sudo systemctl enable jupyter.service
+
+    4)notebook更换conda对应的kernel
+        1）对应conda环境下：pip install ipython ipykernel
+        2）对应conda环境下：python -m ipykernel install --user --name ju_kernel (需要显示的kernel名字)
+    5)解决ubuntu下notebook生成的图中中文显示为方块的问题
+        安装字体
+            git clone https://github.com/tracyone/program_font
+            cd program_font
+            ./install.sh
+            fc-list :lang=zh | grep "SimHei"
+
+        找到位置fonts所在位置
+            import matplotlib
+            matplotlib.matplotlib_fname() (返回'/home/tutu/anaconda3/envs/ju_kernel/lib/python3.10/site-packages/matplotlib/mpl-data/matplotlibrc')
+            有其他字体可以复制到/home/tutu/anaconda3/envs/ju_kernel/lib/python3.10/site-packages/matplotlib/mpl-data/fonts下
+        删除matplotlib缓冲
+            cd ~/.cache/matplotlib
+            rm -rf *.*
+        python代码修改字体
+            font_name = "simhei"
+            plt.rcParams['font.family']= font_name # 指定字体，实际上相当于修改 matplotlibrc 文件　只不过这样做是暂时的　下次失效
+            plt.rcParams['axes.unicode_minus']=False
+        notebook中生成的图的中文就正常了
 
 8、安装agent用的chrome
     playwright install chrome
