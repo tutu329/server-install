@@ -379,7 +379,7 @@ WantedBy=multi-user.target
           lobehub/lobe-chat:latest
     2)注意设置的"语言模型"这里填写llm的proxy url后，"连接测试"报错不用管，主界面上方的角色要调整问刚刚设置的url对应角色才行
 
-19、安装fastgpt
+19、安装fastgpt(严格按官网要求用docker-compose启动)
     1）mkdir fastgpt && cd fastgpt
     2）curl -O https://raw.githubusercontent.com/labring/FastGPT/main/files/deploy/fastgpt/docker-compose.yml
     3）curl -O https://raw.githubusercontent.com/labring/FastGPT/main/projects/app/data/config.json
@@ -393,15 +393,9 @@ WantedBy=multi-user.target
                 - CHAT_API_KEY=empty
 
     5）启动docker容器
-        # 进入项目目录
-            cd fastgpt
-        # 创建 mongo 密钥
-            openssl rand -base64 756 > ./mongodb.key
-            chmod 600 ./mongodb.key
-            sudo chown 999:root ./mongodb.key
-        # 启动容器
-            sudo docker-compose pull
-            sudo docker-compose up -d
+        cd fastgpt
+        sudo docker-compose pull
+        sudo docker-compose up -d
 
     6）初始化 Mongo 副本集(4.6.8以前可忽略)
         # 查看 mongo 容器是否正常运行
@@ -413,7 +407,12 @@ WantedBy=multi-user.target
             mongo -u myusername -p mypassword --authenticationDatabase admin
 
         # 初始化副本集。如果需要外网访问，mongo:27017 可以改成 ip:27017。但是需要同时修改 FastGPT 连接的参数（MONGODB_URI=mongodb://myname:mypassword@mongo:27017/fastgpt?authSource=admin => MONGODB_URI=mongodb://myname:mypassword@ip:27017/fastgpt?authSource=admin）
-            rs.initiate({_id: "rs0",members: [{ _id: 0, host: "mongo:27017" }]})
+rs.initiate({
+  _id: "rs0",
+  members: [
+    { _id: 0, host: "mongo:27017" }
+  ]
+})
         # 检查状态。如果提示 rs0 状态，则代表运行成功
             rs.status()
 
@@ -423,10 +422,9 @@ WantedBy=multi-user.target
           "model": "qwen72",
           "name": "qwen72",
           "maxContext": 32000,
-          "maxResponse": 10000,
+          "maxResponse": 4000,
           "quoteMaxToken": 32000,
           "maxTemperature": 1,
-          "functionCall": true,
 
           "inputPrice": 0,
           "outputPrice": 0,
