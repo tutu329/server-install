@@ -444,4 +444,17 @@ rs.initiate({
         sudo docker-compose up -d
         目前可以通过 ip:7863 直接访问(注意防火墙)。登录用户名为 root，密码为docker-compose.yml环境变量里设置的 DEFAULT_ROOT_PSW。
 
+20、运行wechat-gpt
+    config.json关键参数(用one-api做成gpt-4)：
+        "openai_api_base": "http://116.62.63.204:8002/v1",
+        "model": "gpt-4",
+        "openai_api_key": "sk-dzU39WNBrCXSSd81A0Be0196D83c461dBbFfFe974e6bC0Ca",
+        "chat_group_session_independent": true,
+        "max_tokens": 20000,
+        "temperature": 0,
+
+
+
+
+
 19、安装梯子
