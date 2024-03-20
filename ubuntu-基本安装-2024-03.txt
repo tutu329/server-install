@@ -354,6 +354,6 @@ WantedBy=multi-user.target
           --name lobe-chat \
           --restart=always \
           lobehub/lobe-chat:latest
-    2)注意填写llm的proxy url后，主界面上方的角色要调整问刚刚设置的url对应角色才行
+    2)注意设置的"语言模型"这里填写llm的proxy url后，"连接测试"报错不用管，主界面上方的角色要调整问刚刚设置的url对应角色才行
 
 19、安装梯子
