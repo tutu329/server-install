@@ -338,27 +338,21 @@ WantedBy=multi-user.target
             2）运行自定义模型m3e，模型名称为m3e (此时已经运行了openai格式的m3e的嵌入api)
             3）外部如flowise可以正常访问: http://116.62.63.204:7870/v1
 
-17、安装lobe-chat
-    1)用docker启动，会有访问不了http://116.62.63.204:8001/v1的问题
-    2)local安装：
-        git clone https://github.com/lobehub/lobe-chat.git
-        安装最新node.js
-            1、curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
-            2、新开一个控制台 (或者)
-            3、nvm install 20
-            4、node -v
-            5、npm -v
-        安装pnpm:
-            sudo apt install npm
-            npm install -g pnpm
-        安装lobe依赖库：
-            cd lobe-chat
-            pnpm install
-                查看源：npm config get registry
-                换源：npm config set registry https://registry.npmmirror.com
-                还原：npm config set registry https://registry.npmjs.org/
-        编译和运行lobe（浏览器进入界面后，可能还有一些子界面没有编译完成）：
-            pnpm dev -p 7869
+17、安装最新node.js
+    1、curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    2、新开一个控制台 (或者)
+    3、nvm install 20
+    4、node -v
+    5、npm -v
 
+18、安装lobe-chat
+    1)用docker启动，注意填写llm的proxy url后，主界面上方的角色要调整问刚刚设置的url对应角色才行
+        sudo docker run -d -p 7869:3210 \
+          -e "OPENAI_API_KEY=empty" \
+          -e "OPENAI_PROXY_URL=http://116.62.63.204:8001/v1" \
+          -e "CUSTOM_MODELS=qwen72" \
+          --name lobe-chat \
+          --restart=always \
+          lobehub/lobe-chat:latest
 
-17、安装梯子
+19、安装梯子
