@@ -119,6 +119,9 @@ WantedBy=multi-user.target
             conda activate ju
             whereis jupyter-lab ( /home/tutu/anaconda3/envs/ju/bin/jupyter )
         sudo vi /etc/systemd/system/jupyter.service
+    notebook更换conda对应的kernel
+        1）对应conda环境下：pip install ipython ipykernel
+        2）对应conda环境下：python -m ipykernel install --user --name ju_kernel (需要显示的kernel名字)
 
 [Unit]
 Description=jupyter lab
