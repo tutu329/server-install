@@ -266,7 +266,10 @@ WORKDIR /usr/local/jupyter_temp/
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 RUN pip install pip -U			# RUN为docker build时运行内容
 RUN pip install matplotlib
+RUN pip install scikit-learn
 RUN pip install pandas
+RUN pip install tabulate
+RUN pip install statsmodels
 RUN pip install numpy
 EXPOSE 7865
 CMD ["jupyter", "lab", "--allow-root", "--ServerApp.allow_remote_access=True",  "--ServerApp.token=Jackseaver112279", "--no-browser", "--ip=*", "--port=7865"]
@@ -274,10 +277,19 @@ CMD ["jupyter", "lab", "--allow-root", "--ServerApp.allow_remote_access=True",  
             docker build -t jupyter_with_common_python_libs .
             a)-t 参数用于指定新镜像的名称和可选的 tag
             b). 表示 Dockerfile 文件所在的当前目录，Docker 将从这个目录开始构建镜像。
-        3、新建批处理并运行image（装载d:/jupyter_temp为docker下的/usr/local/jupyter_temp，用作数据交换）
-            ubuntu:     docker run -p 7865:7865 -v /home/tutu/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs
-            win:        docker run -p 7865:7865 -v /d/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs
-        4、关闭容器：win需要在docker desktop中关闭，ubuntu: docker stop
+        3、新建批处理并运行image（装载/home/tutu/jupyter_temp为docker下的/usr/local/jupyter_temp，用作数据交换）
+            mkdir ~/jupyter_temp
+            docker run -p 7865:7865 -v /home/tutu/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs(这个image运行时)
+            win: docker run -p 7865:7865 -v /d/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs
+        4、python安装docker库，并且增加docker权限（否则报错：Error while fetching server API version: ('Connection aborted.', PermissionError(13, 'Permission denied'))）
+            安装：
+                pip install docker
+            允许tutu(如远程jupyter下)连接docker:
+                sudo groupadd docker
+                sudo usermod -aG docker $USER
+                newgrp docker(更新组)
+                测试（python里可以直接调用指定image，不需要docker运行如jupyter_with_common_python_libs镜像）：python life-agent/tools/exec_code/exec_python_linux.py
+
 
 11、安装one-api
     git clone https://github.com/songquanpeng/one-api
