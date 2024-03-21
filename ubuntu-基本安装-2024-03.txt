@@ -259,6 +259,25 @@ WantedBy=multi-user.target
         sudo docker logs -f m3e-large-api (这个退出不会导致容器退出)
         sudo docker attach 162a5f83ec60 (这是某个docker容器的ID)
 
+    12)建立自定义的给agent沙箱用的docker image(jupyter_with_common_python_libs)
+        1、准备文件：dockerfile（docker build需要的默认名字）
+FROM codeocean/jupyterlab
+WORKDIR /usr/local/jupyter_temp/
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip install pip -U			# RUN为docker build时运行内容
+RUN pip install matplotlib
+RUN pip install pandas
+RUN pip install numpy
+EXPOSE 7865
+CMD ["jupyter", "lab", "--allow-root", "--ServerApp.allow_remote_access=True",  "--ServerApp.token=Jackseaver112279", "--no-browser", "--ip=*", "--port=7865"]
+        2、dockerfile所在文件夹下，编译image
+            docker build -t jupyter_with_common_python_libs .
+            a)-t 参数用于指定新镜像的名称和可选的 tag
+            b). 表示 Dockerfile 文件所在的当前目录，Docker 将从这个目录开始构建镜像。
+        3、新建批处理并运行image（装载d:/jupyter_temp为docker下的/usr/local/jupyter_temp，用作数据交换）
+            ubuntu:     docker run -p 7865:7865 -v /home/tutu/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs
+            win:        docker run -p 7865:7865 -v /d/jupyter_temp:/usr/local/jupyter_temp -it jupyter_with_common_python_libs
+        4、关闭容器：win需要在docker desktop中关闭，ubuntu: docker stop
 
 11、安装one-api
     git clone https://github.com/songquanpeng/one-api
