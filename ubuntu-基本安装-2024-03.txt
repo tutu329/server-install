@@ -488,4 +488,112 @@ rs.initiate({
 
 
 
-19、安装梯子
+21、安装梯子
+    0) 安装后的测试:
+        curl -x http://localhost:7890 https://www.google.com
+        curl -x http://localhost:7890 https://huggingface.co
+    1) mkdir v2ray && cd v2ray
+    2) curl -O https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh
+    3) sudo bash install-release.sh
+    4) 常用命令:
+        sudo systemctl status v2ray
+        sudo systemctl enable v2ray
+        sudo systemctl restart v2ray
+        sudo systemctl start v2ray
+        sudo systemctl stop v2ray
+        netstat -autn | grep 7890
+
+        git config --global http.proxy http://localhost:7890
+        git config --global https.proxy http://localhost:7890
+        查看git config：git config --global -l
+        git config --global --unset http.proxy
+        git config --global --unset https.proxy
+
+        export http_proxy="http://127.0.0.1:7890"
+        export https_proxy="http://127.0.0.1:7890"
+
+        a) python中，若playwright需要通过v2ray代理，则增加proxy={"server": "http://127.0.0.1:7890"}即可:
+            self.browser = await p.chromium.launch(
+                channel="chrome",
+                headless=True,
+                proxy={"server": "http://127.0.0.1:7890"},
+            )   # 启动chrome
+        b) 如果python程序中需要访问外网，上述变量可能不起作用，需采用以下方式在程序里写入这些，用于测试：
+            import requests
+
+            proxies = {
+                'http': 'http://127.0.0.1:7890',
+                'https': 'http://127.0.0.1:7890',
+            }
+
+            try:
+                response = requests.get('https://www.google.com', proxies=proxies)
+                print(response.status_code)
+                print(response.text[:200])  # 打印前200个字符
+            except requests.exceptions.RequestException as e:
+                print(e)
+
+    5) sudo vi /usr/local/etc/v2ray/config.json (这里只放了个美国4)
+{
+    "inbounds": [
+        {
+            "port": 7890,
+            "protocol": "http",
+            "settings": {
+                "auth": "noauth",
+                "udp": true
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "vmess",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": "node-1504.yh82l3dsytxzf8.com",
+                        "port": 30030,
+                        "users": [
+                            {
+                                "id": "6e812e27-24df-37a5-98b2-adbba6633c34",
+                                "alterId": 0,
+                                "security": "auto"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "freedom",
+            "settings": {},
+            "tag": "direct"
+        }
+    ],
+    "routing": {
+        "domainStrategy": "AsIs",
+        "rules": [
+            {
+                "type": "field",
+                "ip": [
+                    "geoip:private"
+                ],
+                "outboundTag": "direct"
+            }
+        ]
+    }
+}
+
+22、关于huggingface的镜像
+    1）可以在.bashrc中设置：export HF_ENDPOINT=https://hf-mirror.com
+    2）git clone https://hf-mirror.com/username/model_name
+    3）以xinference为例，可以这样用：
+        docker run --name Xinference \
+          -v /mnt/user/appdata/Xinference/.xinference:/root/.xinference \
+          -v /mnt/user/appdata/Xinference/.cache/huggingface:/root/.cache/huggingface \
+          -v /mnt/user/appdata/Xinference/.cache/modelscope:/root/.cache/modelscope \
+         --env "HF_ENDPOINT=https://hf-mirror.com" \
+          -p 9997:9997 \
+          --gpus all \
+          xprobe/xinference \
+          xinference-local -H 0.0.0.0
