@@ -512,12 +512,17 @@ rs.initiate({
         export http_proxy="http://127.0.0.1:7890"
         export https_proxy="http://127.0.0.1:7890"
 
-        a) python中，若playwright需要通过v2ray代理，则增加proxy={"server": "http://127.0.0.1:7890"}即可:
-            self.browser = await p.chromium.launch(
-                channel="chrome",
-                headless=True,
-                proxy={"server": "http://127.0.0.1:7890"},
-            )   # 启动chrome
+        a) python中，若playwright需要通过v2ray代理:
+            1、搜索过程:
+                增加proxy={"server": "http://127.0.0.1:7890"}:
+                self.browser = await p.chromium.launch(
+                    channel="chrome",
+                    headless=True,
+                    proxy={"server": "http://127.0.0.1:7890"},
+                )   # 启动chrome
+            2、获取搜索结果url内容的过程:
+                尚未解决！
+
         b) 如果python程序中需要访问外网，上述变量可能不起作用，需采用以下方式在程序里写入这些，用于测试：
             import requests
 
