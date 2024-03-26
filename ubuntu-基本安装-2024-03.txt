@@ -183,8 +183,9 @@ WantedBy=multi-user.target
         write_enable=YES
         local_enable=YES
         # chroot_local_user最好还是关闭
-        # local_umask=022 # 这个打开才能上传(022上传后文件权限均为600，所以要改为000,但仍然是600！)
+        # local_umask=022 # 这个打开才能上传(022上传后文件权限均为600，所以要改为000,但此时仍然是600，经测试必须设置anon_umask=000)
         local_umask=000
+        anon_umask=000  # 注意：这行很重要，因为配置的是虚拟user，vsftpd中虚拟用户与匿名用户有相同的权限(virtual_use_local_privs=NO)
         pasv_enable=YES
         pasv_min_port=8020
         pasv_max_port=8025
