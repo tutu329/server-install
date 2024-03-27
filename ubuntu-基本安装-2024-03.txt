@@ -1,3 +1,9 @@
+【支付宝购买gpt订阅】
+    1、appstore登录apple美id
+    2、支付宝切换旧金山，搜索pockytshop，里面搜索apple(apple gift card us)，购买25$（注意复制礼品卡卡号），appstore中输入礼品卡卡号兑换
+    3、开tz，gpt设置-订阅：取消订阅，然后续期。ok
+
+
 【关于ubuntu系统突然掉显卡/突然无故重启的问题】
     1)突然掉显卡(nvidia-smi报错: unable to determine the device handle for GPU 0000.1A.00.0):
         查看gpu的总线情况lspci | grep NVIDIA
