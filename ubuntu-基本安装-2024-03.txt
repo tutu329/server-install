@@ -66,6 +66,13 @@
     pip install torch torchvision torchaudio
     pip install vllm(似乎前面cudatoolkit选择12.4也可以)
 
+4.1、安装flash-attention 1.0.9
+    安装nccl(https://developer.nvidia.com/nccl找对应自己cuda版本的nccl)
+        下载https://developer.nvidia.com/downloads/compute/machine-learning/nccl/secure/2.20.5/ubuntu2204/x86_64/nccl-local-repo-ubuntu2204-2.20.5-cuda12.4_1.0-1_amd64.deb
+        sudo dpkg -i nccl-local-repo-ubuntu2204-2.20.5-cuda12.4_1.0-1_amd64.deb
+        sudo apt update
+        sudo apt install libnccl2 libnccl-dev （也可以安装指定版本sudo apt install libnccl2=2.4.8-1+cuda10.0 libnccl-dev=2.4.8-1+cuda10.0）
+
 5、exfat安装
     安装exfat支持: sudo apt install exfatprogs
     mount移动硬盘: sudo mount -t exfat /dev/sda2 /mnt/disk_1t/
