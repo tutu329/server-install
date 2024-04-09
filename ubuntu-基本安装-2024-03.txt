@@ -635,3 +635,36 @@ rs.initiate({
         sudo docker run -d -p 7864:8080 -e OPENAI_API_BASE_URLS="http://116.62.63.204:8001/v1" -e OPENAI_API_KEYS="empty" -v /home/tutu/open-webui-volume:/app/backend/data --name open-webui --restart no ghcr.io/open-webui/open-webui:main
     2）需要启动一段时间，能通过 http://116.62.63.204:7864进入界面
     3）登录后，直接选择chat页面上方的model，选择qwen72，就可以用了
+
+关于微调：
+CUDA_VISIBLE_DEVICES=0,1,2,3 \
+swift sft \
+--model_type qwen1half-32b-chat \
+--sft_type lora \
+--tuner_backend swift \
+--dtype AUTO \
+--output_dir /home/czb/output \
+--train_dataset_sample 5000 \
+--num_train_epochs 2 \
+--max_length 2048 \
+--check_dataset_strategy warning \
+--lora_rank 8 \
+--lora_alpha 32 \
+--lora_dropout_p 0.05 \
+--lora_target_modules DEFAULT \
+--gradient_checkpointing true \
+--batch_size 1 \
+--weight_decay 0.1 \
+--learning_rate 1e-4 \
+--gradient_accumulation_steps 16 \
+--max_grad_norm 0.5 \
+--warmup_ratio 0.03 \
+--eval_steps 100 \
+--save_steps 100 \
+--save_total_limit 2 \
+--logging_steps 10 \
+--use_flash_attn false \
+--save_safetensors false \
+--self_cognition_sample 500 \
+--model_name 瓦小狸 vall-e \
+--model_author 瓦狸智能 AIOPX
