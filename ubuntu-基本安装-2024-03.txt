@@ -644,6 +644,15 @@ rs.initiate({
     插头设置：api改为 Chat Completion，聊天补全来源改为 Custom(openai-compatible), Custom Endpoint改为 http://116.62.63.204:8001/v1，model ID和models改为qwen72。点击“连接”ok即可
     最右侧：选择角色，即可聊天
 
+25、安装sd webui(已经开了梯子的情况下)
+    cd ~
+    sudo apt install wget git python3 python3-venv libgl1 libglib2.0-0
+    wget -q https://raw.githubusercontent.com/AUTOMATIC1111/stable-diffusion-webui/master/webui.sh
+    chmod +x webui.sh
+    ./webui.sh (安装在~/stable-diffusion-webui/下)
+    下载模型到 /home/tutu/stable-diffusion-webui/models/Stable-diffusion
+    报错: safetensor error重新去civitai.com下载模型就行
+
 
 关于微调：
 CUDA_VISIBLE_DEVICES=0,1,2,3 \
