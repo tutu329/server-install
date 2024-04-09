@@ -636,6 +636,15 @@ rs.initiate({
     2）需要启动一段时间，能通过 http://116.62.63.204:7864进入界面
     3）登录后，直接选择chat页面上方的model，选择qwen72，就可以用了
 
+24、安装sillytavern(需要node.js, 不需要conda)
+    git clone https://github.com/SillyTavern/SillyTavern -b release
+    cd SillyTavern
+    ./start.sh
+    登录: 116.62.63.204:8000
+    插头设置：api改为 Chat Completion，聊天补全来源改为 Custom(openai-compatible), Custom Endpoint改为 http://116.62.63.204:8001/v1，model ID和models改为qwen72。点击“连接”ok即可
+    最右侧：选择角色，即可聊天
+
+
 关于微调：
 CUDA_VISIBLE_DEVICES=0,1,2,3 \
 swift sft \
