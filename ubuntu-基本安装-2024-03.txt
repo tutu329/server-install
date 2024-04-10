@@ -653,36 +653,58 @@ rs.initiate({
     下载模型到 /home/tutu/stable-diffusion-webui/models/Stable-diffusion
     报错: safetensor error重新去civitai.com下载模型就行
 
-
-关于微调：
-CUDA_VISIBLE_DEVICES=0,1,2,3 \
+26、swift微调
+    conda create -n swift python=3.10
+    conda activate swift
+    pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu121
+    pip install deepspeed==0.12.6
+    git clone https://github.com/modelscope/swift.git
+    cd swift
+    pip install -v -e .[llm]
+    vi sft.sh
+#!/bin/bash
+# Experimental environment: 2080ti 22G * 8
+nproc_per_node=8
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+NPROC_PER_NODE=$nproc_per_node \
+MASTER_PORT=29500 \
+OMP_NUM_THREADS=1 \
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True \
 swift sft \
---model_type qwen1half-32b-chat \
---sft_type lora \
---tuner_backend swift \
---dtype AUTO \
---output_dir /home/czb/output \
---train_dataset_sample 5000 \
---num_train_epochs 2 \
---max_length 2048 \
---check_dataset_strategy warning \
---lora_rank 8 \
---lora_alpha 32 \
---lora_dropout_p 0.05 \
---lora_target_modules DEFAULT \
---gradient_checkpointing true \
---batch_size 1 \
---weight_decay 0.1 \
---learning_rate 1e-4 \
---gradient_accumulation_steps 16 \
---max_grad_norm 0.5 \
---warmup_ratio 0.03 \
---eval_steps 100 \
---save_steps 100 \
---save_total_limit 2 \
---logging_steps 10 \
---use_flash_attn false \
---save_safetensors false \
---self_cognition_sample 500 \
---model_name 瓦小狸 vall-e \
---model_author 瓦狸智能 AIOPX
+    --model_type qwen1half-32b-chat  \
+    --model_id_or_path /home/tutu/models/Qwen1.5-32B-Chat  \
+    --sft_type lora \
+    --tuner_backend swift \
+    --template_type qwen \
+    --dtype AUTO \
+    --output_dir /home/tutu/swift/output \
+    --ddp_backend nccl \
+    --train_dataset_sample 5000 \
+    --num_train_epochs 2 \
+    --max_length 2048 \
+    --check_dataset_strategy warning \
+    --lora_rank 8 \
+    --lora_alpha 32 \
+    --lora_dropout_p 0.05 \
+    --lora_target_modules DEFAULT \
+    --gradient_checkpointing true \
+    --batch_size 1 \
+    --weight_decay 0.1 \
+    --learning_rate 1e-4 \
+    --gradient_accumulation_steps $(expr 16 / $nproc_per_node) \
+    --max_grad_norm 0.5 \
+    --warmup_ratio 0.03 \
+    --eval_steps 100 \
+    --save_steps 100 \
+    --save_total_limit 2 \
+    --logging_steps 10 \
+    --use_flash_attn false \
+    --deepspeed default-zero3 \
+    --save_only_model true \
+    --save_safetensors false \
+    --self_cognition_sample 1500 \
+    --model_name 雷神 terrel \
+    --model_author 土土 tutu \
+    --push_to_hub false \
+    --push_hub_strategy push_last  \
+
