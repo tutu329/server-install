@@ -719,3 +719,12 @@ swift sft \
     --push_to_hub false \
     --push_hub_strategy push_last  \
 
+    vi merge.sh (微调完成后，lora和checkpoint的merge)
+CUDA_VISIBLE_DEVICES=0
+swift export \
+    --model_type qwen1half-32b-chat  \
+    --model_id_or_path /home/tutu/models/Qwen1.5-32B-Chat  \
+    --ckpt_dir '/home/tutu/swift/output' \
+    --merge_lora true
+
+
