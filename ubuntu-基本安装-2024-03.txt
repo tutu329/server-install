@@ -669,7 +669,9 @@ rs.initiate({
     cd dify/docker
     修改docker-compose.yaml最下面nginx的端口为7866:80
     docker compose up -d
-    使用: 找一个模板，里面的gpt节点，点击一下，右侧节点说明出来后，点一下“模型”下拉框，然后再点一下里面的gpt模型图片，就能增加、换一个qwen节点；然后注意每一个节点的输入输出变量对不对，即可运行。
+    使用:
+        1）添加本地自定义模型：右上角用户的设置里，模型供应商里增加OpenAI-API-compatible
+        2）找一个模板，里面的gpt节点，点击一下，右侧节点说明出来后，点一下“模型”下拉框，然后再点一下里面的gpt模型图片，就能增加、换一个qwen节点；然后注意每一个节点的输入输出变量对不对，即可运行。
 
 27、swift微调
     conda create -n swift python=3.10
