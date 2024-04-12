@@ -693,7 +693,9 @@ rs.initiate({
         git clone https://www.modelscope.cn/iic/punc_ct-transformer_zh-cn-common-vocab272727-pytorch.git
     运行：
         config.py中修改webui_port_main = 7867
-        python webui.py
+        python webui.py (然后就能进入页面)
+        仔细看说明：https://www.yuque.com/baicaigongchang1145haoyuangong/ib3g1e
+        参考项目：https://github.com/X-T-E-R/GPT-SoVITS-Inference
 
 
 
