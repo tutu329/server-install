@@ -667,7 +667,9 @@ rs.initiate({
 26、安装dify
     git clone https://github.com/langgenius/dify
     cd dify/docker
-    修改docker-compose.yaml最下面nginx的端口为7866:80
+    修改docker-compose.yaml
+        1）最下面nginx的端口为7866:80
+        2）向量库改为: milvus
     docker compose up -d
     使用:
         1）添加本地自定义模型：右上角用户的设置里，模型供应商里增加OpenAI-API-compatible
