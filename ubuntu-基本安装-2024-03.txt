@@ -664,7 +664,14 @@ rs.initiate({
         pip install xformers    (这里注意，如果pip报错SSLError,这种，往往是export https_proxy="http://127.0.0.1:7890"造成的，重新开一个控制台即可)
         deactivate
 
-26、swift微调
+26、安装dify
+    git clone https://github.com/langgenius/dify
+    cd dify/docker
+    修改docker-compose.yaml最下面nginx的端口为7866:80
+    docker compose up -d
+    使用: 找一个模板，里面的gpt节点，点击一下，右侧节点说明出来后，点一下“模型”下拉框，然后再点一下里面的gpt模型图片，就能增加、换一个qwen节点；然后注意每一个节点的输入输出变量对不对，即可运行。
+
+27、swift微调
     conda create -n swift python=3.10
     conda activate swift
     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu121
