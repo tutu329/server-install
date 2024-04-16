@@ -667,8 +667,8 @@ rs.initiate({
 25-1、安装Stable Diffusion WebUI Docker（包含AUTOMATIC1111、InvokeAI和ComfyUI）
     git clone https://github.com/AbdBarho/stable-diffusion-webui-docker
     cd stable-diffusion-webui-docker
-    docker compose --profile download up --build
-    docker compose --profile [ui] up --build   (其中[ui]为：invoke、auto或comfy)
+    下载：docker compose --profile download up --build
+    运行：docker compose --profile [ui] up --build   (其中[ui]为：invoke、auto或comfy)
 
 26、安装dify
     git clone https://github.com/langgenius/dify
