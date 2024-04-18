@@ -666,7 +666,7 @@ rs.initiate({
         # 最早的pip install xformers最后会报错    (这里注意，如果pip报错SSLError,这种，往往是export https_proxy="http://127.0.0.1:7890"造成的，重新开一个控制台即可)
         deactivate
     运行:
-        ~/webui.sh --xformers --no-half-vae
+        ~/webui.sh --xformers --no-half-vae --server 0.0.0.0 --port 7868
 
 25-1、安装Stable Diffusion WebUI Docker（包含AUTOMATIC1111、InvokeAI和ComfyUI）（下载还是有问题，代理设置似乎都没用）
     git clone https://github.com/AbdBarho/stable-diffusion-webui-docker
