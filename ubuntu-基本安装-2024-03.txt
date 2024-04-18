@@ -212,7 +212,7 @@ WantedBy=multi-user.target
         pasv_enable=YES
         pasv_min_port=8020
         pasv_max_port=8025
-        pasv_address=116.62.63.204
+        pasv_address=116.62.63.204  (这里最好设置pasv_address=0.0.0.0，否则局域网机器无法访问，只能通过frp，上传大文件很费流量)
         allow_writeable_chroot=YES  # 这行很关键，不然就连不上
 
         注: cat /etc/ftpusers为禁止作为ftp用户的用户列表
