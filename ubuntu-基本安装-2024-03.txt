@@ -196,7 +196,6 @@ WantedBy=multi-user.target
     sudo service vsftpd restart
     sudo service vsftpd stop
 
-
     用户设置（虚拟user，一个linux的user("ftpuser")对应多个vsftp的虚拟user）:
         sudo useradd -d /home/tutu/server -s /sbin/nologin ftpuser  # ftpuser为新增的user，而虚拟用户对应/etc/vsftpd_user_conf/的tutu329等文件
         sudo chmod -Rf 777 /home/tutu/server    # 这一行很关键，不然filezilla上传下载会报错：严重文件传输错误
