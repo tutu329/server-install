@@ -254,7 +254,10 @@ WantedBy=multi-user.target
         local_root=/home/tutu/server/
 
     sudo service vsftpd restart
-    此时用filezilla可以成功登录、下载、上传，116.62.63.204:6021 tutu329:jackseaver79
+    此时用filezilla可以成功登录、下载、上传
+        192.168.124.33:21   tutu329:jackseaver79    （尽可能用这个，不然需要消耗frp服务器流量，非常贵）
+            如果报错：无法建立数据连接: WSAEADDRNOTAVAIL - 无法分配请求的地址，则把filezilla中的这个用户设置中的“传输设置”改为主动即可。
+        116.62.63.204:6021  tutu329:jackseaver79
     如果外网filezilla可以成功登录、下载、上传，而pycharm连接不了ftp，应该是pycharm版本问题、需要用新版本
 
 10、安装docker(生产环境中不要用非root账户运行docker)
