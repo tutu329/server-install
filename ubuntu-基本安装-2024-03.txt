@@ -789,7 +789,6 @@ swift export \
     3)pip install streamlit
     4)streamlit run ipmi.py --server.port 7860
 
-
 30、关于streamlit报错
     现象：OSError: [Errno 28] inotify watch limit reached
     解决：（似乎就是不能在~/下运行）把ipmi.py文件复制到/home/tutu/server/life-agent下运行即可：streamlit run ipmi.py --server.port 7860
