@@ -785,9 +785,11 @@ swift export \
             sudo usermod -aG sudo tutu  (为tutu增加sudo的组)
         b)sudo apt install ipmitool
         c)sudo ipmitool
-    2)conda create -n streamlit python=3.10
-    3)pip install streamlit
-    4)streamlit run ipmi.py --server.port 7860
+    2)conda create -n ipmi python=3.10
+    3)conda activate ipmi
+    4)pip install streamlit
+    5)pip install torch torchvision torchaudio (主要用于获取GPU信息)
+    6)streamlit run ipmi.py --server.port 7860
 
 30、关于streamlit报错
     现象：OSError: [Errno 28] inotify watch limit reached
