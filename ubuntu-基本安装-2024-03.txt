@@ -777,5 +777,21 @@ swift export \
     --ckpt_dir '/home/tutu/swift/output/qwen1half-32b-chat/v1-20240410-103438/checkpoint-188' \
     --merge_lora true
 
+29、超微4029服务器修改机箱风扇转速
+    1)关于ipmitool权限(为tutu提供root权限)：
+        a)为tutu增加sudo的组
+            sudo passwd (为su设置密码，否则会报错：su: 认证失败)
+            su - (输入密码)
+            sudo usermod -aG sudo tutu  (为tutu增加sudo的组)
+        b)sudo apt install ipmitool
+        c)sudo ipmitool
+    2)conda create -n streamlit python=3.10
+    3)pip install streamlit
+    4)streamlit run ipmi.py --server.port 7860
+
+30、关于streamlit报错
+    现象：OSError: [Errno 28] inotify watch limit reached
+    解决：（似乎就是不能在~/下运行）把ipmi.py文件复制到/home/tutu/server/life-agent下运行即可：streamlit run ipmi.py --server.port 7860
+
 
 
