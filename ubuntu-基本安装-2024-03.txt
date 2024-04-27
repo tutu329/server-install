@@ -778,7 +778,7 @@ swift export \
     --merge_lora true
 
 29、超微4029服务器修改机箱风扇转速
-    1)关于ipmitool权限(为tutu提供root权限)：
+    1)(这个似乎没什么用)关于ipmitool权限(为tutu提供root权限)：
         a)为tutu增加sudo的组
             sudo passwd (为su设置密码，否则会报错：su: 认证失败)
             su - (输入密码)
@@ -790,6 +790,11 @@ swift export \
     4)pip install streamlit
     5)pip install torch torchvision torchaudio (主要用于获取GPU信息)
     6)streamlit run ipmi.py --server.port 7860
+
+    sudo ipmitool raw 0x30 0x70 0x66 0x01 0x00 0x04
+    sudo ipmitool raw 0x30 0x70 0x66 0x01 0x01 0x04
+    sudo ipmitool raw 0x30 0x70 0x66 0x01 0x02 0x08
+    sudo ipmitool raw 0x30 0x70 0x66 0x01 0x03 0x08
 
 30、关于streamlit报错
     现象：OSError: [Errno 28] inotify watch limit reached
