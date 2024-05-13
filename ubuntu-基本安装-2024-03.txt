@@ -808,6 +808,8 @@ swift export \
     cd ComfyUI
     pip install -r requirements.txt
     python main.py --listen=0.0.0.0 --port=7869
+    模型复制到：models/checkpoints
+    VAE复制到：models/vae
 
 
 
