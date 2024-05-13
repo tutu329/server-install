@@ -807,7 +807,7 @@ swift export \
     git clone https://github.com/comfyanonymous/ComfyUI
     cd ComfyUI
     pip install -r requirements.txt
-    python main.py --port=7869
+    python main.py --listen=0.0.0.0 --port=7869
 
 
 
