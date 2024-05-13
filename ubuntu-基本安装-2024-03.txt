@@ -634,6 +634,8 @@ rs.initiate({
 23、安装open-webui
     1)用下面命令启动
         sudo docker run -d -p 7864:8080 -e OPENAI_API_BASE_URLS="http://116.62.63.204:8001/v1" -e OPENAI_API_KEYS="empty" -v /home/tutu/open-webui-volume:/app/backend/data --name open-webui --restart no ghcr.io/open-webui/open-webui:main
+        docker容器的前台启动调试：
+            sudo docker run --rm -p 7864:8080 -e HF_ENDPOINT=https://hf-mirror.com -e OPENAI_API_BASE_URLS="http://116.62.63.204:8001/v1" -e OPENAI_API_KEYS="empty" -v /home/tutu/open-webui-volume:/app/backend/data --name open-webui --restart no ghcr.io/open-webui/open-webui:main
     2）需要启动一段时间，能通过 http://116.62.63.204:7864进入界面
     3）登录后，直接选择chat页面上方的model，选择qwen72，就可以用了
 
@@ -812,6 +814,7 @@ swift export \
         cd /home/tutu/ComfyUI/models/checkpoints
         ln -s /home/tutu/stable-diffusion-webui/models/Stable-diffusion/* ./
     VAE复制到：models/vae
+    (注意：open webui中，图像设置中设置http://116.62.63.204:7869以及模型参数后，聊天界面并不是agent方式绘图，而是对话输出后通过点击绘图按钮绘制和对话内容对应的图片)
 
 
 
