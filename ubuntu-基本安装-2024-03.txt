@@ -809,6 +809,8 @@ swift export \
     pip install -r requirements.txt
     python main.py --listen=0.0.0.0 --port=7869
     模型复制到：models/checkpoints
+        cd /home/tutu/ComfyUI/models/checkpoints
+        ln -s /home/tutu/stable-diffusion-webui/models/Stable-diffusion/* ./
     VAE复制到：models/vae
 
 
