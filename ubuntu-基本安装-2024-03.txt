@@ -800,5 +800,15 @@ swift export \
     现象：OSError: [Errno 28] inotify watch limit reached
     解决：（似乎就是不能在~/下运行）把ipmi.py文件复制到/home/tutu/server/life-agent下运行即可：streamlit run ipmi.py --server.port 7860
 
+31、Comfy UI安装
+    conda create -n comfy python=3.11
+    conda activate comfy
+    pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu121
+    git clone https://github.com/comfyanonymous/ComfyUI
+    cd ComfyUI
+    pip install -r requirements.txt
+    python main.py --port=7869
+
+
 
 
