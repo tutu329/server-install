@@ -816,6 +816,30 @@ swift export \
     VAE复制到：models/vae
     (注意：open webui中，图像设置中设置http://116.62.63.204:7869以及模型参数后，聊天界面并不是agent方式绘图，而是对话输出后通过点击绘图按钮绘制和对话内容对应的图片)
 
+    1）impact pack安装（脸部修复）
+        a）安装manager
+            cd ComfyUI/custom_nodes
+            git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+            重启comfyui
+        b）会发现UltralyticsDetectorProvider节点添加时界面卡死，需要做如下工作：
+            1）/home/tutu/ComfyUI/models/ultralytics/bbox下
+            把https://huggingface.co/Bingsu/adetailer/tree/main下的：
+                face_yolov8n.pt
+                face_yolov8s.pt
+                hand_yolov8n.pt
+                person_yolov8n-seg.pt
+                person_yolov8s-seg.pt
+            等文件复制到/home/tutu/ComfyUI/models/ultralytics/bbox
+            2）/home/tutu/ComfyUI/models/sams下
+                wget https://dl.fbaipublicfiles.com/segment_anything/sam_vit_b_01ec64.pth
+        c)脸部修复的连接：
+            0）FaceDetailer的model、clip、vae、positive、negative从ksampler挪过来，ksampler删除即可
+            1）UltralyticsDetectorProvider   -> FaceDetailer的bbox_detector
+            2）SAMLoader                     -> FaceDetailer的sam_model_opt
+            3）pic                           -> FaceDetailer的输入image
+            4）FaceDetailer的输出image -> save image
+
+
 
 
 
