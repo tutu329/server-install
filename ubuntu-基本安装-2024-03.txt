@@ -840,5 +840,22 @@ swift export \
             3）pic                           -> FaceDetailer的输入image
             4）FaceDetailer的输出image -> save image
 
+32、FastLLM安装和运行deepseek 236b-int4-flm
+    1）conda create -n fastllm python=3.11, conda activate fastllm
+    2)git clone https://github.com/ztxz16/fastllm, cd fastllm
+    3)mkdir build, cd build
+    4)编译gpu版
+        安装cmake：sudo apt install cmake
+        修改配置：CMakeLists.txt文件中，set(CMAKE_CUDA_ARCHITECTURES "native")的"native"改为gpu对应能力数值（2080ti是75）
+        编译：
+            cmake .. -DUSE_CUDA=ON
+            make -j
+            cd tools
+            python setup.py install
+    5）关于下载的deepseek 236b-int4-flm模型文件夹，要在文件夹里，进行文件连接，然后运行是调用连接后的完整flm文件，不然报错：
+        cat deepseekv2-chat-int4g256.flm.part_* > deepseekv2-chat-int4g256.flm
+    6）调用GPU运行模型
+
+
 
 
