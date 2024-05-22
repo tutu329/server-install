@@ -880,6 +880,34 @@ swift export \
         下载：https://redis.io/insight/
         添加database：116.62.63.204 8010
         验证：点击所添加的database后，在界面左下角">_CLI"中输入ping（如果返回PONG则正常）
+    5）安装redis-py(发布message，每一秒+1)
+        选择conda环境，如：conda activate client
+        pip install redis (successfully installed redis-5.0.4)
+        python redis_a.py
+            import redis
+            import time
+            # 连接到 Redis 服务器
+            r = redis.Redis(host='localhost', port=8010, db=0)
+
+            message = 0
+            while True:
+                message += 1
+                r.set('message', message)
+                print(f"Published: {message}")
+                time.sleep(1)
+
+        python redis_b.py(每0.5秒读取message)
+            import redis
+            import time
+            # 连接到 Redis 服务器
+            r = redis.Redis(host='localhost', port=8010, db=0)
+
+            while True:
+                message = r.get('message')
+                if message:
+                    print(f"Received: {int(message)}")
+                time.sleep(0.5)
+
 
 
 
