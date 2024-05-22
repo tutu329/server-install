@@ -878,6 +878,8 @@ swift export \
             ping（如果返回PONG则正常）
     4）安装redis insight
         下载：https://redis.io/insight/
+        添加database：116.62.63.204 8010
+        验证：点击所添加的database后，在界面左下角">_CLI"中输入ping（如果返回PONG则正常）
 
 
 
