@@ -786,7 +786,8 @@ swift export \
             sudo visudo
             增加一行内容（增加后，Ctrl+x，然后y保存退出）：
                 root    ALL=(ALL:ALL) ALL   （通常在这一行下面增加，注意visudo是直接输入，不是vi的那种方式）
-                tutu ALL=(ALL) NOPASSWD: /usr/bin/ipmitool
+                tutu ALL=(ALL) NOPASSWD: /usr/bin/ipmitool  (注意：经过测试，这行必须放在文件最后而不是上面这行之后，否则会被后面的组规则覆盖导致无效)
+                也可以让全部命令sudo不需要密码：tutu ALL=(ALL) NOPASSWD: ALL （参数1为用户名，2为所在主机，3为代替的用户，4为ALL或NOPASSWD等命令，5为具体文件或ALL）
         c)sudo ipmitool（就不需要密码了）
     2)conda create -n ipmi python=3.10
     3)conda activate ipmi
