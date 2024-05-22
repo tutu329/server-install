@@ -876,6 +876,8 @@ swift export \
         控制台下验证：
             redis-cli -h 116.62.63.204 -p 8010
             ping（如果返回PONG则正常）
+    4）安装redis insight
+        下载：https://redis.io/insight/
 
 
 
