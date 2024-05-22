@@ -857,6 +857,26 @@ swift export \
         cat deepseekv2-chat-int4g256.flm.part_* > deepseekv2-chat-int4g256.flm
     6）调用GPU运行模型
 
+33、安装和运行redis（端口为8010）
+    1）安装redis服务
+        sudo apt install redis-server
+        sudo systemctl start redis-server
+        sudo systemctl enable redis-server
+        sudo systemctl status redis-server
+    2）配置redis
+        sudo vi /etc/redis/redis.conf
+        bind 127.0.0.1 改为 bind 0.0.0.0
+        port 6379 改为 8010
+        sudo systemctl restart redis-server
+        验证：
+            redis-cli -p 8010
+            ping（如果返回PONG则正常）
+    3）win下安装redis
+        https://github.com/microsoftarchive/redis/releases下载最新msi，安装即可
+        控制台下验证：
+            redis-cli -h 116.62.63.204 -p 8010
+            ping（如果返回PONG则正常）
+
 
 
 
