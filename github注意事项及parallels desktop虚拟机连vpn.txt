@@ -39,14 +39,15 @@ git侧
 	c）再将HEAD指向main分支：			git symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
 	d）最后删除远程库中旧的master分支即可：	git push origin --delete master
 
-token方式还是会出错，还是要配置SSH（mac下和win下都要这样执行一下，也就是各自有一个ssh-key，且在github上新建2个对应的ssh-key）
+【重要】pycharm的SSH方式运行git的commit：token方式还是会出错，还是要配置SSH（mac下和win下都要这样执行一下，也就是各自有一个ssh-key，且在github上新建2个对应的ssh-key）
 1、ssh-keygen -t rsa -b 4096 -C "jack.seaver@163.com"
 2、~/.ssh/下会有2个文件：id_rsa和id_rsa.pub
 3、github网页登录，settings->SSH and GPG keys->New SSH key，输入Title（随意）和Key（id_rsa.pub中所有文字），Add SSH key
 4、终端输入ssh -T git@github.com，如果返回You've successfully authenticated, but GitHub does not provide shell access，表示SSH设置成功。
 5、.git/config改为以下内容（即可用ssh进行push等操作，而不需要任何密码或token）
     a)命令
-        git remote set-url origin git@github.com:tutu329/life-agent
+        如在d:\server\life-agent下运行：git remote set-url origin git@github.com:tutu329/life-agent
+        如在d:\server\server-install下运行：git remote set-url origin git@github.com:tutu329/server-install
     b）改.git/config
         [remote "origin"]
                 url = git@github.com:tutu329/life-agent
