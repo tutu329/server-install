@@ -808,6 +808,34 @@ swift export \
         sudo ipmitool raw 0x30 0x70 0x66 0x01 0x02 0x08
         sudo ipmitool raw 0x30 0x70 0x66 0x01 0x03 0x08
 
+29-1、ipmi自动启动(注意这里要确保执行sudo已经不需要密码，详见上一条)
+    sudo vi /etc/systemd/system/ipmilowfan.service(注意第一行必须要有，不然exec报错)
+#!/bin/bash
+sudo ipmitool raw 0x30 0x70 0x66 0x01 0x00 0x04
+sudo ipmitool raw 0x30 0x70 0x66 0x01 0x01 0x04
+sudo ipmitool raw 0x30 0x70 0x66 0x01 0x02 0x08
+sudo ipmitool raw 0x30 0x70 0x66 0x01 0x03 0x08
+
+[Unit]
+Description=ipmilowfan
+After=network.target
+[Service]
+Type=simple
+User=tutu
+ExecStart=/home/tutu/ipmilowfan.sh
+ExecReload=/home/tutu/ipmilowfan.sh
+ExecStop=/usr/bin/pkill /home/tutu/ipmilowfan.sh
+KillMode=process
+Restart=on-failure
+RestartSec=15s
+[Install]
+WantedBy=multi-user.target
+
+        sudo systemctl daemon-reload
+        sudo systemctl start ipmilowfan.service
+        sudo systemctl status ipmilowfan.service
+        sudo systemctl enable ipmilowfan.service
+
 
 
 30、关于streamlit报错
