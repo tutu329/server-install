@@ -44,14 +44,16 @@ git侧
 2、~/.ssh/下会有2个文件：id_rsa和id_rsa.pub
 3、github网页登录，settings->SSH and GPG keys->New SSH key，输入Title（随意）和Key（id_rsa.pub中所有文字），Add SSH key
 4、终端输入ssh -T git@github.com，如果返回You've successfully authenticated, but GitHub does not provide shell access，表示SSH设置成功。
-5、.git/config改为以下内容（即可用ssh进行push等操作，而不需要任何密码或token）
+5、git clone如life-agent和server-install
+6、pycharm打开项目后，pycharm的设置的github中，把clone git repo using ssh勾上
+7、.git/config改为以下内容（即可用ssh进行push等操作，而不需要任何密码或token）
     a)命令
         如在d:\server\life-agent下运行：git remote set-url origin git@github.com:tutu329/life-agent
         如在d:\server\server-install下运行：git remote set-url origin git@github.com:tutu329/server-install
     b）改.git/config
         [remote "origin"]
                 url = git@github.com:tutu329/life-agent
-6、git clone也可以改为 git clone git@github.com:tutu329/life-agent 这样，可以快、稳定很多。
+8、git clone也可以改为 git clone git@github.com:tutu329/life-agent 这样，可以快、稳定很多。
 
 【=========================精简总结=========================】
 一、开了vpn且github网页能上的情况下，设置git的代理（win下除了打开vpn、执行下面2句，还需要在internet设置->连接->局域网设置里，打开代理服务器选项，填上127.0.0.1和10809）（mac下打开vpn、执行下面2句即可）
