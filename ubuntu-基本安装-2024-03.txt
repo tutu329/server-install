@@ -976,6 +976,20 @@ WantedBy=multi-user.target
     conda activate craw
     pip install Scrapy
 
+36、win下安装ChatTTS
+    安装ChatTTS
+        git clone https://github.com/2noise/ChatTTS
+        conda create -n tts python=3.11
+        conda activate tts
+        cd ChatTTS
+        pip install -r requirements.txt
+    新版本windows上报错 Normalizer pynini WeTextProcessing nemo_text_processing 解决方法
+        打开 ChatTTS/core.py, 大约143行，注释掉接下来的7行（if do_text_normalization:等7行）即可
+    安装模型
+        git clone https://huggingface.co/2Noise/ChatTTS
+    python webui.py --local_path=d:/models/ChatTTS
+
+
 
 
 
