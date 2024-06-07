@@ -989,6 +989,16 @@ WantedBy=multi-user.target
         git clone https://huggingface.co/2Noise/ChatTTS
     python webui.py --local_path=d:/models/ChatTTS
 
+37、安装最新版本yarn
+    sudo apt update
+    sudo apt install curl
+    curl -sL https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -(需要开vpn：~/proxy_git.sh)
+    echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+    sudo apt install yarn
+    yarn --version(此时为0.32+git)
+    sudo apt install npm
+    sudo curl --compressed -o- -L https://yarnpkg.com/install.sh | bash
+    重启终端后：yarn --version(此时为1.22.22)
 
 
 
