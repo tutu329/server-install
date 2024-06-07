@@ -1000,6 +1000,14 @@ WantedBy=multi-user.target
     sudo curl --compressed -o- -L https://yarnpkg.com/install.sh | bash
     重启终端后：yarn --version(此时为1.22.22)
 
+38、安装llm-viz
+    git clone https://github.com/bbycroft/llm-viz
+    cd llm-viz
+    yarn
+    修改package.json中"scripts"的"dev"的ip和port:
+        "dev": "next dev -H 0.0.0.0 -p 7869",
+    yarn dev
+
 
 
 
