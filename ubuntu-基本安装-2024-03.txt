@@ -1008,6 +1008,63 @@ WantedBy=multi-user.target
         "dev": "next dev -H 0.0.0.0 -p 7869",
     yarn dev
 
+38、用autogptq量化模型
+    安装autogptq：
+        conda create -n autogptq python=3.11
+        conda activate autogptq
+        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+        pip install auto-gptq --no-build-isolation
+    量化：
+        pip install protobuf
+        运行下面的python代码，gptq文件夹出现下列文件：
+            config.json
+            quantize_config.json
+            gptq_model-4bit-128g.safetensors
+        然后将原模型文件夹中的下列文件，copy到gptq文件夹中：
+            special_tokens_map.json
+            tokenizer_config.json
+            tokenizer.json
+            tokenizer.model
+        运行vllm即可
+
+from transformers import AutoTokenizer, TextGenerationPipeline
+from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
+import logging
+
+logging.basicConfig(
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s", level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+pretrained_model_dir = "/home/tutu/models/openbuddy-mistral-22b-v21.1-32k"
+quantized_model_dir = "/home/tutu/models/openbuddy-mistral-22b-v21.1-32k-gptq"
+
+tokenizer = AutoTokenizer.from_pretrained(pretrained_model_dir, use_fast=True)
+examples = [
+    tokenizer(
+        "auto-gptq is an easy-to-use model quantization library with user-friendly apis, based on GPTQ algorithm."
+    )
+]
+
+quantize_config = BaseQuantizeConfig(
+    bits=4,  # quantize model to 4-bit
+    group_size=128,  # it is recommended to set the value to 128
+    desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
+)
+
+# load un-quantized model, by default, the model will always be loaded into CPU memory
+model = AutoGPTQForCausalLM.from_pretrained(pretrained_model_dir, quantize_config)
+
+# quantize model, the examples should be list of dict whose keys can only be "input_ids" and "attention_mask"
+model.quantize(examples)
+
+# save quantized model
+model.save_quantized(quantized_model_dir)
+
+# save quantized model using safetensors
+model.save_quantized(quantized_model_dir, use_safetensors=True)
+print('save_quantized() finished.')
+
+
 
 
 
