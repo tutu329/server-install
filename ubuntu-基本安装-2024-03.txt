@@ -1064,3 +1064,13 @@ model.save_quantized(quantized_model_dir)
 model.save_quantized(quantized_model_dir, use_safetensors=True)
 print('save_quantized() finished.')
 
+39、llama.cpp跑deepseek-coder-v2-instruct gguf
+    conda create -n gguf python=3.11
+    conda activate gguf
+    git clone https://github.com/ggerganov/llama.cpp
+    cd llama.cpp
+    LLAMA_CUDA=1 LLAMA_CUDA_DMMV_F16=1 make
+
+    export LLAMA_CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+    ./llama-server -m ~/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf --port 8001 --host 0.0.0.0 --threads 16 --gpu-layers 50 --batch-size 16 --ctx-size 4096
+
