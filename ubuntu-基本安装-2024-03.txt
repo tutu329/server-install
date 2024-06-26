@@ -1074,14 +1074,14 @@ print('save_quantized() finished.')
     export LLAMA_CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
     ./llama-server -m ~/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf --port 8001 --host 0.0.0.0 --threads 16 --gpu-layers 50 --batch-size 16 --ctx-size 4096
 
-    【ollama方案（可行）】ollama的Modelfile参数参见：https://okhand.org/post/ollama-modefile/
-        【最新发现】参考：https://ollama.com/library/deepseek-coder-v2:236b
+    【ollama方案（可行）】
+        【最新发现】参考：https://ollama.com/library/deepseek-coder-v2:236b-instruct-q4_k_m
             安装：curl -fsSL https://ollama.com/install.sh | sh
             运行：
                 ollama serve
-                ollama run deepseek-coder-v2:236b
+                ollama run deepseek-coder-v2:236b-instruct-q4_k_m
 
-        【老的方式】
+        【老的方式】ollama的Modelfile参数见：https://okhand.org/post/ollama-modefile/
         安装：curl -fsSL https://ollama.com/install.sh | sh
         vi Modelfile:
             From /home/tutu/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf
