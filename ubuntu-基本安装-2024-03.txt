@@ -1075,7 +1075,7 @@ print('save_quantized() finished.')
     ./llama-server -m ~/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf --port 8001 --host 0.0.0.0 --threads 16 --gpu-layers 50 --batch-size 16 --ctx-size 4096
 
     【ollama方案（可行）】ollama的Modelfile参数参见：https://okhand.org/post/ollama-modefile/
-        【最新发现】
+        【最新发现】参考：https://ollama.com/library/deepseek-coder-v2:236b
             安装：curl -fsSL https://ollama.com/install.sh | sh
             运行：
                 ollama serve
