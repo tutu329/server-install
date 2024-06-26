@@ -1103,4 +1103,7 @@ print('save_quantized() finished.')
         如果ollama run deepseek-coder-v2:236b-instruct-q4_k_m等命令报错：Error: [0] server cpu not listed in available servers map[]
             sudo service ollama restart，即可
 
+            # --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,7
+            # /tmp/ollama322037977/runners/cuda_v11/ollama_llama_server --model /usr/share/ollama/.ollama/models/blobs/sha256-ece89e24aa9899d30457e4f1e089286b18c29af6f3d528e1a8597a7bbcb1929d --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,7
+
 
