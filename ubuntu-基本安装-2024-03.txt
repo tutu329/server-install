@@ -875,7 +875,11 @@ WantedBy=multi-user.target
             1）UltralyticsDetectorProvider   -> FaceDetailer的bbox_detector
             2）SAMLoader                     -> FaceDetailer的sam_model_opt
             3）pic                           -> FaceDetailer的输入image
-            4）FaceDetailer的输出image -> save image
+            4）FaceDetailer的输出image -> save
+    2）关于api导出
+        1）flow中最终用于api获取的出图节点，由普通image节点改为'Add Node->api->image->SaveImageWebsocket'节点
+        2）打开Queue Prompt按钮右上角的设置按钮，打开开发者模式
+        3）此时出现Save（Api Format）按钮，导出json文件就可以用python直接调用。可以修改json中的参数。
 
 32、FastLLM安装和运行deepseek 236b-int4-flm
     1）conda create -n fastllm python=3.11, conda activate fastllm
