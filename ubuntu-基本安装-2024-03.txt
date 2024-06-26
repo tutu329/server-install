@@ -1100,4 +1100,7 @@ print('save_quantized() finished.')
             然后另一个控制台，export变量，然后ollama run ds
             如果删除了/tmp/ollama*，可能需要重新ollama create ds -f ./Modelfile
 
+        如果ollama run deepseek-coder-v2:236b-instruct-q4_k_m等命令报错：Error: [0] server cpu not listed in available servers map[]
+            sudo service ollama restart，即可
+
 
