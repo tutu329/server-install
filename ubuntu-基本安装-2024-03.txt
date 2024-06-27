@@ -1079,7 +1079,7 @@ print('save_quantized() finished.')
     ./llama-server -m ~/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf --port 8001 --host 0.0.0.0 --threads 16 --gpu-layers 50 --batch-size 16 --ctx-size 4096
 
     【ollama方案（可行）】
-        【最新发现】参考：https://ollama.com/library/deepseek-coder-v2:236b-instruct-q4_k_m
+        【最新发现】参考：https://ollama.com/library/deepseek-coder-v2:236b-instruct-q4_k_m(经测试，这个模型精度不行)
             安装：curl -fsSL https://ollama.com/install.sh | sh
             运行：
                 ./gpu.sh
@@ -1096,18 +1096,18 @@ print('save_quantized() finished.')
         【老的方式】ollama的Modelfile参数见：https://okhand.org/post/ollama-modefile/
         安装：curl -fsSL https://ollama.com/install.sh | sh
         vi Modelfile:
-From /home/tutu/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf
-PARAMETER temperature 0
-PARAMETER mirostat 2
-PARAMETER num_ctx 2048
-PARAMETER num_gpu 61
-PARAMETER num_thread 24
-PARAMETER num_predict 2048
+            From /home/tutu/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf(经测试，这个模型精度不行)
+            PARAMETER temperature 0
+            PARAMETER mirostat 2
+            PARAMETER num_ctx 2048
+            PARAMETER num_gpu 61
+            PARAMETER num_thread 24
+            PARAMETER num_predict 2048
 
-TEMPLATE """{{ if .System }}{{ .System }}
-{{ end }}{{ if .Prompt }}User: {{ .Prompt }}
-{{ end }}Assistant: {{ .Response }}
-"""
+            TEMPLATE """{{ if .System }}{{ .System }}
+            {{ end }}{{ if .Prompt }}User: {{ .Prompt }}
+            {{ end }}Assistant: {{ .Response }}
+            """
         ollama create ds -f ./Modelfile （133G模型transfer到.ollama/下大概需要270G的临时空间）
         export OLLAMA_HOST=0.0.0.0:8001
         export OLLAMA_KEEPALIVE=2h （不设置会在5分钟自动关掉serve）
