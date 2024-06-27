@@ -1082,6 +1082,7 @@ print('save_quantized() finished.')
         【最新发现】参考：https://ollama.com/library/deepseek-coder-v2:236b-instruct-q4_k_m
             安装：curl -fsSL https://ollama.com/install.sh | sh
             运行：
+                ./gpu.sh
                 export OLLAMA_HOST=0.0.0.0:8001
                 export OLLAMA_KEEPALIVE=24h （不设置会在5分钟自动关掉run的模型）
                 export OLLAMA_NUM_PARALLEL=4
@@ -1105,6 +1106,7 @@ print('save_quantized() finished.')
         export OLLAMA_HOST=0.0.0.0:8001
         export OLLAMA_KEEPALIVE=24h （不设置会在5分钟自动关掉serve）
         export OLLAMA_NUM_PARALLEL=4
+        ./gpu.sh
         ollama run ds
 
         要关掉serve目前必须kill，后续行为比较奇怪：
