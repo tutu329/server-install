@@ -1082,8 +1082,15 @@ print('save_quantized() finished.')
         【最新发现】参考：https://ollama.com/library/deepseek-coder-v2:236b-instruct-q4_k_m
             安装：curl -fsSL https://ollama.com/install.sh | sh
             运行：
-                ollama serve
+                export OLLAMA_HOST=0.0.0.0:8001
+                export OLLAMA_KEEPALIVE=24h （不设置会在5分钟自动关掉run的模型）
+                export OLLAMA_NUM_PARALLEL=4
                 ollama run deepseek-coder-v2:236b-instruct-q4_k_m
+            问题：
+                1）如果ollama run deepseek-coder-v2:236b-instruct-q4_k_m等命令报错：Error: [0] server cpu not listed in available servers map[]
+                    sudo service ollama restart，即可（或者）
+                2）
+                2）如果运行ollama serve，必须注意：（ollama自动安装后，以服务方式启动的就是ollama serve，因此要避免运行了2个serve，那样会很混乱。（用p ollama查看ollama serve进程)
 
         【老的方式】ollama的Modelfile参数见：https://okhand.org/post/ollama-modefile/
         安装：curl -fsSL https://ollama.com/install.sh | sh
@@ -1100,11 +1107,9 @@ print('save_quantized() finished.')
             然后另一个控制台，export变量，然后ollama run ds
             如果删除了/tmp/ollama*，可能需要重新ollama create ds -f ./Modelfile
 
-        如果ollama run deepseek-coder-v2:236b-instruct-q4_k_m等命令报错：Error: [0] server cpu not listed in available servers map[]
-            sudo service ollama restart，即可
 
-            # --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,7
-            # /tmp/ollama322037977/runners/cuda_v11/ollama_llama_server --model /usr/share/ollama/.ollama/models/blobs/sha256-ece89e24aa9899d30457e4f1e089286b18c29af6f3d528e1a8597a7bbcb1929d --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,7
-            ./ollama_llama_server --model /home/tutu/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,8,8,8
+        # --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,7
+        # /tmp/ollama609570959/runners/cuda_v11/ollama_llama_server --model /usr/share/ollama/.ollama/models/blobs/sha256-412c5c6369fa06fceeb202afc5d70b4b46ae9651f89cbe701379a6549867d250 --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,7
+        ./ollama_llama_server --model /home/tutu/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,8,8,8
 
 
