@@ -1096,6 +1096,11 @@ print('save_quantized() finished.')
         安装：curl -fsSL https://ollama.com/install.sh | sh
         vi Modelfile:
             From /home/tutu/models/DeepSeek-Coder-V2-Instruct-GGUF/DeepSeek-Coder-V2-Instruct.Q4_K_M.gguf
+            PARAMETER mirostat 2
+            PARAMETER num_ctx 15000
+            PARAMETER num_gpu 61
+            PARAMETER num_thread 24
+            PARAMETER num_predict 2048
         ollama create ds -f ./Modelfile （133G模型transfer到.ollama/下大概需要270G的临时空间）
         export OLLAMA_HOST=0.0.0.0:8001
         export OLLAMA_KEEPALIVE=24h （不设置会在5分钟自动关掉serve）
