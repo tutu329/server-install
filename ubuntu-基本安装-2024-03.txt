@@ -960,7 +960,9 @@ WantedBy=multi-user.target
         ### 一些其他支持项，也可以在config/base_config.py查看功能，写的有中文注释
 
         # 从配置文件中读取关键词搜索相关的帖子并爬取帖子信息与评论
-        python main.py --platform xhs --lt qrcode --type search
+        【运行1】python main.py --platform xhs --lt qrcode --type search
+        【运行2】运行后：用手机小红书登录
+        【运行3】运行成功后，数据在如MediaCrawler\data\xhs\json下
 
         # 从配置文件中读取指定的帖子ID列表获取指定帖子的信息与评论信息
         python main.py --platform xhs --lt qrcode --type detail
@@ -974,6 +976,8 @@ WantedBy=multi-user.target
         执行 python db.py 初始化数据库数据库表结构（只在首次执行）
         支持保存到csv中（data/目录下）
         支持保存到json中（data/目录下）
+    4）如果报错：ImportError: numpy.core.multiarray failed to import
+        pip install numpy==1.26.4
 
 35、Scrapy
     conda create -n craw python=3.11
