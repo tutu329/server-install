@@ -1131,4 +1131,26 @@ print('save_quantized() finished.')
 
         /tmp/ollama609570959/runners/cuda_v11/ollama_llama_server --model /home/tutu/.ollama/models/blobs/sha256-ece89e24aa9899d30457e4f1e089286b18c29af6f3d528e1a8597a7bbcb1929d --ctx-size 2048 --batch-size 512 --embedding --log-disable --n-gpu-layers 61 --parallel 1 --tensor-split 8,8,8,8,8,7,7,7 --tensor-split 8,8,8,8,8,7,7,7 --port 44567
 
+40、【小红书某博主下帖子和原视频的获取】mediacrawler和XHS-downloader
+    mediacrawler安装：
+        conda create -n craw python=3.11
+        conda activate craw
+        pip install -r requirements.txt
+    mediacrawler注意事项：
+        1、可能会被block（只显示Xhs Crawler finished，而没有获取到数据）
+        2、基本流程：
+            a）config/base_config.py中配置为下述，然后python main.py，获取user_id如'5b081be46b58b72db62e0eb0'
+                CRAWLER_TYPE = "search"
+                KEYWORDS = "摘菌大婶"
+            b)config/base_config.py中配置为下述，然后python main.py，就能获取摘菌大婶的所有帖子的信息，包括title、desc等文本以及视频链接、note_url等
+                CRAWLER_TYPE = "search"
+                XHS_CREATOR_ID_LIST = [
+                    # "58f5a6a982ec391b998ad00d", # hdstudio
+                    "5b081be46b58b72db62e0eb0", # 摘菌大婶
+                    # "5657e79ae00dd80adbd20513",
+                    # ........................
+                ]
+
+        3、可以用XHS-downloader和note_url获取原视频
+            注意：XHS-downloader(https://github.com/JoeanAmier/XHS-Downloader) v1.7的windows版本压缩包可以成功获取原视频（v2.0报错）
 
