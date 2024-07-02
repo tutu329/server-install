@@ -1142,7 +1142,7 @@ print('save_quantized() finished.')
             a）config/base_config.py中配置为下述，然后python main.py，获取user_id如'5b081be46b58b72db62e0eb0'
                 CRAWLER_TYPE = "search"
                 KEYWORDS = "摘菌大婶"
-            b)config/base_config.py中配置为下述，然后python main.py，就能获取摘菌大婶的所有帖子的信息，包括title、desc等文本以及视频链接、note_url等
+            b)config/base_config.py中配置为下述，然后python main.py，就能获取摘菌大婶的所有帖子的信息，包括title、desc等文本以及视频链接video_url、note_url等(注意video_url似乎开梯子才能打开)
                 CRAWLER_TYPE = "search"
                 XHS_CREATOR_ID_LIST = [
                     # "58f5a6a982ec391b998ad00d", # hdstudio
@@ -1151,6 +1151,6 @@ print('save_quantized() finished.')
                     # ........................
                 ]
 
-        3、可以用XHS-downloader和note_url获取原视频
+        3、可以用XHS-downloader、note_url并通过自己的xhs.get_all_video_urls(), 批量获取原视频
             注意：XHS-downloader(https://github.com/JoeanAmier/XHS-Downloader) v1.7的windows版本压缩包可以成功获取原视频（v2.0报错）
 
