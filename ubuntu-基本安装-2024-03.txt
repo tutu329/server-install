@@ -1137,7 +1137,7 @@ print('save_quantized() finished.')
         conda activate craw
         pip install -r requirements.txt
     mediacrawler注意事项：
-        1、可能会被block（只显示Xhs Crawler finished，而没有获取到数据）
+        1、【可能会被block（只显示Xhs Crawler finished，而没有获取到数据）】，似乎换账号才可以，也有说过段时间才行。总之流程和频率要悠着点。
         2、基本流程：
             a）config/base_config.py中配置为下述，然后python main.py，获取user_id如'5b081be46b58b72db62e0eb0'
                 CRAWLER_TYPE = "search"
