@@ -1,0 +1,61 @@
+1、xreal air2 ultra眼镜的购买和使用
+    1）眼镜本身无法单独使用，必须用官方支持的安卓手机或beam pro才能使用ar应用
+    2）建议购买beam pro，能较好体验自带的空间应用nebula（nebula下可以显示一个app以及一个手机投屏，一共两个并排的屏幕）
+    3）接安卓手机的话，要安装的是叫xreal的app，可以显示三个及以上并排的窗口，但意义不大，主要问题是和beam pro下不一样，不一定能很好体验6Dof
+    4）ultra + beam pro的使用：
+        a）beam pro和眼镜连接，注意苹果电脑的充电线用不了，可能除了原装线，必须是雷电线。
+        b）beam pro类似手机，打开后进入“我的眼镜”app
+        c）最关键的是，“我的眼镜”的空间界面里，“home”按钮，按一下就会显示空间图标，再按一下会消失，所以可能不清楚而找不到图标。
+            可以按2次home，或长按beam右侧的红色按钮，空间图标就会出现在眼镜正中。
+        d）beam pro打开“我的眼镜”后：
+            中间区域：用于触摸，类似鼠标移动
+            home图标：用于显示和关闭空间图标的显示
+            右上方的切换按钮：用于后台化“我的眼镜”
+        e）眼镜按钮：
+            第一个按钮：切换眼镜透明度，共3档
+            第二个长条按钮：设置眼镜中的显示亮度（音量需要beam右侧的长条按钮设置）
+            眼镜2个按钮的长按涉及到自定义功能
+        f）beam按钮：
+            红色按钮：长按用于复位空间图标位置
+            长条按钮：条件音量
+            第三个按钮：锁屏
+
+2、unity的安装
+    1）unity和unity 3D是指同一个软件
+    2）安装unity hub：unity.cn中，安装unity hub
+    3）安装unity（不行，build时发现openjdk、sdk、ndk没有）：
+        a）不建议通过unity hub安装，因为出一点小错会导致整个系统无法正常启动
+        b）单独下载安装：unity的2022长期支持版本(LTS)最新版
+        c）单独下载：
+            android sdk(developer.android.com/studio?hl=zh-cn，来自于xreal.gitbook.io)
+            下载并安装：Android Build Support(https://unity.cn/releases/lts/2022的”查看Release Notes“，找到对应unity版本和操作系统版本的”Android Build Support“下载)
+        d）单独下载安装(似乎不需要)
+            java jdk和jre(https://www.oracle.com/java/technologies/downloads/)
+            jdk22(https://download.oracle.com/java/22/latest/jdk-22_windows-x64_bin.msi)
+            jre8(注意要点击一下下“JRE 8”这里，才能显示下载内容，然后注册oracle账户才能下载(jack.seaver@163.com:Jackseaver_112279))
+            环境变量设置：
+                JAVA_HOME：设置为如, d:\java\jdk-22
+                PATH：增加%JAVA_HOME%\bin和d:\java\jre-8u421\bin
+                记得点击“确定”按钮
+                新开控制台，输入java或java -version验证已经正确安装
+    4）用unity hub安装unity(https://unity.cn/releases/lts/2022)
+        a）必须选中Android SDK & NDK Tools和OpenJDK
+        b）必须退出360程序
+        安装中，visual studio community可能安装报错，其他都正确，暂时不用管。此时可以新建项目并通过build。
+        关于编译中的报错：Gradle build failed(用unity hub重新安装unity后，就正常了，可能主要是把unity安装在如D:\unity_install\editor\2022.3.37f1c1z这样比较浅的目录里，而不是之前过于深的目录里)
+
+3、unity设置(xreal.gitbook.io, 可能需要tz)
+    1）运行unity后，会进入hub，检查unity hub的设置，主要是: 偏好设置->安装->安装位置要对应好，特别是安装了多个版本时。
+    2）下载NRSDK for unity(developer.xreal.com/download)
+    3）新建项目，选择3D（Built-In Render Pipeline），确定后进入主界面
+    4）导入NRSDK
+        a)点选左下角Project中的Assets后，Assets->Import Package->Custom Package，选择下载的NRSDK文件，然后确保全选中，点击“Import”
+        b)通过 NRSDK->Project Tips->Accept All, 处理存在的问题
+    5）系统设置和demo使用
+        a)设置系统参数：菜单File->Build Settings: 选择Android，点击“Switch Platform”，然后点击”Player Settings...“，按要求设置(xreal.gitbook.io/nrsdk/nrsdk-fundamentals/quickstart-for-android)
+        b)设置NRSDK：界面Project->Assets->NRSDK->NRProjectConfig中，打开Plane Finding和Image Tracking
+        c)导入NRSDK的演示案例HelloMR：
+            1）界面Project->Assets->NRSDK->Demos->HelloMR
+            2）很关键：此时需要在下方Project窗口中点击右上方的”Search by Type“按钮，并选择”scene“，此时所有demo文件夹变为图标形式，就能双击并使上方的三维场景中显示所选择scene，然后build中也能通过”Add Open Scene“导入该scene了。
+            3）然后通过菜单File->Build Settings->Add Open Scene导入
+        d)build，成功生成apk文件
