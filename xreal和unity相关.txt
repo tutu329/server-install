@@ -59,3 +59,7 @@
             2）很关键：此时需要在下方Project窗口中点击右上方的”Search by Type“按钮，并选择”scene“，此时所有demo文件夹变为图标形式，就能双击并使上方的三维场景中显示所选择scene，然后build中也能通过”Add Open Scene“导入该scene了。
             3）然后通过菜单File->Build Settings->Add Open Scene导入
         d)build，成功生成apk文件
+        e)眼镜运行demo
+            1）打开手机设备的开发者模式，通常是在”关于手机“的”软件版本“或”Build号“上连续点击7次，系统会显示开发者模式已经打开
+            2）然后可以在”系统和更新“的”开发人员选项“里打开”USB调试“，然后再连接PC。点击Build and Run，就能把这个scene对应的apk传到设备如beam pro上
+            3）断开beam pro和pc，连接眼镜，眼镜的空间图标中，即可以看到apk对应的app图标，如prj1，点击就能进入，能看见如HelloMR-3dof的那几个三维的XREAL字。
