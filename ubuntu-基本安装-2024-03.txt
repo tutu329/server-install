@@ -1016,6 +1016,7 @@ WantedBy=multi-user.target
         "dev": "next dev -H 0.0.0.0 -p 7869",
     yarn dev
 
+
 38、用autogptq量化模型
     安装autogptq：
         conda create -n autogptq python=3.11
