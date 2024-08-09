@@ -63,3 +63,9 @@
             1）打开手机设备的开发者模式，通常是在”关于手机“的”软件版本“或”Build号“上连续点击7次，系统会显示开发者模式已经打开
             2）然后可以在”系统和更新“的”开发人员选项“里打开”USB调试“，然后再连接PC。点击Build and Run，就能把这个scene对应的apk传到设备如beam pro上
             3）断开beam pro和pc，连接眼镜，眼镜的空间图标中，即可以看到apk对应的app图标，如prj1，点击就能进入，能看见如HelloMR-3dof的那几个三维的XREAL字。
+
+4、unity中Android Logcat
+    1）unity打开window->package manager
+    2）上方Package类型改为Unity Registry，并搜索android
+    3）然后选择Android Logcat，点击install即可
+    4）unity中可以打开window->Analysis->Android Logcat
