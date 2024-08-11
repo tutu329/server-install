@@ -69,3 +69,20 @@
     2）上方Package类型改为Unity Registry，并搜索android
     3）然后选择Android Logcat，点击install即可
     4）unity中可以打开window->Analysis->Android Logcat
+
+5、unity中的TextMesh Pro对象导入中文字体
+    0）使用：Hierarchy里新建一个Text(TMP),Font Asset设置为后面生成的字体即可。
+    1）创建字体：
+        打开unity的windows->TextMeshPro->Font Asset Creator
+        Source Font File选择一个字体（字体可以直接从windows\fonts里拖一个到Assets下的TextMesh Pro->Resources->Fonts & Materials里）
+        Sampling Point Size似乎用Auto即可
+        Padding暂时用0
+        Packing Method暂时用Fast
+        Atlas Resolution用4090和4096
+        Character Set用Characters from File
+        Character File用下载的20000个汉字表+符号+英文字符集.txt
+        Render Mode暂时用SDFAA_HINTED，AA结尾的是快而质量低，HINTED结尾的是将字符像素与纹理像素对齐以获得更清晰的结果
+        Get Kerning Paris暂时选中
+        然后点击generate，然后存盘即可
+    2）用的时候，Text(TMP)里
+        Extra Settings->Shader，必须选择不是Bitmap的，否则字看起来一片模糊
