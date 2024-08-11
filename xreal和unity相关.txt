@@ -70,7 +70,14 @@
     3）然后选择Android Logcat，点击install即可
     4）unity中可以打开window->Analysis->Android Logcat
 
-5、unity中的TextMesh Pro对象导入中文字体
+5、unity的wifi adb
+    1）方便执行adb：设置系统的path变量：D:\unity_install\editor\2022.3.37f1c1\Editor\Data\PlaybackEngines\AndroidPlayer\SDK\platform-tools
+    2）beam通过usb连接pc，然后执行：
+        a）adb tcpip 5555
+        b）adb connect 192.168.124.25:5555(192.168.124.25为beam的ip地址)
+    3）然后即可拔掉usb线。以后每次执行完b）之后，一段时间内，unity的build里就能看到wifi下的beam，可以直接build and run到beam里。
+
+6、unity中的TextMesh Pro对象导入中文字体
     0）使用：Hierarchy里新建一个Text(TMP),Font Asset设置为后面生成的字体即可。
     1）创建字体：
         打开unity的windows->TextMeshPro->Font Asset Creator
