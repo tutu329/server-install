@@ -76,6 +76,8 @@
         a）adb tcpip 5555
         b）adb connect 192.168.124.25:5555(192.168.124.25为beam的ip地址)
     3）然后即可拔掉usb线。以后每次执行完b）之后，一段时间内，unity的build里就能看到wifi下的beam，可以直接build and run到beam里。
+    4）有时报错：adb server version (32) doesn't match this client (41); killing...
+        有线连一下，然后执行adb tcpip 5555，即可（可能和360等软件有关）
 
 6、unity中的TextMesh Pro对象导入中文字体
     0）使用：Hierarchy里新建一个Text(TMP),Font Asset设置为后面生成的字体即可。
