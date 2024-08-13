@@ -113,3 +113,7 @@
     2）名字空间：
         a）main.cs中如果要调用NRinput等库，只需要加入名字空间using NRKernal即可
         b）scene中如已建一个组件及其对应c#，则复制该组件及c#后，全局空间下的数据类如ChatCompletionResponse容易重复，此时可以考虑用namespace Openai_1和namespace Openai_2来区分。
+    3）package安装：
+        a）如openai包的安装，依赖test-framework：
+            1）下载https://github.com/needle-mirror/com.unity.test-framework/releases中的压缩文件，解压后，用unity的package manager的install from dick打开其中的package.json安装即可。
+            2）然后再安装openai包即可（需按照https://github.com/RageAgainstThePixel/com.openai.unity的要求按照）
