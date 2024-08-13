@@ -106,3 +106,6 @@
         b）start中关联：syncContext = SynchronizationContext.Current;
         c）task中调用：syncContext.Post((function => { UpdateUnityUI(msg); }), null);
     2）协程机制：为主线程中运行，可以用于定时处理短流程，似乎无法用于运行长流程（界面主线程会阻塞，需要用task或thread而不是协程来解决）。
+
+9、unity常见问题
+    1）can't add script：解决方式，要确保c#文件的文件名和class名称，不能和已有文件名和class名称重复。
