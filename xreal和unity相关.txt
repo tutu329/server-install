@@ -94,10 +94,15 @@
     2）用的时候，Text(TMP)里
         Extra Settings->Shader，必须选择不是Bitmap的，否则字看起来一片模糊
 
-7、关于unity导入
+7、关于unity导入和新建c#文件的位置
     1）assetstore.unity.com项目，点击open in unity后，unity hub会有一下反应，而后续又没有新项目被打开。而实际情况是，手动打开unity而不是hub，就能看到项目并下载导入。
     2）导入TMPro等库后，vs下using无效：
+        a）找到了using无效的原因：c#文件创建在了Asserts->NRSDK->Input->Script下(文件没有指向Assebly-CSharp.dll）
+        b）解决办法，要在Assets下或者Assets->c#（新建的文件夹）下，而不是在Asserts->NRSDK->Input->Scripts下，新建c#代码。这样才能保证c#文件的Assembly Information里不是NRSDK.dll而是Assebly-CSharp.dll。
 
-8、关于unity的c#
+8、关于unity的c#的线程机制
     1)task为线程机制，但task中不能直接访问unity的对象或api（这些对象在unity主线程中），需要做特殊处理，获取主线程context
-    2）
+        a）awake中声明：private SynchronizationContext syncContext;
+        b）start中关联：syncContext = SynchronizationContext.Current;
+        c）task中调用：syncContext.Post((function => { UpdateUnityUI(msg); }), null);
+    2）协程机制：为主线程中运行，可以用于定时处理短流程，似乎无法用于运行长流程（界面主线程会阻塞，需要用task或thread而不是协程来解决）。
