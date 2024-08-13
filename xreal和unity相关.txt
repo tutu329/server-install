@@ -93,3 +93,11 @@
         然后点击generate，然后存盘即可
     2）用的时候，Text(TMP)里
         Extra Settings->Shader，必须选择不是Bitmap的，否则字看起来一片模糊
+
+7、关于unity导入
+    1）assetstore.unity.com项目，点击open in unity后，unity hub会有一下反应，而后续又没有新项目被打开。而实际情况是，手动打开unity而不是hub，就能看到项目并下载导入。
+    2）导入TMPro等库后，vs下using无效：
+
+8、关于unity的c#
+    1)task为线程机制，但task中不能直接访问unity的对象或api（这些对象在unity主线程中），需要做特殊处理，获取主线程context
+    2）
