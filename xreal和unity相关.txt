@@ -113,14 +113,16 @@
     package manager安装：https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity
 
 10、unity安装redis
-    1)（不行）通过vs的项目->管理NuGet程序包下载StackExchange.Redis
-    2)package manager安装https://github.com/StackExchange/StackExchange.Redis
-    3)（不行）把1）或者2）安装的StackExchange.Redis.dll和xml一起复制到unity的Assets->Plugins下，即可
-    4）c#中这样可用：
+    1)NuGetForUnity搜索Redis，安装StackExchange.Redis，即可
+    2）c#中：
         引用：using StackExchange.Redis;
         代码：
-            ConnectionMultiplexer redis = ConnectionMultiplexer.Connect("localhost:6379,password=your_password");
-            IDatabase db = redis.GetDatabase();
+            ConnectionMultiplexer m_redis_connect;
+            IDatabase m_redis;
+            m_redis_connect = ConnectionMultiplexer.Connect("localhost:6379");
+            m_redis = m_redis_connect.GetDatabase();
+            m_redis.StringSet("cmd_key", "Redis你好");
+            string res = m_redis.StringGet("cmd_key");
 
 11、unity常见问题
     1）将c#代码拖到组件上时报错can't add script：
