@@ -109,7 +109,10 @@
         c）task中调用：syncContext.Post((function => { UpdateUnityUI(msg); }), null);
     2）协程机制：为主线程中运行，可以用于定时处理短流程，似乎无法用于运行长流程（界面主线程会阻塞，需要用task或thread而不是协程来解决）。
 
-9、unity安装redis
+9、unity安装NuGetForUnity
+    package manager安装：https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity
+
+10、unity安装redis
     1)（不行）通过vs的项目->管理NuGet程序包下载StackExchange.Redis
     2)package manager安装https://github.com/StackExchange/StackExchange.Redis
     3)（不行）把1）或者2）安装的StackExchange.Redis.dll和xml一起复制到unity的Assets->Plugins下，即可
@@ -119,7 +122,7 @@
             ConnectionMultiplexer redis = ConnectionMultiplexer.Connect("localhost:6379,password=your_password");
             IDatabase db = redis.GetDatabase();
 
-10、unity常见问题
+11、unity常见问题
     1）将c#代码拖到组件上时报错can't add script：
         解决方式，要确保c#文件的文件名和class名称，不能和已有文件名和class名称重复。
     2）名字空间：
