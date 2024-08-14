@@ -110,7 +110,7 @@
     2）协程机制：为主线程中运行，可以用于定时处理短流程，似乎无法用于运行长流程（界面主线程会阻塞，需要用task或thread而不是协程来解决）。
 
 9、unity安装NuGetForUnity
-    package manager安装：https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity
+    1)package manager安装：https://github.com/GlitchEnzo/NuGetForUnity.git?path=/src/NuGetForUnity
 
 10、unity安装redis
     1)NuGetForUnity搜索Redis，安装StackExchange.Redis，即可
@@ -123,6 +123,7 @@
             m_redis = m_redis_connect.GetDatabase();
             m_redis.StringSet("cmd_key", "Redis你好");
             string res = m_redis.StringGet("cmd_key");
+    3)用NuGetForUnity安装重要库：System.Runtime.CompilerServices.Unsafe（不安装，则game模式正常，而build and run时报错）
 
 11、unity常见问题
     1）将c#代码拖到组件上时报错can't add script：
