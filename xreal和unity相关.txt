@@ -110,9 +110,9 @@
     2）协程机制：为主线程中运行，可以用于定时处理短流程，似乎无法用于运行长流程（界面主线程会阻塞，需要用task或thread而不是协程来解决）。
 
 9、unity安装redis
-    1)通过vs的项目->管理NuGet程序包下载StackExchange.Redis
+    1)（不行）通过vs的项目->管理NuGet程序包下载StackExchange.Redis
     2)package manager安装https://github.com/StackExchange/StackExchange.Redis
-    3)把1）或者2）安装的StackExchange.Redis.dll和xml一起复制到unity的Assets->Plugins下，即可
+    3)（不行）把1）或者2）安装的StackExchange.Redis.dll和xml一起复制到unity的Assets->Plugins下，即可
     4）c#中这样可用：
         引用：using StackExchange.Redis;
         代码：
