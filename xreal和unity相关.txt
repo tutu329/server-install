@@ -125,7 +125,146 @@
             string res = m_redis.StringGet("cmd_key");
     3)用NuGetForUnity安装重要库：System.Runtime.CompilerServices.Unsafe（不安装，则game模式正常，而build and run时报错）
 
-11、unity常见问题
+11、安装支持tls的redis-stack-server(只能在ubuntu或wsl下，win下没有)
+    一、配置 Redis 服务器以支持 SSL/TLS
+        步骤 1：（win下其实没用，必须wsl才能装支持tls的redis-stack-server）下载 OpenSSL（如果尚未安装）
+            1.访问 Win32 OpenSSL 下载页面。
+            2.下载适合你系统的安装包（Win64 OpenSSL或Win32 OpenSSL）。
+            3.安装 OpenSSL，并确保其可执行文件路径被添加到系统环境变量的 PATH 中。
+
+        步骤 2：生成自签名证书
+            0.（没用）重新安装openssl(因为cmd下运行的openssl可能是conda安装的低版本，会找不到openssl.cnf文件)：https://slproweb.com/products/Win32OpenSSL.html，选择对应版本，安装到如c:\openssl-win64下（安装最后的捐钱选项去掉）
+            1.（没用）打开命令提示符并进入 OpenSSL 的安装目录（C:\OpenSSL-Win64\bin）。
+            1.进入wsl
+            2.运行以下命令生成证书：
+            openssl genrsa -out redis-server.key 2048
+                openssl：OpenSSL 工具命令。
+                genrsa：命令生成一个 RSA 私钥。
+                -out redis-server.key：指定输出密钥文件的名称。
+                2048：密钥长度为 2048 比特。
+            openssl req -new -key redis-server.key -out redis-server.csr -subj "/CN=localhost"
+                openssl：OpenSSL 工具命令。
+                req：创建并处理证书签名请求。
+                -new：创建新的 CSR。
+                -key redis-server.key：指定用于签署 CSR 的私钥文件。
+                -out redis-server.csr：指定输出 CSR 文件的名称。
+                -subj：直接指定证书的主题信息。
+                /CN=localhost：证书的主题信息，其中 CN 表示公共名称。
+            openssl x509 -req -in redis-server.csr -signkey redis-server.key -out redis-server.crt
+                openssl：OpenSSL 工具命令。
+                x509：用于管理证书的 OpenSSL 子命令。
+                -req：指示输入是一个 CSR 文件。
+                -in redis-server.csr：指定输入的 CSR 文件的名称。
+                -signkey redis-server.key：使用指定私钥文件进行签署。
+                -out redis-server.crt：指定输出证书文件的名称。
+
+            3.将生成的 redis-server.key 和 redis-server.crt 复制到某个目录(如/opt/redis-stack或/home/tutu下，注意不能是/home/tutu/models这种映射的volume下，否则权限有问题，redis启动不了)。
+
+        步骤 3：配置 Redis 服务器
+            0.下载支持tls的wsl redis
+                1）下载并添加 Redis Stack 的 GPG 密钥：
+                    curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
+                2)将 Redis Stack 的存储库添加到你的系统源列表中：
+                    echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb $(lsb_release -c -s) main" | sudo tee /etc/apt/sources.list.d/redis-stack.list
+                3)更新包列表并安装 redis-stack-server：
+                    sudo apt update
+                    sudo apt install redis-stack-server -y
+                4)启动redis
+                    sudo service redis-stack-server start
+                    sudo service redis-stack-server status
+                5）配置
+                    找到redis-stack.conf文件：sudo find / -name redis-stack.conf 2>/dev/null
+                    sudo nano /opt/redis-stack/etc/redis-stack.conf
+                        把port 6379这一行去掉，加入以下内容：
+tls-cert-file /home/tutu/models/redis-server.crt
+tls-key-file /home/tutu/models/redis-server.key
+tls-ca-cert-file /home/tutu/models/redis-server.crt
+tls-port 6380
+port 0
+                    sudo service redis-stack-server restart
+                    sudo service redis-stack-server status（会显示：Ready to accept connections tls）
+
+    二、使用 StackExchange.Redis 以 SSL/TLS 方式连接到 Redis 服务器
+        步骤 1：安装 StackExchange.Redis
+            在 Unity 项目中安装 StackExchange.Redis 库：
+            1.打开 Unity 项目。
+            2.使用 NuGet for Unity 或直接下载 StackExchange.Redis DLL 并添加到 Unity 项目的 Plugins 文件夹中。
+            3.如果使用 NuGet for Unity，打开 Unity Package Manager，搜索 StackExchange.Redis 并安装。
+
+        步骤 2-1：配置代码（unity的c#）
+            在 Unity 项目中，编写代码以使用 SSL/TLS 方式连接到 Redis 服务器：
+            using StackExchange.Redis;
+            using System;
+            using System.Security.Authentication;
+
+            public class RedisManager : MonoBehaviour
+            {
+                private ConnectionMultiplexer _redis;
+
+                void Start()
+                {
+                    ConnectToRedis();
+                }
+
+                private void ConnectToRedis()
+                {
+                    var options = new ConfigurationOptions
+                    {
+                        EndPoints = { "localhost:6380" },
+                        Ssl = true,
+                        SslProtocols = SslProtocols.Tls12,
+                        CertificateValidation = false // 如果是自签名证书，可以考虑禁用验证。
+                    };
+
+                    _redis = ConnectionMultiplexer.Connect(options);
+                    Debug.Log("Connected to Redis with SSL/TLS");
+                }
+
+                void OnDestroy()
+                {
+                    _redis?.Dispose();
+                }
+            }
+
+        步骤 2-2：配置代码（已测，成功。python：注意key、crt文件要复制到如d:\models\下）
+            import redis
+            import ssl
+
+            # 配置连接参数
+            redis_host = 'localhost'
+            redis_port = 6380  # 假设 Redis 使用的是启用 TLS 的端口
+            redis_password = ''  # 如果 Redis 设置了密码，请填写此处
+
+            # SSL/TLS 相关参数
+            ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            ssl_context.check_hostname = False  # 如果不验证主机名，可以将其设置为 False
+            ssl_context.verify_mode = ssl.CERT_NONE  # 如果不验证证书，可以将其设置为 CERT_NONE
+
+            # 创建 Redis 连接对象
+            redis_client = redis.StrictRedis(
+                host=redis_host,
+                port=redis_port,
+                password=redis_password,
+                ssl=True,
+                ssl_cert_reqs=None,
+                ssl_ca_certs=None,
+                ssl_keyfile='d:\\models\\redis.key',
+                ssl_certfile='d:\\models\\redis.crt',
+            )
+
+            # 测试连接
+            try:
+                pong = redis_client.ping()
+                if pong:
+                    print('Connected to Redis server with SSL/TLS successfully!')
+            except Exception as e:
+                print(f'Error connecting to Redis server: {e}')
+
+        注意事项
+        · 如果使用自签名证书并且 SSL/TLS 连接失败，尝试禁用证书验证（如上面的 CertificateValidation = false 设置）。
+        · 使用生产级别的证书时应启用证书验证，并确保证书的可信链完整。
+
+12、unity常见问题
     1）将c#代码拖到组件上时报错can't add script：
         解决方式，要确保c#文件的文件名和class名称，不能和已有文件名和class名称重复。
     2）名字空间：
