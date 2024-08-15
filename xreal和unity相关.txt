@@ -273,6 +273,12 @@ port 0
         using (HttpClient client = new HttpClient(handler))
         ...
 
+11-2、顺便设置streamlit应用支持https
+    1）streamlit启动命令增加下述参数：
+        --server.sslCertFile=D:\models\redis.crt
+        --server.sslKeyFile=D:\models\redis.key
+    2）streamlit界面里面的base_url由http改为https即可
+
 12、unity常见问题
     1）将c#代码拖到组件上时报错can't add script：
         解决方式，要确保c#文件的文件名和class名称，不能和已有文件名和class名称重复。
