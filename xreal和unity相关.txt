@@ -266,11 +266,19 @@ port 0
         --ssl-certfile=/opt/redis-stack/redis.crt
     2)win下的client调用测试（注意一个空格都不能多，修改ip和model名字即可）：curl -k https://localhost:8001/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer empty" -d "{\"model\": \"qwen14\", \"messages\": [{\"role\": \"user\", \"content\": \"who are you?\"}], \"max_tokens\":100}"
     3)(测试通过)openai api的调用修改，必须增加http_client=openai.DefaultHttpxClient(verify=False)，否则会报错(SSL: CERTIFICATE_VERIFY_FAILED)：
-        self.openai = OpenAI(
-            api_key=self.api_key,
-            base_url=self.url,
-            http_client=openai.DefaultHttpxClient(verify=False),    # 用于自建的vllm openai api的ssl访问(https访问)
-        )
+        a）测试
+            self.openai = OpenAI(
+                api_key=self.api_key,
+                base_url=self.url,
+                # http_client=openai.DefaultHttpxClient(verify=False),    # 用于自建的vllm openai api的ssl临时https访问(由于verify为falst，unity安卓设备仍然不能访问外网)。阿里云购买了正式证书（可以是免费的）后，即可开启verify，也就是去掉本行
+            )
+        b）测试结果：
+            # 测试https（阿里云购买的免费ssl证书，绑定在powerai.cc）
+            # url='https://172.27.67.106:8001/v1/'  # 不通
+            # url='https://116.62.63.204:8001/v1/'  # 不通
+            # url='https://powerai.cc:8001/v1/'     # 通过
+            # url='https://localhost:8001/v1/'      # 不通
+
     4)(测试通过)unity下的openai api的调用修改，必须增加一个HttpClientHandler，并用在HttpClient的初始化中，即可：
         HttpClientHandler handler = new HttpClientHandler
         {
