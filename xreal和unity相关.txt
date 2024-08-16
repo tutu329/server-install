@@ -132,33 +132,37 @@
             2.下载适合你系统的安装包（Win64 OpenSSL或Win32 OpenSSL）。
             3.安装 OpenSSL，并确保其可执行文件路径被添加到系统环境变量的 PATH 中。
 
-        步骤 2：生成自签名证书
-            0.（没用）重新安装openssl(因为cmd下运行的openssl可能是conda安装的低版本，会找不到openssl.cnf文件)：https://slproweb.com/products/Win32OpenSSL.html，选择对应版本，安装到如c:\openssl-win64下（安装最后的捐钱选项去掉）
-            1.（没用）打开命令提示符并进入 OpenSSL 的安装目录（C:\OpenSSL-Win64\bin）。
-            1.进入wsl
-            2.运行以下命令生成证书：
-            openssl genrsa -out redis-server.key 2048
-                openssl：OpenSSL 工具命令。
-                genrsa：命令生成一个 RSA 私钥。
-                -out redis-server.key：指定输出密钥文件的名称。
-                2048：密钥长度为 2048 比特。
-            openssl req -new -key redis-server.key -out redis-server.csr -subj "/CN=localhost"
-                openssl：OpenSSL 工具命令。
-                req：创建并处理证书签名请求。
-                -new：创建新的 CSR。
-                -key redis-server.key：指定用于签署 CSR 的私钥文件。
-                -out redis-server.csr：指定输出 CSR 文件的名称。
-                -subj：直接指定证书的主题信息。
-                /CN=localhost：证书的主题信息，其中 CN 表示公共名称。
-            openssl x509 -req -in redis-server.csr -signkey redis-server.key -out redis-server.crt
-                openssl：OpenSSL 工具命令。
-                x509：用于管理证书的 OpenSSL 子命令。
-                -req：指示输入是一个 CSR 文件。
-                -in redis-server.csr：指定输入的 CSR 文件的名称。
-                -signkey redis-server.key：使用指定私钥文件进行签署。
-                -out redis-server.crt：指定输出证书文件的名称。
+        步骤 2：（安卓设备必须用证书机构签发的证书，不能用自生成证书）获取签名证书
+            （没用）0.重新安装openssl(因为cmd下运行的openssl可能是conda安装的低版本，会找不到openssl.cnf文件)：https://slproweb.com/products/Win32OpenSSL.html，选择对应版本，安装到如c:\openssl-win64下（安装最后的捐钱选项去掉）
+            （没用）1.打开命令提示符并进入 OpenSSL 的安装目录（C:\OpenSSL-Win64\bin）。
+            1.阿里云里:
+                a)必须在主页而不是控制台里，搜索“ssl证书“，然后选择”个人测试证书”的“管理控制台”，然后进入“ssl证书管理”，选择“个人测试证书”
+                b）点选“立即购买”购买免费证书，然后点选“创建证书”（必须这里获得的才是新的，千万不要选择了下面的已过期的证书进行下载），绑定powerai.cc
+                c）新的证书处于“已签发”状态后，下载Apache的“crt/key”证书（包括key、public.crt和chain.crt三个文件），并且下载根证书（xxx-root.cer文件，根据官方说明是非浏览器访问需要的）。
+            2.进入wsl
+            （没用）3.运行以下命令生成证书：
+                openssl genrsa -out redis-server.key 2048
+                    openssl：OpenSSL 工具命令。
+                    genrsa：命令生成一个 RSA 私钥。
+                    -out redis-server.key：指定输出密钥文件的名称。
+                    2048：密钥长度为 2048 比特。
+                openssl req -new -key redis-server.key -out redis-server.csr -subj "/CN=localhost"
+                    openssl：OpenSSL 工具命令。
+                    req：创建并处理证书签名请求。
+                    -new：创建新的 CSR。
+                    -key redis-server.key：指定用于签署 CSR 的私钥文件。
+                    -out redis-server.csr：指定输出 CSR 文件的名称。
+                    -subj：直接指定证书的主题信息。
+                    /CN=localhost：证书的主题信息，其中 CN 表示公共名称。
+                openssl x509 -req -in redis-server.csr -signkey redis-server.key -out redis-server.crt
+                    openssl：OpenSSL 工具命令。
+                    x509：用于管理证书的 OpenSSL 子命令。
+                    -req：指示输入是一个 CSR 文件。
+                    -in redis-server.csr：指定输入的 CSR 文件的名称。
+                    -signkey redis-server.key：使用指定私钥文件进行签署。
+                    -out redis-server.crt：指定输出证书文件的名称。
 
-            3.将生成的 redis-server.key 和 redis-server.crt 复制到某个目录(如/opt/redis-stack或/home/tutu下，注意不能是/home/tutu/models这种映射的volume下，否则权限有问题，redis启动不了)。
+            3.将生成的key 和 public.crt 复制到某个目录(如/opt/redis-stack或/home/tutu下，注意不能是/home/tutu/models这种映射的volume下，否则权限有问题，redis启动不了)。
 
         步骤 3：配置 Redis 服务器
             0.下载支持tls的wsl redis
@@ -176,9 +180,9 @@
                     找到redis-stack.conf文件：sudo find / -name redis-stack.conf 2>/dev/null
                     sudo nano /opt/redis-stack/etc/redis-stack.conf
                         把port 6379这一行去掉，加入以下内容（unity调用的话，必须增加tls-auth-clients no从而关闭redis服务的双向TLS认证）：
-tls-cert-file /home/tutu/models/redis-server.crt
-tls-key-file /home/tutu/models/redis-server.key
-tls-ca-cert-file /home/tutu/models/redis-server.crt
+tls-cert-file /home/tutu/models/xxx-public.crt
+tls-key-file /home/tutu/models/xxx.key
+tls-ca-cert-file /home/tutu/models/xxx-chain.crt
 tls-auth-clients no
 tls-port 6380
 port 0
@@ -275,9 +279,9 @@ port 0
 
 11-2、顺便设置streamlit应用支持https
     1）streamlit启动命令增加下述参数：
-        --server.sslCertFile=D:\models\redis.crt
-        --server.sslKeyFile=D:\models\redis.key
-    2）streamlit界面里面的base_url由http改为https即可
+        --server.sslCertFile=D:\models\powerai.cc_public.crt
+        --server.sslKeyFile=D:\models\powerai.cc.key
+    2）streamlit界面里面的base_url由http改为https即可，可能需要重启浏览器，查看证书是否有效。
 
 12、unity常见问题
     1）将c#代码拖到组件上时报错can't add script：
