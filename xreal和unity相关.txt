@@ -117,12 +117,7 @@
     2）c#中：
         引用：using StackExchange.Redis;
         代码：
-            ConnectionMultiplexer m_redis_connect;
-            IDatabase m_redis;
-            m_redis_connect = ConnectionMultiplexer.Connect("localhost:6379");
-            m_redis = m_redis_connect.GetDatabase();
-            m_redis.StringSet("cmd_key", "Redis你好");
-            string res = m_redis.StringGet("cmd_key");
+            参考后续关于如何tls连接powerai.cc
     3)用NuGetForUnity安装重要库：System.Runtime.CompilerServices.Unsafe（不安装，则game模式正常，而build and run时报错）
 
 11、安装支持tls的redis-stack-server(只能在ubuntu或wsl下，win下没有)
@@ -135,11 +130,7 @@
         步骤 2：（安卓设备必须用证书机构签发的证书，不能用自生成证书）获取签名证书
             （没用）0.重新安装openssl(因为cmd下运行的openssl可能是conda安装的低版本，会找不到openssl.cnf文件)：https://slproweb.com/products/Win32OpenSSL.html，选择对应版本，安装到如c:\openssl-win64下（安装最后的捐钱选项去掉）
             （没用）1.打开命令提示符并进入 OpenSSL 的安装目录（C:\OpenSSL-Win64\bin）。
-            1.阿里云里:
-                a)必须在主页而不是控制台里，搜索“ssl证书“，然后选择”个人测试证书”的“管理控制台”，然后进入“ssl证书管理”，选择“个人测试证书”
-                b）点选“立即购买”购买免费证书，然后点选“创建证书”（必须这里获得的才是新的，千万不要选择了下面的已过期的证书进行下载），绑定powerai.cc
-                c）新的证书处于“已签发”状态后，下载Apache的“crt/key”证书（包括key、public.crt和chain.crt三个文件），并且下载根证书（xxx-root.cer文件，根据官方说明是非浏览器访问需要的）。
-            2.进入wsl
+
             （没用）3.运行以下命令生成证书：
                 openssl genrsa -out redis-server.key 2048
                     openssl：OpenSSL 工具命令。
@@ -162,8 +153,13 @@
                     -signkey redis-server.key：使用指定私钥文件进行签署。
                     -out redis-server.crt：指定输出证书文件的名称。
 
+            1.阿里云里:
+                a)必须在主页而不是控制台里，搜索“ssl证书“，然后选择”个人测试证书”的“管理控制台”，然后进入“ssl证书管理”，选择“个人测试证书”
+                b）点选“立即购买”购买免费证书，然后点选“创建证书”（必须这里获得的才是新的，千万不要选择了下面的已过期的证书进行下载），绑定powerai.cc
+                c）新的证书处于“已签发”状态后，下载Apache的“crt/key”证书（包括key、public.crt和chain.crt三个文件），并且下载根证书（xxx-root.cer文件，根据官方说明是非浏览器访问需要的。目前暂时没用）。
+            2.进入wsl
             3.处理证书文件：
-                1）将生成的key 和 public.crt 复制到某个目录(如/opt/redis-stack或/home/tutu下，注意不能是/home/tutu/models这种wsl映射的volume下，否则权限有问题，redis启动不了)。
+                1）将生成的key和crt复制到某个目录(如/opt/redis-stack或/home/tutu下，注意不能是/home/tutu/models这种wsl映射的volume下，否则权限有问题，redis启动不了)。
                 2）在/opt/redis-stack，运行：sudo ln -s ~/models/powerai* .
 
         步骤 3：配置 Redis 服务器
@@ -186,10 +182,14 @@ tls-cert-file /home/tutu/models/xxx-public.crt
 tls-key-file /home/tutu/models/xxx.key
 tls-ca-cert-file /home/tutu/models/xxx-chain.crt
 tls-auth-clients no
-tls-port 6380
+tls-port 8002
 port 0
+                        注意1：redis-stack-server读取crt和key文件时，文件命名必须是xxx-public.crt这样，而不能是xxx.xx-public.crt这样（即不能有多个.）
+                        注意2：即使用了机构的证书，tls-auth-clients仍然要为no，yes时python下和game模式都连不上redis，而no时，眼镜可以正常连上redis。
+
                     sudo service redis-stack-server restart
                     sudo service redis-stack-server status（会显示：Ready to accept connections tls）
+                    sudo systemctl enable redis-stack-server(设置自启动)
 
     二、使用 StackExchange.Redis 以 SSL/TLS 方式连接到 Redis 服务器
         步骤 1：安装 StackExchange.Redis
@@ -207,9 +207,9 @@ port 0
             //用于ConnectionMultiplexer.Connect的初始化
             ConfigurationOptions options = new ConfigurationOptions
             {
-                EndPoints = { "172.27.67.106:6380" },   // 替换为你的 Redis 服务器地址和端口
+                EndPoints = { "powerai.cc:8002" },      // 替换为你的 Redis 服务器地址和端口
                 Ssl = true,                             // 启用 TLS
-                SslHost = "172.27.67.106",              // 服务器的主机名（通常是你的 Redis 服务器地址）
+                SslHost = "powerai.cc",                 // 服务器的主机名（通常是你的 Redis 服务器地址）
                 Password = "",                          // 如果 Redis 服务器设置了密码，填写在这里
                 AbortOnConnectFail = false              // 避免首次连接失败时抛出异常
             };
@@ -227,9 +227,9 @@ port 0
             import ssl
 
             # 配置连接参数
-            redis_host = 'localhost'
-            redis_port = 6380  # 假设 Redis 使用的是启用 TLS 的端口
-            redis_password = ''  # 如果 Redis 设置了密码，请填写此处
+            redis_host = 'powerai.cc'
+            redis_port = 8002           # 假设 Redis 使用的是启用 TLS 的端口
+            redis_password = ''         # 如果 Redis 设置了密码，请填写此处
 
             # SSL/TLS 相关参数
             ssl_context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
@@ -242,10 +242,8 @@ port 0
                 port=redis_port,
                 password=redis_password,
                 ssl=True,
-                ssl_cert_reqs=None,
-                ssl_ca_certs=None,
-                ssl_keyfile='d:\\models\\redis.key',
-                ssl_certfile='d:\\models\\redis.crt',
+                ssl_keyfile='d:\\models\\powerai.key',
+                ssl_certfile='d:\\models\\powerai_public.crt',
             )
 
             # 测试连接
@@ -289,8 +287,8 @@ port 0
 
 11-2、顺便设置streamlit应用支持https
     1）streamlit启动命令增加下述参数：
-        --server.sslCertFile=D:\models\powerai.cc_public.crt
-        --server.sslKeyFile=D:\models\powerai.cc.key
+        --server.sslCertFile=D:\models\powerai_public.crt
+        --server.sslKeyFile=D:\models\powerai.key
     2）streamlit界面里面的base_url由http改为https即可，可能需要重启浏览器，查看证书是否有效。
 
 12、unity常见问题
@@ -300,6 +298,6 @@ port 0
         a）main.cs中如果要调用NRinput等库，只需要加入名字空间using NRKernal即可
         b）scene中如已建一个组件及其对应c#，则复制该组件及c#后，全局空间下的数据类如ChatCompletionResponse容易重复，此时可以考虑用namespace Openai_1和namespace Openai_2来区分。
     3）package安装：
-        a）如openai包的安装，依赖test-framework：
+        a）(没用，又NuGetForUnity就行了)如openai包的安装，依赖test-framework：
             1）下载https://github.com/needle-mirror/com.unity.test-framework/releases中的压缩文件，解压后，用unity的package manager的install from dick打开其中的package.json安装即可。
             2）然后再安装openai包即可（需按照https://github.com/RageAgainstThePixel/com.openai.unity的要求按照）
