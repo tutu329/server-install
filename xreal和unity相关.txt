@@ -291,7 +291,45 @@ port 0
         --server.sslKeyFile=D:\models\powerai.key
     2）streamlit界面里面的base_url由http改为https即可，可能需要重启浏览器，查看证书是否有效。
 
-12、unity常见问题
+12、unity中安卓设备录音及播放（需主线程中）
+    1）录音：
+        string[] devices = Microphone.devices;
+        m_mic_device = devices[0];
+        m_audio_clip = Microphone.Start(
+            m_mic_device,   //deviceName
+            false,          //loop
+            5,              //lengthSec
+            44100           //frequency
+        );                  //此时眼镜开始录音，手机录音绿色信号亮起
+    2）录音是否结束
+        a）主线程中调用协程polling状态：
+            private void Update() {
+                if (m_recording==true) {
+                    StartCoroutine(CheckRecording(m_mic_device));
+                }
+            }
+        b）协程中判断是否结束：
+        private System.Collections.IEnumerator CheckRecording(string mic_device)
+        {
+            yield return new WaitForSeconds(0.1f);
+            if (Microphone.IsRecording(mic_device)) {}
+            else {
+                m_record_finished = true;
+                m_recording = false;
+            }
+        }
+    3）播放：
+        AudioSource audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
+        audioSource.clip = m_audio_clip;
+        audioSource.Play();
+    4）手动结束录音：
+        Microphone.End(m_mic_device);
+
+13、unity常见问题
     1）将c#代码拖到组件上时报错can't add script：
         解决方式，要确保c#文件的文件名和class名称，不能和已有文件名和class名称重复。
     2）名字空间：
