@@ -328,6 +328,8 @@ port 0
         audioSource.Play();
     4）手动结束录音：
         Microphone.End(m_mic_device);
+    5）m_audio_clip转mp3字节流发redis
+
 
 13、unity常见问题
     1）将c#代码拖到组件上时报错can't add script：
