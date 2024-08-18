@@ -339,3 +339,6 @@ port 0
         a）(没用，又NuGetForUnity就行了)如openai包的安装，依赖test-framework：
             1）下载https://github.com/needle-mirror/com.unity.test-framework/releases中的压缩文件，解压后，用unity的package manager的install from dick打开其中的package.json安装即可。
             2）然后再安装openai包即可（需按照https://github.com/RageAgainstThePixel/com.openai.unity的要求按照）
+
+14、语音识别
+    https://modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx
