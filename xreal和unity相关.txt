@@ -182,7 +182,7 @@ tls-cert-file /home/tutu/models/xxx-public.crt
 tls-key-file /home/tutu/models/xxx.key
 tls-ca-cert-file /home/tutu/models/xxx-chain.crt
 tls-auth-clients no
-tls-port 8002
+tls-port 8010
 port 0
                         注意1：redis-stack-server读取crt和key文件时，文件命名必须是xxx-public.crt这样，而不能是xxx.xx-public.crt这样（即不能有多个.）
                         注意2：即使用了机构的证书，tls-auth-clients仍然要为no，yes时python下和game模式都连不上redis，而no时，眼镜可以正常连上redis。
@@ -207,7 +207,7 @@ port 0
             //用于ConnectionMultiplexer.Connect的初始化
             ConfigurationOptions options = new ConfigurationOptions
             {
-                EndPoints = { "powerai.cc:8002" },      // 替换为你的 Redis 服务器地址和端口
+                EndPoints = { "powerai.cc:8010" },      // 替换为你的 Redis 服务器地址和端口
                 Ssl = true,                             // 启用 TLS
                 SslHost = "powerai.cc",                 // 服务器的主机名（通常是你的 Redis 服务器地址）
                 Password = "",                          // 如果 Redis 服务器设置了密码，填写在这里
@@ -228,7 +228,7 @@ port 0
 
             # 配置连接参数
             redis_host = 'powerai.cc'
-            redis_port = 8002           # 假设 Redis 使用的是启用 TLS 的端口
+            redis_port = 8010           # 假设 Redis 使用的是启用 TLS 的端口
             redis_password = ''         # 如果 Redis 设置了密码，请填写此处
 
             # SSL/TLS 相关参数
