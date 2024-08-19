@@ -341,9 +341,8 @@ port 0
         a）(没用，又NuGetForUnity就行了)如openai包的安装，依赖test-framework：
             1）下载https://github.com/needle-mirror/com.unity.test-framework/releases中的压缩文件，解压后，用unity的package manager的install from dick打开其中的package.json安装即可。
             2）然后再安装openai包即可（需按照https://github.com/RageAgainstThePixel/com.openai.unity的要求按照）
-    4)Newtonsoft.Json的安装(参考https://blog.csdn.net/he153422079/article/details/137132170)：
-        a)找到项目文件夹D:\unity_project\World\Packages
-        b）manifest.json里搜索‘com.unity.collab-proxy’，将值改为1.15.4，然后回到unity界面刷新库，然后再到vs界面中选择重新读取，即可using Newtonsoft.Json，且安卓设备也可用。
+    4)（仍然不可行）Newtonsoft.Json的安装(参考https://blog.csdn.net/he153422079/article/details/137132170)：
+
 
 14、语音识别
     https://modelscope.cn/models/iic/speech_paraformer-large_asr_nat-zh-cn-16k-common-vocab8404-online-onnx
