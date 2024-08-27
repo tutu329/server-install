@@ -1155,3 +1155,18 @@ print('save_quantized() finished.')
         3、可以用XHS-downloader、note_url并通过自己的xhs.get_all_video_urls(), 批量获取原视频
             注意：XHS-downloader(https://github.com/JoeanAmier/XHS-Downloader) v1.7的windows版本压缩包可以成功获取原视频（v2.0报错）
 
+41、下载meta原版模型（参考https://blog.csdn.net/weixin_59191169/article/details/139302372）
+    0、填写meta问卷，获取下载权限
+    1、获取access token：https://huggingface.co/settings/tokens
+    2、控制台：huggingface-cli login（并输入token）
+    3、安装依赖（accelerate和transformers）
+    4、通过右上角"use this model->transformers"获取py下载代码：https://huggingface.co/meta-llama/Meta-Llama-3.1-70B-Instruct
+# Load model directly
+from transformers import AutoTokenizer, AutoModelForCausalLM
+
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-70B-Instruct")
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Meta-Llama-3.1-70B-Instruct")
+    5、运行后，下载的模型位置类似这样：
+        win：C:\\Users\\用户名\\.cache\\huggingface\\hub\\models--meta-llama--Meta->Llama-3-8B
+        linux：/root/.cache/huggingface/hub/models--meta-llama--Meta-Llama-3-8B
+
