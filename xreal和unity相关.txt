@@ -278,12 +278,14 @@ port 0
     1)vllm的启动参数增加：
         --ssl-keyfile=/home/tutu/ssl/powerai.key
         --ssl-certfile=/home/tutu/ssl/powerai_public.crt
+        --ssl-ca-certs=/home/tutu/ssl/powerai_chain.crt
     1-1)注意：ubuntu下vllm会和redis类似，报读取key和crt文件的权限不足的错误，此时需要：
         a）sudo cp /home/tutu/ssl/powerai* /home/tutu/anaconda3/envs/vllm55/ssl
         b）sudo chmod 644 /home/tutu/anaconda3/envs/vllm55/ssl/powerai*
-        c）vllm启动参数如下，即可。
+        c）vllm启动参数如下，即可(注意三个文件一个不能少，如果少了chain.crt，会出现curl成功，但api失败的情况)。
             --ssl-keyfile=/home/tutu/anaconda3/envs/vllm55/ssl/powerai.key
             --ssl-certfile=/home/tutu/anaconda3/envs/vllm55/ssl/powerai_public.crt
+            --ssl-ca-certs=/home/tutu/anaconda3/envs/vllm55/ssl/powerai_chain.crt
 
     2)win下的client调用测试（注意一个空格都不能多，修改ip和model名字即可）：
         curl -k https://powerai.cc:8001/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer empty" -d "{\"model\": \"qwen72\", \"messages\": [{\"role\": \"user\", \"content\": \"你是谁?\"}], \"max_tokens\":100}"
@@ -311,6 +313,9 @@ port 0
         ...
 
 11-2、顺便设置streamlit应用支持https
+    0）ubuntu下：
+        sudo cp /home/tutu/ssl/powerai* /home/tutu/anaconda3/envs/client/ssl
+        sudo chmod 644 /home/tutu/anaconda3/envs/client/ssl/powerai*
     1）streamlit启动命令增加下述参数：
         --server.sslCertFile=D:\models\powerai_public.crt
         --server.sslKeyFile=D:\models\powerai.key
