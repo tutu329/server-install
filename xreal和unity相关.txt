@@ -162,7 +162,7 @@
                 1）将生成的key和crt复制到某个目录(如/opt/redis-stack或/home/tutu下，注意不能是/home/tutu/models这种wsl映射的volume下，否则权限有问题，redis启动不了)。
                 2）在/opt/redis-stack，运行：sudo ln -s ~/models/powerai* .
 
-        步骤 3：配置 Redis 服务器
+        步骤 3：配置 Redis 服务器(wsl-ubuntu)
             0.下载支持tls的wsl redis
                 1）下载并添加 Redis Stack 的 GPG 密钥：
                     curl -fsSL https://packages.redis.io/gpg | sudo gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg
@@ -190,6 +190,22 @@ port 0
                     sudo service redis-stack-server restart
                     sudo service redis-stack-server status（会显示：Ready to accept connections tls）
                     sudo systemctl enable redis-stack-server(设置自启动)
+
+        步骤 3-1：配置redis服务器（ubuntu)
+            1、sudo vi /etc/redis/redis.conf
+tls-cert-file /etc/redis/powerai_public.crt
+tls-key-file /etc/redis/powerai.key
+tls-ca-cert-file /etc/redis/powerai_chain.crt
+tls-auth-clients no
+tls-port 8010
+port 0
+            2、将crt和key文件copy到/etc/redis这种权限比较足的文件夹里(由于/lib/systemd/system/redis-server.service的权限设置，如果crt和key文件在/home/tutu/ssl这种目录下会造成redis-server启动权限不足)
+
+            3、重启即可
+                sudo systemctl daemon-reload
+                sudo systemctl restart redis-server
+                sudo systemctl status redis-server
+                即可用redis_client.py测试通过
 
     二、使用 StackExchange.Redis 以 SSL/TLS 方式连接到 Redis 服务器
         步骤 1：安装 StackExchange.Redis
