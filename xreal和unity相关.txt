@@ -276,15 +276,24 @@ port 0
 
 11-1、顺便设置vllm的openai api支持https
     1)vllm的启动参数增加：
-        --ssl-keyfile=/opt/redis-stack/redis.key
-        --ssl-certfile=/opt/redis-stack/redis.crt
-    2)win下的client调用测试（注意一个空格都不能多，修改ip和model名字即可）：curl -k https://localhost:8001/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer empty" -d "{\"model\": \"qwen14\", \"messages\": [{\"role\": \"user\", \"content\": \"who are you?\"}], \"max_tokens\":100}"
+        --ssl-keyfile=/home/tutu/ssl/powerai.key
+        --ssl-certfile=/home/tutu/ssl/powerai_public.crt
+    1-1)注意：ubuntu下vllm会和redis类似，报读取key和crt文件的权限不足的错误，此时需要：
+        a）sudo cp /home/tutu/ssl/powerai* /home/tutu/anaconda3/envs/vllm55/ssl
+        b）sudo chmod 644 /home/tutu/anaconda3/envs/vllm55/ssl/powerai*
+        c）vllm启动参数如下，即可。
+            --ssl-keyfile=/home/tutu/anaconda3/envs/vllm55/ssl/powerai.key
+            --ssl-certfile=/home/tutu/anaconda3/envs/vllm55/ssl/powerai_public.crt
+
+    2)win下的client调用测试（注意一个空格都不能多，修改ip和model名字即可）：
+        curl -k https://powerai.cc:8001/v1/chat/completions -H "Content-Type: application/json" -H "Authorization: Bearer empty" -d "{\"model\": \"qwen72\", \"messages\": [{\"role\": \"user\", \"content\": \"你是谁?\"}], \"max_tokens\":100}"
+
     3)(测试通过)openai api的调用修改，必须增加http_client=openai.DefaultHttpxClient(verify=False)，否则会报错(SSL: CERTIFICATE_VERIFY_FAILED)：
         a）测试
             self.openai = OpenAI(
                 api_key=self.api_key,
                 base_url=self.url,
-                # http_client=openai.DefaultHttpxClient(verify=False),    # 用于自建的vllm openai api的ssl临时https访问(由于verify为falst，unity安卓设备仍然不能访问外网)。阿里云购买了正式证书（可以是免费的）后，即可开启verify，也就是去掉本行
+                # http_client=openai.DefaultHttpxClient(verify=False),    # 用于自建的vllm openai api的ssl临时https访问(由于verify为false，unity安卓设备仍然不能访问外网)。阿里云购买了正式证书（可以是免费的）后，即可开启verify，也就是去掉本行
             )
         b）测试结果：
             # 测试https（阿里云购买的免费ssl证书，绑定在powerai.cc）
