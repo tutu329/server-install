@@ -1008,7 +1008,7 @@ WantedBy=multi-user.target
     sudo curl --compressed -o- -L https://yarnpkg.com/install.sh | bash
     重启终端后：yarn --version(此时为1.22.22)
 
-38、安装llm-viz(直接演示3D的llm(GPT-2、nano-gpt、GPT-3)结构，demo链接是https://bbycroft.net/llm)
+38、安装llm-viz(直接演示3D三维的llm(GPT-2、nano-gpt、GPT-3)结构，demo链接是https://bbycroft.net/llm)
     git clone https://github.com/bbycroft/llm-viz
     cd llm-viz
     yarn
