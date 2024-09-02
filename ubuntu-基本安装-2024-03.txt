@@ -791,17 +791,19 @@ swift export \
 
 28-1、swift界面微调、合并的全流程
     1、安装swift(28中训练数据多一些时，训练几个it后会报错Expected is_sm80 || is_sm90 to be true, but got false，估计是torch的bug，所以用最新的torch)：
-        pip install ms-swift[llm] -U（自带为torch.__version__为2.4.0+cu121）
+        git clone https://github.com/modelscope/swift.git
+        cd swift
+        pip install -v -e .[llm]（自带为torch.__version__为2.4.0+cu121）
     2、安装环境：
         pip install deepspeed==0.14.5(0.15会报错)
-        pip install auto_gptq -U
-        pip install optimum
     3、启动：swift web-ui（界面中要能正确调用GPU，需在环境中安装torch）
     4、注意事项：
         1）模型路径要正确
         2）模型类型要正确
         3）训练数据如jsonl文件中，似乎不能有可见回车，否则会报错。
-        4）关于报错：RuntimeError: Expected is_sm80 || is_sm90 to be true, but got false.
+        4）关于报错：RuntimeError: Expected is_sm80 || is_sm90 to be true, but got false, 估计是torch的bug，所以用最新的torch如2.4.0+cu121:
+
+
 
     *、关于win下编辑生成的sh文件在ubuntu的转换(报错：-bash: ./xiaoshan.sh: /usr/bin/bash^M: bad interpreter: No such file or directory)：
     sudo apt install dos2unix
