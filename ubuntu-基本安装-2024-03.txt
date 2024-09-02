@@ -775,6 +775,9 @@ swift sft \
     --push_to_hub false \
     --push_hub_strategy push_last  \
 
+    关于lora训练记不住的问题：
+        尝试将epoch改为较大，如10-50，总能记住：--num_train_epochs 10
+
     vi merge.sh (微调完成后，lora和checkpoint的merge。注意：ckpt_dir千万不要搞错，如果搞错，swift并不会报错，导致merge出来的模型就是原模型)
 CUDA_VISIBLE_DEVICES=0
 swift export \
@@ -787,15 +790,17 @@ swift export \
     然后直接用vllm启动这个模型即可。
 
 28-1、swift界面微调、合并的全流程(目前能成功的swift版本是："git describe --tags"显示为"v1.2.0-351-g5e3d1e0"，按28要求下载和编译)
-    1、安装swift(含了torch)：pip install ms-swift[all] -U
+    1、安装swift(含了torch)：pip install ms-swift[llm] -U
     2、安装环境：
-        pip install deepspeed -U
+        pip install deepspeed==0.14.5(0.15会报错)
         pip install auto_gptq -U
         pip install optimum
     3、启动：swift web-ui（界面中要能正确调用GPU，需在环境中安装torch）
     4、注意事项：
         1）模型路径要正确
         2）模型类型要正确
+        3）训练数据如jsonl文件中，似乎不能有可见回车，否则会报错。
+        4）关于报错：RuntimeError: Expected is_sm80 || is_sm90 to be true, but got false.
 
     *、关于win下编辑生成的sh文件在ubuntu的转换(报错：-bash: ./xiaoshan.sh: /usr/bin/bash^M: bad interpreter: No such file or directory)：
     sudo apt install dos2unix
