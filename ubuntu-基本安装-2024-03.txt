@@ -721,7 +721,11 @@ rs.initiate({
     conda activate swift
     pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu121
     pip install deepspeed==0.12.6
-    git clone https://github.com/modelscope/swift.git
+    pip install importlib_metadata
+    pip install einops
+    pip install oss2
+    pip install addict
+    git clone https://github.com/modelscope/swift.git (目前能成功的版本是："git describe --tags"显示为"v1.2.0-351-g5e3d1e0")
     cd swift
     pip install -v -e .[llm]
     vi sft.sh
@@ -784,7 +788,12 @@ swift export \
     2、安装环境：
         pip install deepspeed -U
         pip install auto_gptq -U
+        pip install optimum
     3、启动：swift web-ui（界面中要能正确调用GPU，需在环境中安装torch）
+    4、注意事项：
+        1）模型路径要正确
+        2）模型类型要正确
+
     *、关于win下编辑生成的sh文件在ubuntu的转换(报错：-bash: ./xiaoshan.sh: /usr/bin/bash^M: bad interpreter: No such file or directory)：
     sudo apt install dos2unix
     dos2unix xiaoshan.sh
