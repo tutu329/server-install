@@ -771,10 +771,6 @@ swift sft \
     --push_to_hub false \
     --push_hub_strategy push_last  \
 
-    关于win下编辑生成的sh文件在ubuntu的转换(报错：-bash: ./xiaoshan.sh: /usr/bin/bash^M: bad interpreter: No such file or directory)：
-        sudo apt install dos2unix
-        dos2unix xiaoshan.sh
-
     vi merge.sh (微调完成后，lora和checkpoint的merge。注意：ckpt_dir千万不要搞错，如果搞错，swift并不会报错，导致merge出来的模型就是原模型)
 CUDA_VISIBLE_DEVICES=0
 swift export \
@@ -788,7 +784,10 @@ swift export \
     2、安装环境：
         pip install deepspeed -U
         pip install auto_gptq -U
-    2、启动：swift web-ui（界面中要能正确调用GPU，需在环境中安装torch）
+    3、启动：swift web-ui（界面中要能正确调用GPU，需在环境中安装torch）
+    *、关于win下编辑生成的sh文件在ubuntu的转换(报错：-bash: ./xiaoshan.sh: /usr/bin/bash^M: bad interpreter: No such file or directory)：
+    sudo apt install dos2unix
+    dos2unix xiaoshan.sh
 
 29、超微4029服务器修改机箱风扇转速
     1)关于ipmitool权限(为tutu提供root权限，从而避免sudo ipmitool需要输入密码)：
