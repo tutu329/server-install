@@ -789,8 +789,9 @@ swift export \
     merge完成后，合并的模型如位于：/home/tutu/models/swift_output/qwen1half-7b-chat/v0-20240902-102830/checkpoint-100-merged
     然后直接用vllm启动这个模型即可。
 
-28-1、swift界面微调、合并的全流程(目前能成功的swift版本是："git describe --tags"显示为"v1.2.0-351-g5e3d1e0"，按28要求下载和编译)
-    1、安装swift(含了torch)：pip install ms-swift[llm] -U
+28-1、swift界面微调、合并的全流程
+    1、安装swift(28中训练数据多一些时，训练几个it后会报错Expected is_sm80 || is_sm90 to be true, but got false，估计是torch的bug，所以用最新的torch)：
+        pip install ms-swift[llm] -U（自带为torch.__version__为2.4.0+cu121）
     2、安装环境：
         pip install deepspeed==0.14.5(0.15会报错)
         pip install auto_gptq -U
