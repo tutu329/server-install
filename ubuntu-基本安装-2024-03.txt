@@ -927,7 +927,7 @@ WantedBy=multi-user.target
         cat deepseekv2-chat-int4g256.flm.part_* > deepseekv2-chat-int4g256.flm
     6）调用GPU运行模型
 
-33、安装和运行redis（端口为8010）
+33、安装和运行redis（端口为8010）(如果是设置tls/ssl的redis server，详见xreal和unity相关.txt)
     1）安装redis服务
         sudo apt install redis-server
         sudo systemctl start redis-server
