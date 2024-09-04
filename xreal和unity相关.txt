@@ -158,9 +158,8 @@
                 b）点选“立即购买”购买免费证书，然后点选“创建证书”（必须这里获得的才是新的，千万不要选择了下面的已过期的证书进行下载），绑定powerai.cc
                 c）新的证书处于“已签发”状态后，下载Apache的“crt/key”证书（包括key、public.crt和chain.crt三个文件），并且下载根证书（xxx-root.cer文件，根据官方说明是非浏览器访问需要的。目前暂时没用）。
             2.进入wsl
-            3.处理证书文件：
-                1）将生成的key和crt复制到某个目录(如/opt/redis-stack或/home/tutu下，注意不能是/home/tutu/models这种wsl映射的volume下，否则权限有问题，redis启动不了)。
-                2）在/opt/redis-stack，运行：sudo ln -s ~/models/powerai* .
+            3.处理证书文件的权限：
+                crt和key文件的权限要chmod 644(即其他用户可读)，crt和key文件所在文件夹要chmod 755(即其他用户可进入)
 
         步骤 3：配置 Redis 服务器(wsl-ubuntu)
             0.下载支持tls的wsl redis
@@ -199,8 +198,7 @@ tls-ca-cert-file /etc/redis/powerai_chain.crt
 tls-auth-clients no
 tls-port 8010
 port 0
-            2、将crt和key文件copy到/etc/redis这种权限比较足的文件夹里(由于/lib/systemd/system/redis-server.service的权限设置，如果crt和key文件在/home/tutu/ssl这种目录下会造成redis-server启动权限不足)
-
+            2、crt和key文件的权限要chmod 644(即其他用户可读)，crt和key文件所在文件夹要chmod 755(即其他用户可进入)
             3、重启即可
                 sudo systemctl daemon-reload
                 sudo systemctl restart redis-server
