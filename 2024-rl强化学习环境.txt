@@ -1,0 +1,11 @@
+1、gym安装(https://github.com/Farama-Foundation/Gymnasium)
+    1)安装swig
+        a）win
+            pip install swig
+        b）linux或wsl
+            apt-get install swig3.0
+            ln -s /usr/bin/swig3.0 /usr/bin/swig
+    2）安装gymnasium
+        conda create -n gym python=3.11
+        conda activate gym
+        pip install gymnasium[all]
