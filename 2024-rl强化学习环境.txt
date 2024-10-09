@@ -9,3 +9,4 @@
         conda create -n gym python=3.11
         conda activate gym
         pip install gymnasium[all]
+
