@@ -9,3 +9,14 @@
         conda create -n gym python=3.11
         conda activate gym
         pip install gymnasium[all]
+
+2、cleanrl安装（https://github.com/vwxyzjn/cleanrl）
+    1）conda create -n cleanrl python=3.10
+    2）conda activate cleanrl
+    3）git clone https://github.com/vwxyzjn/cleanrl.git && cd cleanrl
+    4）poetry install
+    5）运行
+        poetry run python cleanrl/ppo.py --seed 1 --env-id CartPole-v0 --total-timesteps 50000
+    6）观测
+        例子运行完之后，在cleanrl下，运行：
+            tensorboard --logdir runs
