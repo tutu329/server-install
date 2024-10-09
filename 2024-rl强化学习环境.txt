@@ -9,6 +9,8 @@
         conda create -n gym python=3.11
         conda activate gym
         pip install gymnasium[all]
+    3）关于可视化，实际是record整个训练过程，设置render_mode即可：
+        env = gym.make("CartPole-v1", render_mode="human")
 
 2、cleanrl安装（https://github.com/vwxyzjn/cleanrl）
     1）conda create -n cleanrl python=3.10
