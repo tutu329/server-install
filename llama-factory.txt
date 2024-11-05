@@ -1,2 +1,15 @@
 1、llama-factory安装
     conda create -n llamafactory python=3.11
+    conda activate llamafactory
+    git clone --depth 1 https://github.com/hiyouga/LLaMA-Factory.git
+    cd LLaMA-Factory
+    pip install -e .[all]
+
+2、微调example
+    llamafactory-cli train examples/train_lora/llama3_lora_sft.yaml
+    llamafactory-cli chat examples/inference/llama3_lora_sft.yaml
+    llamafactory-cli export examples/merge_lora/llama3_lora_sft.yaml
+    使用自定义数据集时，需更新 data/dataset_info.json 文件
+
+3、界面
+    llamafactory-cli webui
