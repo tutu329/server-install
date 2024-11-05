@@ -1,0 +1,2 @@
+1、llama-factory安装
+    conda create -n llamafactory python=3.11
