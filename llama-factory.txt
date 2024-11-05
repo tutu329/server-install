@@ -12,4 +12,13 @@
     使用自定义数据集时，需更新 data/dataset_info.json 文件
 
 3、界面
-    GRADIO_SERVER_PORT=7860 llamafactory-cli webui
+    启动界面：
+        GRADIO_SERVER_PORT=7860 llamafactory-cli webui
+    界面参数：
+        语言：zh
+        模型名称：Qwen2.5-1.5B
+        模型路径：/home/tutu/models/Qwen2.5-1.5B
+        训练阶段：Pre-Training
+        数据集：alpaca_zh_demo
+        计算类型：fp16（默认是bf16，2080ti会报错）
+    然后可以点“开始”，该demo数据集，训练几秒钟后即完成。报错可看后台信息
