@@ -12,4 +12,4 @@
     使用自定义数据集时，需更新 data/dataset_info.json 文件
 
 3、界面
-    llamafactory-cli webui
+    GRADIO_SERVER_PORT=7860 llamafactory-cli webui
