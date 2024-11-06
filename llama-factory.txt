@@ -40,11 +40,21 @@
         然后即可用vllm推理/home/tutu/my_models/xxx的模型
 
 4、其他
-    1）关于Cutoff length(参考：https://github.com/hiyouga/LLaMA-Factory/issues/5024)
-        I don't quite understand what "suppose better than cutoff_length=2048" is.
-        Actually, I'm a beginner, but I think it depends on what you're trying to do,
-        if you want longer context, cutoff_length=12000 is better, for the question you're referencing,
-            pt采用文本分段，而不是根据cutoff_length进行truncate，【if it's pre-training, it automatically segments for you,it doesn't truncate, 】
-            sft根据cutoff_length进行truncate，【if it's SFT it truncates.】
+    1）关于Cutoff length
+        a）参考：https://github.com/hiyouga/LLaMA-Factory/issues/5024
+            I don't quite understand what "suppose better than cutoff_length=2048" is.
+            Actually, I'm a beginner, but I think it depends on what you're trying to do,
+            if you want longer context, cutoff_length=12000 is better, for the question you're referencing,
+                pt采用文本分段，而不是根据cutoff_length进行truncate，【if it's pre-training, it automatically segments for you,it doesn't truncate, 】
+                sft根据cutoff_length进行truncate，【if it's SFT it truncates.】
+        b）参考：https://github.com/hiyouga/LLaMA-Factory/issues/4657
+            Q：I'm using llama-factory to do continual pre-training,
+                and my data is a jsonl file with each line's content >10k tokens.
+                I'm wondering if i set the cutoff_len to 1024,
+                then most of the information will be cutoff?
+                Should i do chunking manually before running the training script or is there some easy way to do this?
+            A：See this section for the packing operation we used in the pre-training stage:
+                https://huggingface.co/learn/nlp-course/chapter7/6?fw=pt#preparing-the-dataset
+        结论：pretrain时，训练集的长文，是被分段后进行训练，不涉及到cutoff_length的截断操作，最多只在长文最后一段（该段不够长时）才可能涉及到drop。
 
     2）使用自定义数据集时，需更新 data/dataset_info.json 文件
