@@ -21,22 +21,25 @@
             数据集：c4_demo
             计算类型：fp16（默认是bf16，2080ti会报错）
             DeepSpeed stage：3（默认是none，会报oom）
-            批处理大小：4（默认是2，如果改为8及以上，就会oom）
-            输出目录：train_2024-11-05-14-46-20（会自动按当前时间设置）
+            批处理大小和截断长度（建议1和8192）：4和1024（默认是2，如果改为8及以上，就会oom），或者2和2048，或者1和4096、1和8192（16384会oom，32000会报数据不够长的错误）
+            输出目录：如train_2024-11-05-14-46-20_cpt
             配置路径：2024-11-05-14-56-41.yaml
         然后可以点“开始”，该demo数据集，训练几秒钟后即完成，模型会输出到/home/tutu/LLaMA-Factory/saves/Qwen2.5-1.5B/full下。报错可看后台信息。
     2）sft(Supervised Fine-Tuning)
         界面参数：
             微调方法：full
             训练阶段：Supervised Fine-Tuning
-            检查点路径：如前述cpt输出的“train_2024-11-05-14-46-20” （注意：该参数如果为空，则可以通过“预览命令”看到sft的是原版模型而非cpt输出模型，即--model_name_or_path /home/tutu/models/Qwen2.5-1.5B）
+            检查点路径：如前述cpt输出的“train_2024-11-05-14-46-20_cpt” （注意：该参数如果为空，则可以通过“预览命令”看到sft的是原版模型而非cpt输出模型，即--model_name_or_path /home/tutu/models/Qwen2.5-1.5B）
             数据集：alpaca_zh_demo
-            批处理大小：8（默认是2，如果改为16及以上，就会oom）
-            输出目录：train_2024-11-05-14-46-20_sft（要和上面cpt输出的base模型区分）
+            批处理大小和截断长度（建议8和8192）：8和2048（默认是2，如果改为16及以上，就会oom），或8和4096，或8和128000都行（可能demo数据实际没有很长的QA）
+            输出目录：如train_2024-11-05-14-46-20_sft（要和上面cpt输出的base模型区分）
             配置路径：2024-11-05-14-56-41_sft.yaml
         然后可以点“开始”，该demo数据集，训练几秒钟后即完成，模型会输出到/home/tutu/LLaMA-Factory/saves/Qwen2.5-1.5B/full下。报错可看后台信息。
+    3、chat测试
+        检查点路径：设置为“train_2024-11-05-14-46-20_cpt”或“train_2024-11-05-14-46-20_sft”
+        “Chat”中“加载模型”，然后对话即可，cpt为base模型，sft为对话模型。
     *、导出
-        cpt或sft完成后，“检查点路径”选择为训练输出的模型如“train_2024-11-05-10-52-37”或“train_2024-11-05-10-52-37_sft”，然后“export”中，“导出目录”填写如/home/tutu/my_models/xxx，点“开始导出”，即可。
+        cpt或sft完成后，“检查点路径”选择为训练输出的模型如“train_2024-11-05-10-52-37_cpt”或“train_2024-11-05-10-52-37_sft”，然后“export”中，“导出目录”填写如/home/tutu/my_models/xxx，点“开始导出”，即可。
         然后即可用vllm推理/home/tutu/my_models/xxx的模型
 
 4、其他
