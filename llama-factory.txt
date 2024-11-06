@@ -6,18 +6,12 @@
     pip install -e .[all]
     pip install deepspeed
 
-2、微调example
-    llamafactory-cli train examples/train_lora/llama3_lora_sft.yaml
-    llamafactory-cli chat examples/inference/llama3_lora_sft.yaml
-    llamafactory-cli export examples/merge_lora/llama3_lora_sft.yaml
-    使用自定义数据集时，需更新 data/dataset_info.json 文件
-
-3、界面
+2、界面
     启动界面：
         GRADIO_SERVER_PORT=7860 llamafactory-cli webui
 
 
-4、流程
+3、流程
     1）cpt(Continue Pre-Train)
         界面参数：
             模型名称：Qwen2.5-1.5B
@@ -35,12 +29,22 @@
         界面参数：
             微调方法：full
             训练阶段：Supervised Fine-Tuning
+            检查点路径：如前述cpt输出的“train_2024-11-05-14-46-20” （注意：该参数如果为空，则可以通过“预览命令”看到sft的是原版模型而非cpt输出模型，即--model_name_or_path /home/tutu/models/Qwen2.5-1.5B）
             数据集：alpaca_zh_demo
             批处理大小：8（默认是2，如果改为16及以上，就会oom）
             输出目录：train_2024-11-05-14-46-20_sft（要和上面cpt输出的base模型区分）
             配置路径：2024-11-05-14-56-41_sft.yaml
         然后可以点“开始”，该demo数据集，训练几秒钟后即完成，模型会输出到/home/tutu/LLaMA-Factory/saves/Qwen2.5-1.5B/full下。报错可看后台信息。
     *、导出
-        cpt或sft完成后，“检查点路径”选择为训练输出的模型如“train_2024-11-05-10-52-37”，然后“export”中，“导出目录”填写如/home/tutu/my_models/xxx，点“开始导出”，即可。
+        cpt或sft完成后，“检查点路径”选择为训练输出的模型如“train_2024-11-05-10-52-37”或“train_2024-11-05-10-52-37_sft”，然后“export”中，“导出目录”填写如/home/tutu/my_models/xxx，点“开始导出”，即可。
         然后即可用vllm推理/home/tutu/my_models/xxx的模型
 
+4、其他
+    1）关于Cutoff length(参考：https://github.com/hiyouga/LLaMA-Factory/issues/5024)
+        I don't quite understand what "suppose better than cutoff_length=2048" is.
+        Actually, I'm a beginner, but I think it depends on what you're trying to do,
+        if you want longer context, cutoff_length=12000 is better, for the question you're referencing,
+            pt采用文本分段，而不是根据cutoff_length进行truncate，【if it's pre-training, it automatically segments for you,it doesn't truncate, 】
+            sft根据cutoff_length进行truncate，【if it's SFT it truncates.】
+
+    2）使用自定义数据集时，需更新 data/dataset_info.json 文件
