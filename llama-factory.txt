@@ -77,11 +77,16 @@
     2)llama-factory中的dataset_info.json
         a)自定义的pt数据的引用要采用下面格式，可参考自带的c4_demo.json（要注意，否则llama-factory会默认是sft数据）
           "00": {
-            "file_name": "/home/tutu/data/Chinese-H-Novels/one/train-00000-of-00192.jsonl",
+            "file_name": "/home/tutu/data/train-00000-of-00192.jsonl",
             "columns": {
               "prompt": "text"
             }
           },
-
+          "01": {
+            "file_name": "/home/tutu/data", （这样就可以训练data下的所有如jsonl文件，但是data下必须只有jsonl一种类型的文件，否则会报错）
+            "columns": {
+              "prompt": "text"
+            }
+          },
 
 
