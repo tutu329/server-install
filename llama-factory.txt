@@ -9,6 +9,7 @@
 2、界面
     启动界面：
         GRADIO_SERVER_PORT=7860 llamafactory-cli webui
+        (注意：需要在llama-factory所在目录如/home/tutu/LLaMA-Factory下运行，否则会导致data文件夹找不到等问题)
 
 
 3、流程
