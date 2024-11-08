@@ -61,7 +61,13 @@
                 https://huggingface.co/learn/nlp-course/chapter7/6?fw=pt#preparing-the-dataset
         结论：pretrain时，训练集的长文，是被分段后进行训练，不涉及到cutoff_length的截断操作，最多只在长文最后一段（该段不够长时）才可能涉及到drop。
 
-    2）使用自定义数据集时，需更新 data/dataset_info.json 文件
+    2）关于训练刚开始时的overflow（参考：https://github.com/THUDM/CogVideo/issues/233）
+        报错：
+            [INFO] [loss_scaler.py:183:update_scale] [deepspeed] OVERFLOW! Rank 0 Skipping step. Attempted loss scale: 65536, reducing to 32768
+        建议：
+            It is normal to skip when the loss is large at the beginning of training.
+            You can find that a small number of steps will be skipped in the first 50 steps.
+            Once the training is stable, it will not happen again.
 
 5、数据相关
     1）parquet列式数据格式
