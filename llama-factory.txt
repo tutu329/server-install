@@ -83,7 +83,7 @@
             }
           },
           "01": {
-            "file_name": "/home/tutu/data", （这样就可以训练data下的所有如jsonl文件，但是data下必须只有jsonl一种类型的文件，否则会报错）
+            "file_name": "/home/tutu/data", （这样就可以训练data下的所有如jsonl文件，但是data下必须只有jsonl一种类型的文件，而且不能有其他文件夹包括.xxx这种文件夹，否则会报错）
             "columns": {
               "prompt": "text"
             }
