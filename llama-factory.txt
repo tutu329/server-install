@@ -69,6 +69,8 @@
             It is normal to skip when the loss is large at the beginning of training.
             You can find that a small number of steps will be skipped in the first 50 steps.
             Once the training is stable, it will not happen again.
+    3）报错：Token indices sequence length is longer than the specified maximum sequence length for this model (159603 > 131072). Running this sequence through the model will result in indexing errors
+        结论：根据issue中hiyouga反馈，不影响训练，也和cutoff length无关。（https://github.com/hiyouga/LLaMA-Factory/issues/5952）
 
 5、数据相关
     1）parquet列式数据格式
