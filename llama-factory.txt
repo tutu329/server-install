@@ -26,6 +26,8 @@
             输出目录：如train_2024-11-05-14-46-20_cpt
             最大样本数：10000000000（这个很关键，否则jsonl文件再多，也只训练一部分。如5GB多的jsonl文件，样本数能达到597943079）
             配置路径：2024-11-05-14-56-41.yaml
+            其他参数设置->额外参数（增加save_only_model为true，或者将save_steps设置为10000甚至20000以上。否则预训练1.5B模型、90GB数据，70000steps，大概会产生700个21GB的中间checkpoint文件夹（save_steps默认为100））：
+                {"optim": "adamw_torch", "save_only_model":true}
         然后可以点“开始”，该demo数据集，训练几秒钟后即完成，模型会输出到/home/tutu/LLaMA-Factory/saves/Qwen2.5-1.5B/full下。报错可看后台信息。
     2）sft(Supervised Fine-Tuning)
         界面参数：
