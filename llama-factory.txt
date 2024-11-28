@@ -96,4 +96,9 @@
             }
           },
 
+6、tensorboard
+    1）将gpu_server/train_tools下的tensorboard.sh和trainer_log_to_tensorboard.py复制到如/home/tutu/LLaMA-Factory/saves/Qwen2.5-1.5B/full/cpt_all_2024-11-11-09-41-24下
+    2）pip install tensorboard
+    3）./tensorboard.sh
+    4）打开网页，展开loss页面
 
