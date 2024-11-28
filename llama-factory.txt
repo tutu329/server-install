@@ -102,3 +102,31 @@
     3）./tensorboard.sh
     4）打开网页，展开loss页面
 
+附）2024-11-27训练情况：
+    训练时间：16天3小时
+    epoch：1
+    loss：3.3->2.4左右
+    steps：75810
+    训练平均速度：18.4s/it
+
+    训练参数：
+    cutoff length	4096
+    epoches		1
+    max samples	10000000000
+    learning rate	5e-5
+    batch size		1
+    deepspeed stage	3
+    compute type	fp16
+    saving steps	5000
+    extra arguments	{"optim": "adamw_torch", "save_only_model":true}
+
+    datasets		"all"
+    数据集配置文件：/home/tutu/LLaMA-Factory/data/dataset_info.json
+    {
+      "all": {
+        "file_name": "/home/tutu/data/xxx/jsonl",
+        "columns": {
+          "prompt": "text"
+        }
+      }
+    }
