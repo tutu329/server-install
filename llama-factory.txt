@@ -131,3 +131,14 @@
         }
       }
     }
+
+7、关于训练的关键超参（【过拟合要优于欠拟合】）
+    关于loss收敛：
+        a）sft数据只有几十条时，epoch到几十以上，直到loss到3左右，loss小于8时才会开始回复部分训练数据、loss小于6时会精确复述一句话但如人名会错（如sft 4b-chat时，lr设置为5e-6, epoch设置为100则训练完成后的train_loss到3.3，可以完整复述一段话、人名也正确。）
+        b）可能和显存有关：报warning，1 pytorch allocator cache flushes since last step. this happens when there is high memory pressure and is detrimental to performance. if this is happening frequently consider adjusting settings to reduce memory consumption. If you are unable to make the cache flushes go away consider adding get_accelerator().empty_cache() calls in your training loop to ensure that all ranks flush their caches at the same time
+    1）学习率
+        SFT数据集不是特别大的情况下，建议设置较小学习率，一般设置为pre-train阶段学习率的0.1左右，如在pre-train阶段的学习率为5e-5，则SFT学习率设置为5e-6。
+        在10万SFT样本上，采用与pre-train一样的学习率，发现loss一直不收敛，在调低学习率至原来0.1之后，loss在两个epoch之后就收敛。
+    2）Epoch
+        Epoch设置可以根据loss收敛情况设置，如果SFT样本较少，可以设置较大epoch，在较小的epoch上loss会不收敛，指令都很难遵循。较大epoch会容易导致过拟合，但过拟合要优于欠拟合。
+        如果SFT样本数量较多，如在十万以上，一般2个epoch即可收敛。
