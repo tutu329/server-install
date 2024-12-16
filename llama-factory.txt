@@ -148,13 +148,40 @@
         git clone https://github.com/multimodal-art-projection/MAP-NEO
         cd MAP-NEO/Matrix/document-convert
     1）安装
-        conda create -n neo python=3.9(FastDeploy之类必须用3.9)
+        conda create -n neo python=3.10(FastDeploy之类最大支持3.10)
         conda activate neo
         pip install -r requirements.txt
         python -m pip install fastdeploy-gpu-python -f https://www.paddlepaddle.org.cn/whl/fastdeploy.html
-    2）可能的报错
-        报错：ImportError: libcudart.so.11.0: cannot open shared object file: No such file or directory
+
+        安装cuDNN：
+            去 NVIDIA 官网下载对应版本的 cuDNN（https://developer.nvidia.com/cudnn）
+            1）下载
+                https://developer.download.nvidia.com/compute/cudnn/9.6.0/local_installers/cudnn-local-repo-ubuntu2204-9.6.0_1.0-1_amd64.deb
+            sudo dpkg -i cudnn-local-repo-ubuntu2204-9.6.0_1.0-1_amd64.deb
+            sudo cp /var/cudnn-local-repo-ubuntu2204-9.6.0/cudnn-*-keyring.gpg /usr/share/keyrings/
+            sudo apt update
+            sudo apt -y install cudnn
+
+            找到安装的位置（如/usr/lib/x86_64-linux-gnu，可以用find /usr -name "libcudnn*"查找）
+            echo 'export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH' >> ~/.bashrc
+            echo 'export CUDA_HOME=/usr/local/cuda' >> ~/.bashrc
+            source ~/.bashrc
+
+            如有权限问题
+            sudo chmod 755 /usr/lib/x86_64-linux-gnu/libcudnn*
+    2）运行
+        运行前，把~/neo_data/下的无关文件、隐藏文件、隐藏文件夹全部删除
+        python multi_thread_process_to_doc.py ~/neo_data/ --process-num 8
+    3）可能的报错
+        a）报错：ImportError: libcudart.so.11.0: cannot open shared object file: No such file or directory
         (尚未解决)解决：可能需要在ubuntu安装多版本cuda toolkit(https://blog.csdn.net/weixin_64174049/article/details/140065229?spm=1001.2014.3001.5506)
 
-        报错：cannot import name 'xyxy24p' from 'cnstd.yolov7.general'
-        解决：pip install cnstd==1.2.3
+        b）报错：cannot import name 'xyxy24p' from 'cnstd.yolov7.general'
+        解决：
+            1）如下修改latex/latex_rec.py第24行：
+# from cnstd.yolov7.general import xyxy24p, box_partial_overlap
+from cnstd.yolov7.general import box_partial_overlap
+            2）不要用pip install cnstd==1.2.3解决这个错误，会产生新问题
+
+        c）报错：PreconditionNotMetError: Cannot load cudnn shared library. Cannot invoke method cudnnGetVersion.
+        解决：安装cuDNN
