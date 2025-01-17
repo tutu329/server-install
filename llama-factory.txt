@@ -4,7 +4,7 @@
     git clone --depth 1 https://github.com/hiyouga/LLaMA-Factory.git
     cd LLaMA-Factory
     pip install -e .[all]
-    pip install deepspeed
+    pip install deepspeed（如果lf用了0.92dev版报错：no_sync context manager is incompatible，则pip install deepspeed==0.15.4）
 
 2、界面
     启动界面：
