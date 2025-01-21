@@ -1047,15 +1047,14 @@ WantedBy=multi-user.target
     yarn dev
 
 
-38、用autogptq量化模型
+38、用gptqmodel量化模型（原来的autogptq已经不维护了，转为https://github.com/ModelCloud/GPTQModel）
     安装autogptq：
-        conda create -n autogptq python=3.11
-        conda activate autogptq
-        pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-        pip install auto-gptq --no-build-isolation
+        conda create -n gptqmodel python=3.12
+        conda activate gptqmodel
+        pip install -v gptqmodel --no-build-isolation
     量化：
-        pip install protobuf
-        运行下面的python代码，gptq文件夹出现下列文件：
+        python gptq.py
+        运行后，gptq文件夹出现下列文件：
             config.json
             quantize_config.json
             gptq_model-4bit-128g.safetensors
@@ -1065,43 +1064,54 @@ WantedBy=multi-user.target
             tokenizer.json
             tokenizer.model
         运行vllm即可
+# 【python代码: gptq.py】
+# Copyright 2025 ModelCloud
+# Contact: qubitium@modelcloud.ai, x.com/qubitium
 
-from transformers import AutoTokenizer, TextGenerationPipeline
-from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
-import logging
+import torch
+from gptqmodel import GPTQModel, QuantizeConfig
+from transformers import AutoTokenizer
 
-logging.basicConfig(
-    format="%(asctime)s %(levelname)s [%(name)s] %(message)s", level=logging.INFO, datefmt="%Y-%m-%d %H:%M:%S"
-)
+pretrained_model_id = "/home/tutu/models/DeepSeek-R1-Distill-Qwen-32B"
+quantized_model_id = "/home/tutu/models/DeepSeek-R1-Distill-Qwen-32B-gptq"
 
-pretrained_model_dir = "/home/tutu/models/openbuddy-mistral-22b-v21.1-32k"
-quantized_model_dir = "/home/tutu/models/openbuddy-mistral-22b-v21.1-32k-gptq"
+def main():
 
-tokenizer = AutoTokenizer.from_pretrained(pretrained_model_dir, use_fast=True)
-examples = [
-    tokenizer(
-        "auto-gptq is an easy-to-use model quantization library with user-friendly apis, based on GPTQ algorithm."
+    print('开始量化...')
+    print('读取tokenizer...')
+
+    tokenizer = AutoTokenizer.from_pretrained(pretrained_model_id, use_fast=True)
+    examples = [
+        tokenizer(
+            "gptqmodel is an easy-to-use model quantization library with user-friendly apis, based on GPTQ algorithm."
+        )
+    ]
+
+    quantize_config = QuantizeConfig(
+        bits=4,  # quantize model to 4-bit
+        group_size=128,  # it is recommended to set the value to 128
     )
-]
 
-quantize_config = BaseQuantizeConfig(
-    bits=4,  # quantize model to 4-bit
-    group_size=128,  # it is recommended to set the value to 128
-    desc_act=False,  # set to False can significantly speed up inference but the perplexity may slightly bad
-)
+    print('读取模型...')
 
-# load un-quantized model, by default, the model will always be loaded into CPU memory
-model = AutoGPTQForCausalLM.from_pretrained(pretrained_model_dir, quantize_config)
+    model = GPTQModel.load(
+        pretrained_model_id,
+        quantize_config=quantize_config,
+    )
 
-# quantize model, the examples should be list of dict whose keys can only be "input_ids" and "attention_mask"
-model.quantize(examples)
+    print('正在量化...')
 
-# save quantized model
-model.save_quantized(quantized_model_dir)
+    model.quantize(examples)
 
-# save quantized model using safetensors
-model.save_quantized(quantized_model_dir, use_safetensors=True)
-print('save_quantized() finished.')
+    print('存储量化...')
+
+    model.save(quantized_model_id)
+
+    tokenizer.save_pretrained(quantized_model_id)
+
+    print('量化完成.')
+
+main()
 
 39、llama.cpp跑deepseek-coder-v2-instruct gguf（llama.cpp在cpu上可以跑，gpu上跑出错）
     conda create -n gguf python=3.11
