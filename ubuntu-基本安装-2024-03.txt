@@ -1054,15 +1054,6 @@ WantedBy=multi-user.target
         pip install -v gptqmodel --no-build-isolation
     量化：
         python gptq.py
-        运行后，gptq文件夹出现下列文件：
-            config.json
-            quantize_config.json
-            gptq_model-4bit-128g.safetensors
-        然后将原模型文件夹中的下列文件，copy到gptq文件夹中：
-            special_tokens_map.json
-            tokenizer_config.json
-            tokenizer.json
-            tokenizer.model
         运行vllm即可
 # 【python代码: gptq.py】
 # Copyright 2025 ModelCloud
