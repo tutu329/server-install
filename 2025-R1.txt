@@ -24,7 +24,6 @@
         修改：trainer.logger=['wandb'] 改为 trainer.logger=['console']
         增加：actor_rollout_ref.rollout.dtype=half \
     b）相对于官方提供的环境变量，增加下面两行
-        export WANDB__SERVICE_WAIT=300
         export ROLLOUT_TP_SIZE=4
 2）运行
     export N_GPUS=8
