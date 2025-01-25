@@ -34,5 +34,16 @@
     chmod +x scripts/train_tiny_zero.sh
     ./scripts/train_tiny_zero.sh
 3）报错：
-    a）3090正常，4029-2080ti服务器报错：
+    a）3090正常运行，但20G会OOM，有已下部分结果：
+(main_task pid=67136) --------------------------------
+(main_task pid=67136) Target: 22 | Numbers: [77 27  6 21]
+(main_task pid=67136) Extracted equation: None
+(main_task pid=67136) Solution string: A conversation between User and Assistant. The user asks a question, and the Assistant solves it. The assistant first thinks about the reasoning process in the mind and then provides the user with the answer.
+(main_task pid=67136) User: Using the numbers [77, 27, 6, 21], create an equation that equals 22. You can use basic arithmetic operations (+, -, *, /) and each number can only be used once. Show your work in <think> </think> tags. And return the final answer in <answer> </answer> tags, for example <answer> (1 + 2) / 3 </answer>.
+(main_task pid=67136) Assistant: Let me solve this step by step.
+(main_task pid=67136) <think>Now I have two possible solutions</think></thangives me what they are: <think>15/3 = 5</think></thangives me that one.</thightext (27 - 6 + 21) / 7 = 22(Answer)</thangives me that one.</userid>15 / 3 = 5<g>there you go</g></userid><|endoftext|>
+(main_task pid=67136) No equation found
+(main_task pid=67136) --------------------------------
+
+    b）4029-2080ti服务器报错：
         RuntimeError: FlashAttention only supports Ampere GPUs or newer.
