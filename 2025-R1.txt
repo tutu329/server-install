@@ -1,0 +1,27 @@
+一、安装
+1、安装verl
+    conda create -n zero python=3.12
+    conda activate zero
+
+    git clone https://github.com/Jiayi-Pan/verl
+    cd verl
+    pip install -e .
+
+    pip install flash-attn --no-build-isolation(安装fa2，要3090及以上的卡)
+    pip install wandb IPython matplotlib
+2、下载TinyZero
+    git clone https://github.com/Jiayi-Pan/TinyZero
+
+二、zero测试
+1、测试数据生成
+    cd TinyZero
+    mkdir my_data
+    python ./examples/data_preprocess/countdown.py --local_dir ./my_data
+2、训练
+export N_GPUS=8
+export BASE_MODEL=/home/tutu/models/Qwen2.5-1.5B
+export DATA_DIR=/home/tutu/TinyZero/my_data
+export EXPERIMENT_NAME=countdown-qwen2.5-1.5b
+export VLLM_ATTENTION_BACKEND=XFORMERS
+chmod +x scripts/train_tiny_zero.sh
+./scripts/train_tiny_zero.sh
