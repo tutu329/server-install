@@ -19,10 +19,20 @@
     mkdir my_data
     python ./examples/data_preprocess/countdown.py --local_dir ./my_data
 2、训练
-export N_GPUS=8
-export BASE_MODEL=/home/tutu/models/Qwen2.5-1.5B
-export DATA_DIR=/home/tutu/TinyZero/my_data
-export EXPERIMENT_NAME=countdown-qwen2.5-1.5b
-export VLLM_ATTENTION_BACKEND=XFORMERS
-chmod +x scripts/train_tiny_zero.sh
-./scripts/train_tiny_zero.sh
+1)修改配置
+    a）train_tiny_zero.sh
+        修改：trainer.logger=['wandb'] 改为 trainer.logger=['console']
+        增加：actor_rollout_ref.rollout.dtype=half \
+    b）相对于官方提供的环境变量，增加下面两行
+        export WANDB__SERVICE_WAIT=300
+        export ROLLOUT_TP_SIZE=4
+2）运行
+    export N_GPUS=8
+    export BASE_MODEL=/home/tutu/models/Qwen2.5-1.5B
+    export DATA_DIR=/home/tutu/TinyZero/my_data
+    export EXPERIMENT_NAME=countdown-qwen2.5-1.5b
+    export VLLM_ATTENTION_BACKEND=XFORMERS
+    chmod +x scripts/train_tiny_zero.sh
+    ./scripts/train_tiny_zero.sh
+3）报错：
+    a）RuntimeError: FlashAttention only supports Ampere GPUs or newer.
