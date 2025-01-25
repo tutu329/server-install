@@ -9,6 +9,7 @@
 
     pip install flash-attn --no-build-isolation(安装fa2，要3090及以上的卡)
     pip install wandb IPython matplotlib
+    pip install vllm==0.5.4(0.6.3会报错：No module named 'vllm._version')
 2、下载TinyZero
     git clone https://github.com/Jiayi-Pan/TinyZero
 
