@@ -34,4 +34,5 @@
     chmod +x scripts/train_tiny_zero.sh
     ./scripts/train_tiny_zero.sh
 3）报错：
-    a）RuntimeError: FlashAttention only supports Ampere GPUs or newer.
+    a）3090正常，4029-2080ti服务器报错：
+        RuntimeError: FlashAttention only supports Ampere GPUs or newer.
