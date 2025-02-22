@@ -17,7 +17,8 @@ open-webui serve --port 7860
 
 三、运行
 1、./ui.sh
-2、模型选择好，就可以对话
+2、设置管理员账号，如，tutu:18758868006:Jackseaver112279
+3、模型选择好，就可以对话
 # 注意：
 # 如果是本地的reason模型，vllm启动参数不要加--enable-reasoning --reasoning-parser deepseek_r1
 # 也就是不要分离推理内容，才能在webui中显示reason内容
