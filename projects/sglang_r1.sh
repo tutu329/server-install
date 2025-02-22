@@ -75,7 +75,6 @@ python -m sglang.launch_server \
 # benchmark
 python -m sglang.bench_one_batch_server --model None --base-url https://powerai.cc:8001 --batch-size 1 --input-len 256 --output-len 256
 
-
 # 1、如果有CUDA graph loading挂起问题
 # update nccl to nccl 2.24，fixed hangs when running with different CPU architectures. https://docs.nvidia.com/deeplearning/nccl/release-notes/rel_2-24-3.html#rel_2-24-3
 
