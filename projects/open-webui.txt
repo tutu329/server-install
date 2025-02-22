@@ -14,6 +14,7 @@ export OPENAI_API_BASE_URLS=https://powerai.cc:8001/v1
 export OPENAI_API_KEY=EMPTY
 open-webui serve --port 7860
 ######################################################
+chmod +x ui.sh
 
 三、运行
 1、./ui.sh
