@@ -1,0 +1,12 @@
+git clone https://github.com/FlowiseAI/Flowise
+cd Flowise/docker
+cp .env.example .env
+docker-compose.yml的environment和ports的PORT改为7860
+        environment:
+            - PORT=7860
+        ports:
+            - '7860:7860'
+sudo docker compose up -d(-d为后台方式)
+
+sudo docker compose down
+sudo docker compose restart
