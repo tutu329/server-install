@@ -1,14 +1,15 @@
-git clone https://github.com/infiniflow/ragflow.git
-cd ragflow/docker
-docker-compose.yml的environment和ports的PORT改为7860
-    ports:
-        - 7871:9380
-sudo docker compose -f docker-compose.yml up -d
+1、下载
+    git clone https://github.com/infiniflow/ragflow.git
+2、安装
+    cd ragflow/docker
+    docker-compose.yml的environment和ports的PORT改为7860
+        ports:
+            - 7871:9380
+    vi .env
+        RAGFLOW_IMAGE修改为：
+        RAGFLOW_IMAGE=swr.cn-north-4.myhuaweicloud.com/infiniflow/ragflow
 
-
-
-
-
+    sudo docker compose -f docker-compose.yml up -d
 
 
 
