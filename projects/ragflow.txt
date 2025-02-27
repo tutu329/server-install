@@ -1,0 +1,46 @@
+git clone https://github.com/infiniflow/ragflow.git
+cd ragflow/docker
+docker-compose.yml的environment和ports的PORT改为7860
+    ports:
+        - 7871:9380
+sudo docker compose -f docker-compose.yml up -d
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    environment:
+      # 设置 HTTP/HTTPS 代理到宿主机的代理服务
+      HTTP_PROXY: http://host.docker.internal:7890
+      HTTPS_PROXY: http://host.docker.internal:7890
+      # 如果有不需要代理的地址（如内网服务），可通过 NO_PROXY 排除
+      # NO_PROXY: localhost,127.0.0.1,.your_internal_domain.com
+
+sudo vi /etc/resolv.conf
+nameserver 114.114.114.114
+nameserver 8.8.8.8
+sudo systemctl restart docker
+
+mkdir -p /etc/docker
+sudo vi /etc/docker/daemon.json
+{
+    "registry-mirrors": ["http://hub-mirror.c.163.com",
+        "https://docker.mirrors.ustc.edu.cn",
+        "https://registry.docker-cn.com",
+        "http://hub-mirror.c.163.com",
+        "https://docker.mirrors.ustc.edu.cn",
+        "https://docker.mirrors.ustc.edu.cn"
+        ]
+}
+
