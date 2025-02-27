@@ -19,7 +19,6 @@ sudo docker compose -f docker-compose.yml up -d
 
 
 
-
     environment:
       # 设置 HTTP/HTTPS 代理到宿主机的代理服务
       HTTP_PROXY: http://host.docker.internal:7890
