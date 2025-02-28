@@ -38,3 +38,12 @@ environment:
     sudo docker compose -f docker-compose.yml up
     报错：No such file or directory: '/ragflow/conf/service_conf.yaml'
     解决办法：ragflow要用dev镜像，.env文件里修改，RAGFLOW_IMAGE=swr.cn-north-4.myhuaweicloud.com/infiniflow/ragflow:dev
+
+4、ragflow登陆后的设置
+    1）添加知识库：如，添加GB3.md，解析。
+    2）模型提供商：
+        添加LocalAI模型，base_url为: https://powerai.cc:8001/v1，模型名为vllm设置的名字
+    3)新建助理：
+        添加知识库并解析成功后，知识库此时才能关联
+    4）新建聊天：
+        问题：无功平衡及补偿的内容是什么？
