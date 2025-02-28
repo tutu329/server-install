@@ -1,0 +1,25 @@
+1、安装comfyui
+    conda create -n comfyui python=3.12
+    conda activate comfyui
+    git clone https://github.com/comfyanonymous/ComfyUI
+    pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu126
+    cd ComfyUI
+    pip install -r requirements.txt
+
+2、运行comfyui
+    vi comfyui.sh
+export CUDA_VISIBLE_DEVICES=7
+source /home/tutu/anaconda3/etc/profile.d/conda.sh
+conda activate comfyui
+~/gpu.sh
+python /home/tutu/comfyui-llm/ComfyUI/main.py --listen=0.0.0.0 --port=5100
+
+3、comfyui中安装ComfyUI-Manager
+    cd ComfyUI/custom_nodes
+    git clone https://github.com/ltdrdata/ComfyUI-Manager comfyui-manager
+    重启ComfyUI
+
+4、运行comfyui_LLM_party
+    comfyui manager中安装comfyui_LLM_party
+    重启ComfyUI
+    将https://github.com/heshengtao/comfyui_LLM_party中api json文件托到ComfyUI中(https://github.com/heshengtao/comfyui_LLM_party/blob/main/workflow/start_with_LLM_api.json)
