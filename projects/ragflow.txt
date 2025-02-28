@@ -2,45 +2,39 @@
     git clone https://github.com/infiniflow/ragflow.git
 2、安装
     cd ragflow/docker
-    docker-compose.yml的environment和ports的PORT改为7860
+    docker-compose.yml的environment和ports的PORT的80:80改为7871:80
         ports:
-            - 7871:9380
+          - ${SVR_HTTP_PORT}:9380
+          - 7871:80
+          - 443:443
     vi .env
         RAGFLOW_IMAGE修改为：
-        RAGFLOW_IMAGE=swr.cn-north-4.myhuaweicloud.com/infiniflow/ragflow
+        RAGFLOW_IMAGE=swr.cn-north-4.myhuaweicloud.com/infiniflow/ragflow:dev
+        # RAGFLOW_IMAGE=swr.cn-north-4.myhuaweicloud.com/infiniflow/ragflow
 
     sudo docker compose -f docker-compose.yml up -d
-
-
-
-
-
-
-
-
-
-
-    environment:
-      # 设置 HTTP/HTTPS 代理到宿主机的代理服务
-      HTTP_PROXY: http://host.docker.internal:7890
-      HTTPS_PROXY: http://host.docker.internal:7890
-      # 如果有不需要代理的地址（如内网服务），可通过 NO_PROXY 排除
-      # NO_PROXY: localhost,127.0.0.1,.your_internal_domain.com
-
-sudo vi /etc/resolv.conf
-nameserver 114.114.114.114
-nameserver 8.8.8.8
-sudo systemctl restart docker
-
-mkdir -p /etc/docker
-sudo vi /etc/docker/daemon.json
+    问题：关于docker compose在pull时中断报错（Error response from daemon: Get "https://registry-1.docker.io/v2/": net/http: request canceled while waiting for connection (Client.Timeout exceeded while awaiting headers)）
+    解决办法：手动pull（redis、mysql、es01、minio和ragflow）
+        1)pull官网推荐的ragflow镜像image: sudo docker pull swr.cn-north-4.myhuaweicloud.com/infiniflow/ragflow:dev
+        2)修改镜像解决其他几个image的问题：
+            a）sudo vi /etc/docker/daemon.json（注意最后一行地址后面不能有","，且每一行地址前面不能有制表符）
 {
-    "registry-mirrors": ["http://hub-mirror.c.163.com",
-        "https://docker.mirrors.ustc.edu.cn",
-        "https://registry.docker-cn.com",
-        "http://hub-mirror.c.163.com",
-        "https://docker.mirrors.ustc.edu.cn",
-        "https://docker.mirrors.ustc.edu.cn"
-        ]
+"registry-mirrors": [
+"https://docker.1panel.live",
+"https://hub.rat.dev",
+"https://docker-0.unsee.tech"
+]
 }
+            b）重启服务
+                sudo systemctl daemon-reload
+                sudo systemctl restart docker
+            c）sudo docker compose -f docker-compose.yml pull（要多试几次）
+            d）还不行就通过代理，修改docker-compose.yaml：
+environment:
+  - HTTP_PROXY=http://127.0.0.1:7890
+  - HTTPS_PROXY=http://127.0.0.1:7890
 
+3、运行：
+    sudo docker compose -f docker-compose.yml up
+    报错：No such file or directory: '/ragflow/conf/service_conf.yaml'
+    解决办法：ragflow要用dev镜像，.env文件里修改，RAGFLOW_IMAGE=swr.cn-north-4.myhuaweicloud.com/infiniflow/ragflow:dev
