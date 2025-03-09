@@ -188,6 +188,27 @@ WantedBy=multi-user.target
 
 8、安装agent用的chrome
     playwright install chrome
+    如果运行playwright install报错：
+     Host system is missing dependencies to run browsers. ║
+    ║ Missing libraries:                                   ║
+    ║     libgstcodecparsers-1.0.so.0                      ║
+    ║     libflite.so.1                                    ║
+    ║     libflite_usenglish.so.1                          ║
+    ║     libflite_cmu_grapheme_lang.so.1                  ║
+    ║     libflite_cmu_grapheme_lex.so.1                   ║
+    ║     libflite_cmu_indic_lang.so.1                     ║
+    ║     libflite_cmu_indic_lex.so.1                      ║
+    ║     libflite_cmulex.so.1                             ║
+    ║     libflite_cmu_time_awb.so.1                       ║
+    ║     libflite_cmu_us_awb.so.1                         ║
+    ║     libflite_cmu_us_kal16.so.1                       ║
+    ║     libflite_cmu_us_kal.so.1                         ║
+    ║     libflite_cmu_us_rms.so.1                         ║
+    ║     libflite_cmu_us_slt.so.1                         ║
+    ║     libavif.so.13
+    解决办法：
+        sudo apt install -y libgstreamer-plugins-bad1.0-0 libflite1 libavif13
+    然后再运行：playwright install
 
 9、安装与/home/tutu/server/关联的ftp服务
     安装: sudo apt install vsftpd
