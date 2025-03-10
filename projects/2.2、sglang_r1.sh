@@ -6,9 +6,10 @@ conda activate sglxx
 python -m sglang.launch_server \
 --served-model-name=xxx --model-path=/xxx --host=0.0.0.0 --port=8001 --tp=8 --trust-remote-code \
 --enable-p2p-check --mem-fraction-static=0.9 \
+--reasoning-parser deepseek-r1 \
 --max-total-tokens=65536 \
 --random-seed 1234 \
---enable-flashinfer-mla \
+#--enable-flashinfer-mla \
 # 开启nextN(MTP, https://github.com/sgl-project/sglang/pull/3582)
   # 1、Export the weights of nextn layer with script scripts/export_deepseek_nextn.py
   # python export_deepseek_nextn.py --input-dir /path/to/DeepSeek-V3 --output-dir /path/to/DeepSeek-V3-NextN
@@ -33,16 +34,24 @@ conda activate sglxx
 python -m sglang.launch_server \
 --served-model-name=xxx --model-path=/xxx \
 --enable-p2p-check --mem-fraction-static=0.9 \
+--reasoning-parser deepseek-r1 \
 --max-total-tokens=65536 \
+--max-running-requests 128 \
 --random-seed 1234 \
---enable-flashinfer-mla \
---speculative-algo NEXTN \
---speculative-draft /sgl-workspace/DeepSeek-V3-nextn \
---speculative-num-steps 2 \
---speculative-eagle-topk 4 \
---speculative-num-draft-tokens 4 \
---disable-radix -enable-torch-compile --torch-compile-max-bs 1 \
+# --enable-flashinfer-mla \
+### Speculative Decoding is great for small concurrency (less than 32), but its performance degrades quickly as the concurrency increases.
+#--speculative-algo NEXTN \
+#--speculative-draft /sgl-workspace/DeepSeek-V3-nextn \
+#--speculative-num-steps 2 \
+#--speculative-eagle-topk 4 \
+#--speculative-num-draft-tokens 4 \
+#--disable-radix -enable-torch-compile --torch-compile-max-bs 1 \
 --trust-remote-code \
+--enable-ep-moe \
+### CUDA Graph boosts inference performance significantly, at the cost of increased memory usage. Sometimes it's a good trade-off to disable CUDA Graph to further increase concurrency to get better throughput.
+# --disable-cuda-graph
+### DP-Attention is a must for large concurrency (greater than 256), but it hurts per-request decoding speed.
+# --enable-dp-attention \
 --tp 16 \
 --dist-init-addr FIRST_NODE_IP:5000 \
 --nnodes 2 \
@@ -56,16 +65,24 @@ conda activate sglxx
 python -m sglang.launch_server \
 --served-model-name=xxx --model-path=/xxx \
 --enable-p2p-check --mem-fraction-static=0.9 \
+--reasoning-parser deepseek-r1 \
 --max-total-tokens=65536 \
+--max-running-requests 128 \
 --random-seed 1234 \
---enable-flashinfer-mla \
---speculative-algo NEXTN \
---speculative-draft /sgl-workspace/DeepSeek-V3-nextn \
---speculative-num-steps 2 \
---speculative-eagle-topk 4 \
---speculative-num-draft-tokens 4 \
---disable-radix -enable-torch-compile --torch-compile-max-bs 1 \
+# --enable-flashinfer-mla \
+### Speculative Decoding is great for small concurrency (less than 32), but its performance degrades quickly as the concurrency increases.
+#--speculative-algo NEXTN \
+#--speculative-draft /sgl-workspace/DeepSeek-V3-nextn \
+#--speculative-num-steps 2 \
+#--speculative-eagle-topk 4 \
+#--speculative-num-draft-tokens 4 \
+#--disable-radix -enable-torch-compile --torch-compile-max-bs 1 \
 --trust-remote-code
+--enable-ep-moe \
+### CUDA Graph boosts inference performance significantly, at the cost of increased memory usage. Sometimes it's a good trade-off to disable CUDA Graph to further increase concurrency to get better throughput.
+# --disable-cuda-graph
+### DP-Attention is a must for large concurrency (greater than 256), but it hurts per-request decoding speed.
+# --enable-dp-attention \
 --tp 16 \
 --dist-init-addr FIRST_NODE_IP:5000 \
 --nnodes 2 \
