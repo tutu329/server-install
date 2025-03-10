@@ -13,7 +13,12 @@
     下载：https://www.anaconda.com/download
     安装：bash Anaconda3-2023.09-0-Linux-x86_64.sh（过程中要注意每一个确认项）
 
-4、安装jupyterlab及其自启动
+4、pip的配置
+    配置源：
+        pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/
+        pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+
+5、安装jupyterlab及其自启动
     1)安装:
         conda create -n ju python=3.11
         pip install jupyterlab
