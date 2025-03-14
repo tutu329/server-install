@@ -1210,15 +1210,15 @@ main()
 41、下载meta原版模型（参考https://blog.csdn.net/weixin_59191169/article/details/139302372）
     0、填写meta问卷，获取下载权限
     1、获取access token：https://huggingface.co/settings/tokens
-    2、控制台：huggingface-cli login（并输入token）
-    3、安装依赖（accelerate和transformers）
-    4、通过右上角"use this model->transformers"获取py下载代码：https://huggingface.co/meta-llama/Meta-Llama-3.1-70B-Instruct
-# Load model directly
-from transformers import AutoTokenizer, AutoModelForCausalLM
+    2-1、直接下载（要确保meta已经通过下载申请）：git clone https://user_name:your_access_token@huggingface.co/CohereForAI/c4ai-command-a-03-2025
+    2-2、或者控制台：huggingface-cli login（并输入token）
+        安装依赖（accelerate和transformers）
+        通过右上角"use this model->transformers"获取py下载代码：https://huggingface.co/meta-llama/Meta-Llama-3.1-70B-Instruct
+    # Load model directly
+    from transformers import AutoTokenizer, AutoModelForCausalLM
 
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-70B-Instruct")
-model = AutoModelForCausalLM.from_pretrained("meta-llama/Meta-Llama-3.1-70B-Instruct")
-    5、运行后，下载的模型位置类似这样：
-        win：C:\\Users\\用户名\\.cache\\huggingface\\hub\\models--meta-llama--Meta->Llama-3-8B
-        linux：/root/.cache/huggingface/hub/models--meta-llama--Meta-Llama-3-8B
-
+    tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3.1-70B-Instruct")
+    model = AutoModelForCausalLM.from_pretrained("meta-llama/Meta-Llama-3.1-70B-Instruct")
+            运行后，下载的模型位置类似这样：
+                win：C:\\Users\\用户名\\.cache\\huggingface\\hub\\models--meta-llama--Meta->Llama-3-8B
+                linux：/root/.cache/huggingface/hub/models--meta-llama--Meta-Llama-3-8B
