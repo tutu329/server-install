@@ -1,0 +1,10 @@
+注意：
+    似乎以下export的方式不行：
+        export http_proxy="http://127.0.0.1:7890"
+        export https_proxy="http://127.0.0.1:7890"
+    必须直接加环境变量。
+
+# 文件夹下载
+http_proxy="http://127.0.0.1:7890" https_proxy="http://127.0.0.1:7890" huggingface-cli download bartowski/CohereForAI_c4ai-command-a-03-2025-GGUF --include "CohereForAI_c4ai-command-a-03-2025-Q6_K/*" --local-dir ./
+# 文件下载
+http_proxy="http://127.0.0.1:7890" https_proxy="http://127.0.0.1:7890" huggingface-cli download bartowski/CohereForAI_c4ai-command-a-03-2025-GGUF --include "CohereForAI_c4ai-command-a-03-2025-Q6_K.gguf" --local-dir ./
