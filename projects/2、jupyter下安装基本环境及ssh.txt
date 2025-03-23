@@ -47,7 +47,7 @@ WantedBy=multi-user.target
         sudo systemctl status frpc.service
         sudo systemctl enable frpc.service
 
-4、打开ssh(注意frp中22端口映射到了6000)(可以用于pycharm的远程运行/调试):
+4、开启ssh(注意frp中22端口映射到了6000)(便于ssh和sftp一起，用于pycharm的远程运行/调试):
         sudo apt install openssh-server
         sudo service ssh start (sudo service ssh status)
         sudo systemctl enable ssh (sudo systemctl is-enabled ssh)
