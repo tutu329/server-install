@@ -47,10 +47,10 @@ WantedBy=multi-user.target
         sudo systemctl status frpc.service
         sudo systemctl enable frpc.service
 
-    打开ssh(注意frp中22端口映射到了6000):
+4、打开ssh(注意frp中22端口映射到了6000)(可以用于pycharm的远程运行/调试):
         sudo apt install openssh-server
         sudo service ssh start (sudo service ssh status)
         sudo systemctl enable ssh (sudo systemctl is-enabled ssh)
         sudo ufw allow ssh (如果需要专门打开防火墙的话)
         sudo apt install net-tools (用于ifconfig)
-        其他电脑上可以(端口为6000, 密码为jackseaver79): ssh -p 6000 tutu@116.62.63.204
+        其他电脑上可以(端口为6000, 密码为jackseaver79): ssh -p 6000 tutu@powerai.cc(jackseaver79)
