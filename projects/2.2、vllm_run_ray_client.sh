@@ -3,7 +3,7 @@
 # 1、sudo apt install -y nvidia-docker2（涉及daemon.json，选择N保留即可）
 # 2、sudo systemctl restart docker
 
-cd vllm/examples
+cd ~/vllm/examples
 sudo bash run_cluster.sh \
                 vllm/vllm-openai \
                 172.19.80.49 \
