@@ -26,9 +26,16 @@ python -m sglang.launch_server \
 # ============================================================================
 
 # ======================多节点版本(FP8最多TP16，BF16最多TP32)=====================
+# The SGLang team is excited to announce the release of v0.4.4.
+# We will keep improving DeepSeek V3/R1 performance.
+# With the combination of FlashInfer, MTP, DeepGEMM, and Torch Compile optimizations on H200,
+# it can achieve nearly 100 tokens/s
+
 # 节点0
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 source /home/tutu/anaconda3/etc/profile.d/conda.sh
+# DeepGEMM Integration: Full integration of DeepGEMM for NVIDIA Hopper architectures
+export SGL_ENABLE_JIT_DEEPGEMM=1
 conda activate sglxx
 ./gpu.sh
 python -m sglang.launch_server \
@@ -38,7 +45,8 @@ python -m sglang.launch_server \
 --max-total-tokens=65536 \
 --max-running-requests 128 \
 --random-seed 1234 \
-# --enable-flashinfer-mla \
+# Enhanced FlashInfer MLA Support: Now fully compatible with radix cache, chunked prefill, and MTP optimizations
+--enable-flashinfer-mla \
 ### Speculative Decoding is great for small concurrency (less than 32), but its performance degrades quickly as the concurrency increases.
 #--speculative-algo NEXTN \
 #--speculative-draft /sgl-workspace/DeepSeek-V3-nextn \
@@ -57,9 +65,12 @@ python -m sglang.launch_server \
 --nnodes 2 \
 --node-rank 0 \
 --host 0.0.0.0 --port 8001
+
 # 节点1
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 source /home/tutu/anaconda3/etc/profile.d/conda.sh
+# DeepGEMM Integration: Full integration of DeepGEMM for NVIDIA Hopper architectures
+export SGL_ENABLE_JIT_DEEPGEMM=1
 conda activate sglxx
 ./gpu.sh
 python -m sglang.launch_server \
@@ -69,7 +80,8 @@ python -m sglang.launch_server \
 --max-total-tokens=65536 \
 --max-running-requests 128 \
 --random-seed 1234 \
-# --enable-flashinfer-mla \
+# Enhanced FlashInfer MLA Support: Now fully compatible with radix cache, chunked prefill, and MTP optimizations
+--enable-flashinfer-mla \
 ### Speculative Decoding is great for small concurrency (less than 32), but its performance degrades quickly as the concurrency increases.
 #--speculative-algo NEXTN \
 #--speculative-draft /sgl-workspace/DeepSeek-V3-nextn \
