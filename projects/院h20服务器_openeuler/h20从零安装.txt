@@ -79,12 +79,19 @@ remote_port = 27860-27879
 # 1. 永久开放 26000/tcp
 sudo firewall-cmd --add-port=26000/tcp --permanent --zone=public
 sudo firewall-cmd --add-port=7880/tcp --permanent --zone=public
+sudo firewall-cmd --add-port=28201/tcp --permanent --zone=public
+sudo firewall-cmd --zone=public --add-port=28012-28020/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=25100-25120/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=28001-28011/tcp --permanent
+sudo firewall-cmd --zone=public --add-port=27860-27879/tcp --permanent
 
 # 2. 立即使配置生效
 sudo firewall-cmd --reload
 
 # 3. 再次查看当前规则
 sudo firewall-cmd --list-all
+
+记得powerai.cc的ecs服务器打开对应端口！
 
 
 
