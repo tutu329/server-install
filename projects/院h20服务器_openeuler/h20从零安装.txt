@@ -1,0 +1,90 @@
+1、没有普通网卡（只有光口，那个普通口可能是管理口），所以装一个usb网卡
+
+ssh
+    172.19.80.137:22 root:JCss%6!8
+
+sudo cp /etc/yum.repos.d/openEuler.repo /etc/yum.repos.d/openEuler.repo.bak
+
+sudo dnf install -y git
+
+uname -m（是x86_64，然后选择frp的合适版本）
+wget https://github.com/fatedier/frp/releases/download/v0.51.3/frp_0.51.3_linux_amd64.tar.gz
+
+
+/root/download/frp_0.51.3_linux_amd64
+
+[Unit]
+Description=frpc Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+Restart=always
+RestartSec=5s
+ExecStart=/root/download/frp_0.51.3_linux_amd64/frpc -c /root/download/frp_0.51.3_linux_amd64/frpc.ini
+ExecReload=/root/download/frp_0.51.3_linux_amd64/frpc -c /root/download/frp_0.51.3_linux_amd64/frpc.ini
+
+[Install]
+WantedBy=multi-user.target
+
+
+# frpc.ini
+[common]
+server_addr = powerai.cc
+server_port = 7880
+
+[ssh2 26000]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 22
+remote_port = 26000
+
+[ftp2 28021]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 21
+remote_port = 28021
+
+# if you want to expose multiple ports, add 'range:' prefix to the section name
+# frpc will generate multiple proxies such as 'tcp_port_6010', 'tcp_port_6011' and so on.
+[range:ftp_pasv1]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 28012-28020
+remote_port = 28012-28020
+use_encryption = false
+use_compression = false
+
+[range:sd2]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 25100-25120
+remote_port = 25100-25120
+
+[range:llm2]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 28001-28011
+remote_port = 28001-28011
+
+[range:ui2]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 27860-27879
+remote_port = 27860-27879
+
+
+# 1. 永久开放 26000/tcp
+sudo firewall-cmd --add-port=26000/tcp --permanent --zone=public
+sudo firewall-cmd --add-port=7880/tcp --permanent --zone=public
+
+# 2. 立即使配置生效
+sudo firewall-cmd --reload
+
+# 3. 再次查看当前规则
+sudo firewall-cmd --list-all
+
+
+
