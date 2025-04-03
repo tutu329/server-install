@@ -1,0 +1,74 @@
+1、设置用户
+    useradd -m -s /bin/bash tutu
+    passwd tutu
+    usermod -aG wheel tutu(让tutu有sudo权限)
+    重启ssh登录tutu即可
+
+2、可以用termius登录ssh了
+    tutu:Jackseaver112279@powerai.cc:26000
+    设置.bashrc的alias(source .bashrc)
+        alias p='ps aux | grep -v "grep" | grep $1'
+        alias s='systemctl list-unit-files | grep $1'
+        alias d='du -sh .; df -h .'
+
+3、安装mini-conda
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    sh Miniconda3-latest-Linux-x86_64.sh（全部选择yes）
+    source .bashrc
+    conda可用
+
+4、用tutu开启jupyter
+    1)关掉root的jupyter：
+        ps aux | grep jupyter
+        kill
+    2)安装jupyter
+        conda create -n ju python=3.12
+        conda activate ju
+        pip install
+    3)jupyter自启动
+        找到jupyter：whereis jupyter-lab（/home/tutu/miniconda3/envs/ju/bin/jupyter-lab）
+        sudo vi /etc/systemd/system/jupyter.service
+            [Unit]
+            Description=jupyter lab
+            After=network.target
+            [Service]
+            Type=simple
+            User=tutu
+            Environment="PATH=/home/tutu/miniconda3/envs/ju/bin:/usr/local/bin:/usr/bin:/bin"
+            ExecStart=/home/tutu/miniconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=27862
+            ExecReload=/home/tutu/miniconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=27862
+            ExecStop=/usr/bin/pkill /home/tutu/miniconda3/envs/ju/bin/jupyter
+            KillMode=process
+            Restart=on-failure
+            RestartSec=15s
+            [Install]
+            WantedBy=multi-user.target
+
+        sudo setenforce 0(open-euler下这个很重要。运行getenforce返回：Enforcing，说明要设置为0才行)
+        sudo systemctl daemon-reload
+        sudo systemctl start jupyter.service
+        sudo systemctl status jupyter.service
+        sudo systemctl enable jupyter.service
+
+    4)notebook更换conda对应的kernel
+        1）对应conda环境下：pip install ipython ipykernel
+        2）对应conda环境下：python -m ipykernel install --user --name ju_kernel (需要显示的kernel名字)
+    5)解决ubuntu下notebook生成的图中中文显示为方块的问题
+        安装字体
+            git clone https://github.com/tracyone/program_font
+            cd program_font
+            ./install.sh
+            fc-list :lang=zh | grep "SimHei"
+
+        找到位置fonts所在位置
+            import matplotlib
+            matplotlib.matplotlib_fname() (返回'/home/tutu/anaconda3/envs/ju_kernel/lib/python3.10/site-packages/matplotlib/mpl-data/matplotlibrc')
+            有其他字体可以复制到/home/tutu/anaconda3/envs/ju_kernel/lib/python3.10/site-packages/matplotlib/mpl-data/fonts下
+        删除matplotlib缓冲
+            cd ~/.cache/matplotlib
+            rm -rf *.*
+        python代码修改字体
+            font_name = "simhei"
+            plt.rcParams['font.family']= font_name      # 指定字体，实际上相当于修改 matplotlibrc 文件　只不过这样做是暂时的　下次失效
+            plt.rcParams['axes.unicode_minus']=False    # 正确显示负号，防止变成方框
+        notebook中生成的图的中文就正常了
