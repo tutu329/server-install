@@ -17,6 +17,25 @@
         export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
     5)source ~/.bashrc
     6)nvcc --version和nvidia-smi即可ok
+    7)设置显卡persistence模式
+        sudo nvidia-persistenced --persistence-mode  # 启动守护进程
+sudo tee /etc/systemd/system/nvidia-persistenced.service <<EOF
+[Unit]
+Description=NVIDIA Persistence Daemon
+Wants=syslog.target
+
+[Service]
+Type=forking
+ExecStart=/usr/bin/nvidia-persistenced --user root
+ExecStopPost=/bin/rm -rf /var/run/nvidia-persistenced
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+        sudo systemctl enable nvidia-persistenced    # 设为开机自启
+        sudo systemctl daemon-reload
+        sudo systemctl enable --now nvidia-persistenced
 4、查看功耗
     1)sudo yum install ipmitool
     2)查看sensor: sudo ipmitool sensor
