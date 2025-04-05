@@ -41,3 +41,30 @@ EOF
     2)查看sensor: sudo ipmitool sensor
     3)查看功耗: sudo ipmitool sdr | grep -i watt
     4)nvidia-smi查看nvlink情况: nvidia-smi topo -m
+
+5、关于torch.cuda.is_available()报错，是因为sxm服务器必须启动nvidia-fabricmanager才行
+    wget https://developer.download.nvidia.com/compute/cuda/repos/kylin10/x86_64/nvidia-fabric-manager-570.124.06-1.x86_64.rpm
+    wget https://developer.download.nvidia.com/compute/cuda/repos/kylin10/x86_64/nvidia-persistenced-570.124.06-1.ky10.x86_64.rpm
+
+    # 1. 写入 Kylin10 repo 文件
+    sudo wget -O /etc/yum.repos.d/cuda-kylin10.repo https://developer.download.nvidia.com/compute/cuda/repos/kylin10/x86_64/cuda-kylin10.repo
+    # 2. 导入 NVIDIA 公钥
+    sudo rpm --import https://developer.download.nvidia.com/compute/cuda/repos/kylin10/x86_64/D42D0685.pub
+    # 3. 刷新缓存
+    sudo dnf clean all && sudo dnf makecache
+    # 安装与驱动同版号的 Fabric Manager和Persistenced
+    sudo dnf install -y nvidia-driver-libs-570.124.06
+    sudo dnf install -y nvidia-fabric-manager-570.124.06 nvidia-persistenced-570.124.06
+    sudo systemctl enable --now nvidia-fabricmanager
+    sudo systemctl enable --now nvidia-persistenced
+    验证：
+        systemctl status nvidia-fabricmanager
+        nvidia-smi nvlink -s         # NVSwitch 状态应为 Active
+python - <<'EOF'
+import torch, subprocess, os, platform
+print("torch:", torch.__version__, "cuda libs:", torch.version.cuda)
+print("is_available:", torch.cuda.is_available())
+print("device_count:", torch.cuda.device_count())
+EOF
+
+    成功！
