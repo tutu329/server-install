@@ -16,6 +16,7 @@
     sh Miniconda3-latest-Linux-x86_64.sh（全部选择yes）
     source .bashrc
     conda可用
+    pip设置清华源: pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
 
 4、用tutu开启jupyter
     1)关掉root的jupyter：
