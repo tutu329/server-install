@@ -1,0 +1,24 @@
+1、安装依赖
+    更换yun的国内镜像
+        sudo cp /etc/yum.repos.d/openEuler.repo /etc/yum.repos.d/openEuler.repo.bak
+        sudo sed -i 's|http://repo.openeuler.org|https://mirrors.aliyun.com/openeuler|g' /etc/yum.repos.d/openEuler.repo
+        sudo yum clean all
+        sudo yum makecache
+    sudo yum install kernel-devel-$(uname -r) kernel-headers-$(uname -r) dkms gcc make tar gzip
+2、设置
+    setenforce 0
+    sudo vi /etc/selinux/config(SELINUX=enforcing改为SELINUX=disabled)
+3、下载安装cuda toolkit(包含了驱动和cuda运行库)
+    1)https://developer.nvidia.com/cuda-downloads选择: Linux->x86_64->KylinOS->10->runfile(local)
+    2)wget https://developer.download.nvidia.com/compute/cuda/12.8.1/local_installers/cuda_12.8.1_570.124.06_linux.run
+    3)sudo sh cuda_12.8.1_570.124.06_linux.run
+    4)vi ~/.bashrc(在"export PATH"这一行后面增加)
+        export PATH=/usr/local/cuda-12.8/bin:$PATH
+        export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
+    5)source ~/.bashrc
+    6)nvcc --version和nvidia-smi即可ok
+4、查看功耗
+    1)sudo yum install ipmitool
+    2)查看sensor: sudo ipmitool sensor
+    3)查看功耗: sudo ipmitool sdr | grep -i watt
+    4)nvidia-smi查看nvlink情况: nvidia-smi topo -m
