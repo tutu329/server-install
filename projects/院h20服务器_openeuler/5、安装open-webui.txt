@@ -1,3 +1,20 @@
+1、下载和安装cherry-studio
+    下载页面：https://docs.cherry-ai.com/cherrystudio/download
+    建议直接安装在笔记本电脑
+2、模型设置
+    1）左下角，设置->模型服务->添加：
+        提供商名称：取一个名字如zepdi
+        提供商类型：OpenAI
+        API密钥：empty
+        API地址(注意最后那个"/"不能少)：http://172.19.80.137:28001/v1/
+    2）模型->添加：
+        模型ID：ds-r1-671b
+3、对话设置
+    1）左上角，设置->助手设置：
+        模型温度：0.6
+        上下文数：不限
+
+#-------------------------open-webui仍然解决不了多用户问题！！！-------------------------
 1、安装
     conda create -n openwebui python=3.12
     conda activate openwebui
@@ -13,3 +30,4 @@
         zepdi:zepdi@zepdi.com:zepdi
         外部连接：http://172.19.80.137:28001/v1，empty
         模型：ds-r1-671b，温度0.6，最大生成长度8192
+#-------------------------open-webui仍然解决不了多用户问题！！！-------------------------
