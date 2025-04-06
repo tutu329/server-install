@@ -1,0 +1,15 @@
+1、安装
+    conda create -n openwebui python=3.12
+    conda activate openwebui
+    pip install open-webui
+
+2、运行
+    open-webui serve --port=27864
+    等待一些hf的库下载失败之类
+
+3、登录设置
+    172.19.80.137:27864
+    管理员设置：
+        zepdi:zepdi@zepdi.com:zepdi
+        外部连接：http://172.19.80.137:28001/v1，empty
+        模型：ds-r1-671b，温度0.6，最大生成长度8192
