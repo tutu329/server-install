@@ -97,7 +97,7 @@ EOF
     --speculative-eagle-topk 4 \
     --speculative-num-draft-tokens 4
 
-9、tuning_fused_moe_triton
+9、tuning fused moe triton（30t/s->35t/s）
     参考：
         1)https://github.com/sgl-project/sglang/issues/3956#user-content-fnref-11-e81d04ca2b83568d349df11d65f5dc17
         @lishicheng1996 May be you need tuning fused moe kernel on H20 with scripts then copy config to moe configs. because default configs not included H20
@@ -123,6 +123,11 @@ EOF
                     conda activate sglang44
                     pip install sglang -U
         然后获得tuning生成在当前目录下的json文件('E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128, 128].json')
-        cp 'E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128, 128].json' /home/tutu/miniconda3/envs/sgl45/lib/python3.12/site-packages/sglang/srt/layers/quantization/configs/
         复制到conda环境对应的sglang下。(如/home/tutu/miniconda3/envs/sgl44/lib/python3.12/site-packages/sglang/srt/layers/moe/fused_moe_triton/configs/)
+            cp 'E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128, 128].json' /home/tutu/miniconda3/envs/sgl44/lib/python3.12/site-packages/sglang/srt/layers/moe/fused_moe_triton/configs/
         然后运行sglang
+
+10、关于安装ds的官方flash_mla（似乎只有H800有用）
+    git clone https://github.com/deepseek-ai/FlashMLA
+    cd FlashMLA
+    python setup.py install
