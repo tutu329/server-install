@@ -78,7 +78,7 @@ EOF
     cd sglang/scripts
     python export_deepseek_nextn.py --input-dir ~/models/DeepSeek-R1 --output-dir ~/models/DeepSeek-R1-NextN
 
-8、sglang推理r1的指令(1*H20单线程为30t/s)
+8、sglang推理r1的指令(1*H20单线程为35t/s)
     export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
     export SGL_ENABLE_JIT_DEEPGEMM=1
     source /home/tutu/miniconda3/etc/profile.d/conda.sh
@@ -88,19 +88,19 @@ EOF
     --mem-fraction-static=0.9 \
     --random-seed=446369220 \
     --tp=8 --max-total-tokens=65000 --max-running-requests=64 \
-    --enable-flashmla \
-    --enable-nccl-nvls \
+    # --enable-flashmla \
+    # --enable-nccl-nvls \
     # --enable-deepep-moe \
     --disable-radix \
-    --attention-backend=fa3 \
+    # --attention-backend=fa3 \
     # --enable-torch-compile --torch-compile-max-bs 1 \
     --enable-ep-moe \
     --speculative-algorithm EAGLE3 \
     # --speculative-algo NEXTN \
     --speculative-draft /home/tutu/models/DeepSeek-R1-NextN \
     --speculative-num-steps 2 \
-    --speculative-eagle-topk 4 \
-    --speculative-num-draft-tokens 4
+    --speculative-eagle-topk 2 \
+    --speculative-num-draft-tokens 2
 
 9、tuning fused moe triton（30t/s->35t/s）
     参考：
