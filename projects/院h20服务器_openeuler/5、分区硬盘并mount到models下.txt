@@ -5,3 +5,6 @@
     sudo mkdir -p /home/tutu/models
     sudo mount /dev/mapper/docker-lv_docker /home/tutu/models
     开机自动mount：echo "/dev/mapper/docker-lv_docker /home/tutu/models ext4 defaults 0 0" | sudo tee -a /etc/fstab
+
+3、修改models的权限
+    sudo chown -R tutu:tutu /home/tutu/models
