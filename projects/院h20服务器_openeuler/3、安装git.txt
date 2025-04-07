@@ -1,3 +1,4 @@
+# 方案1：这个方式经常更新半天都不行，可以先采用conda方式
 sudo dnf update
 sudo dnf install git
 
@@ -7,3 +8,10 @@ cd git-lfs-3.5.1
 sudo ./install.sh
 
 git lfs install
+
+# 方案2(推荐)：conda安装git的方式
+conda create -n git git
+conda activate git
+conda install -c conda-forge git-lfs
+git lfs version
+
