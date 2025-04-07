@@ -122,4 +122,7 @@ EOF
                 解决办法：
                     conda activate sglang44
                     pip install sglang -U
-        然后将tuning生成在当前目录下的json文件（如E=64,N=640,device_name=NVIDIA_GeForce_RTX_4090,dtype=fp8_w8a8.json）复制到sglang/srt/layers/fused_moe_triton/configs/，运行sglang时好用
+        然后获得tuning生成在当前目录下的json文件('E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128, 128].json')
+        cp 'E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128, 128].json' /home/tutu/miniconda3/envs/sgl45/lib/python3.12/site-packages/sglang/srt/layers/quantization/configs/
+        复制到conda环境对应的sglang下。(如/home/tutu/miniconda3/envs/sgl44/lib/python3.12/site-packages/sglang/srt/layers/moe/fused_moe_triton/configs/)
+        然后运行sglang
