@@ -25,27 +25,26 @@
     2)安装jupyter
         conda create -n ju python=3.12
         conda activate ju
-        pip install
+        pip install jupyterlab
     3)jupyter自启动
         找到jupyter：whereis jupyter-lab（/home/tutu/miniconda3/envs/ju/bin/jupyter-lab）
         sudo vi /etc/systemd/system/jupyter.service
-            [Unit]
-            Description=jupyter lab
-            After=network.target
-            [Service]
-            Type=simple
-            User=tutu
-            Environment="PATH=/home/tutu/miniconda3/envs/ju/bin:/usr/local/bin:/usr/bin:/bin"
-            ExecStart=/home/tutu/miniconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=27862
-            ExecReload=/home/tutu/miniconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=27862
-            ExecStop=/usr/bin/pkill /home/tutu/miniconda3/envs/ju/bin/jupyter
-            KillMode=process
-            Restart=on-failure
-            RestartSec=15s
-            [Install]
-            WantedBy=multi-user.target
+[Unit]
+Description=jupyter lab
+After=network.target
+[Service]
+Type=simple
+User=tutu
+Environment="PATH=/home/tutu/miniconda3/envs/ju/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/tutu/miniconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=27862
+ExecReload=/home/tutu/miniconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=27862
+ExecStop=/usr/bin/pkill /home/tutu/miniconda3/envs/ju/bin/jupyter
+KillMode=process
+Restart=on-failure
+RestartSec=15s
+[Install]
+WantedBy=multi-user.target
 
-        sudo setenforce 0(open-euler下这个很重要。运行getenforce返回：Enforcing，说明要设置为0才行)
         sudo systemctl daemon-reload
         sudo systemctl start jupyter.service
         sudo systemctl status jupyter.service
