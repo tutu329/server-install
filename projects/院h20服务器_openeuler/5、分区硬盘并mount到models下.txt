@@ -1,0 +1,7 @@
+1、查看ssd情况
+    sudo fdisk -l
+
+2、mount
+    sudo mkdir -p /home/tutu/models
+    sudo mount /dev/mapper/docker-lv_docker /home/tutu/models
+    开机自动mount：echo "/dev/mapper/docker-lv_docker /home/tutu/models ext4 defaults 0 0" | sudo tee -a /etc/fstab
