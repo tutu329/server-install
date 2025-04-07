@@ -96,3 +96,30 @@ EOF
     --speculative-num-steps 2 \
     --speculative-eagle-topk 4 \
     --speculative-num-draft-tokens 4
+
+9、tuning_fused_moe_triton
+    参考：
+        1)https://github.com/sgl-project/sglang/issues/3956#user-content-fnref-11-e81d04ca2b83568d349df11d65f5dc17
+        @lishicheng1996 May be you need tuning fused moe kernel on H20 with scripts then copy config to moe configs. because default configs not included H20
+    Thanks for you reply! We did tuning the fused_moe config, and the speed improvement is about 1.2 tokens/s~ May I know your tuning improvement and the test query? Thank you very much~
+    Sorry, We did not separately calculate the improvement of moe tuning. I test serving use python3 -m sglang.bench_serving , random dataset, /v1/completions endpoint, input 1k, output 1k
+    We found that tuning fused_moe config can have a improvement about 16 tokens/s (38->54 tokens/s) with NEXTN, although it has little gain on no-speculative decoding.
+        2)readme: https://github.com/sgl-project/sglang/tree/main/benchmark/kernels/fused_moe_triton
+
+    具体操作：
+        git clone https://github.com/sgl-project/sglang
+        cd sglang
+        conda activate sgl44
+        pip install ray
+        关闭所有gpu应用，nvidia-smi查看gpu都空载
+        然后运行下面指令（dtype查看tuning_fused_moe.py确认，目前可选"fp8_w8a8"、"int8_w8a16"、"int8_w8a8"），可能需要几个小时。
+            python benchmark/kernels/fused_moe_triton/tuning_fused_moe_triton.py \
+                --model /home/tutu/models/DeepSeek-R1 \
+                --tp-size 8 \
+                --dtype fp8_w8a8 \
+                --tune
+            关于报错：ImportError: cannot import name 'fused_experts' from partially initialized module
+                解决办法：
+                    conda activate sglang44
+                    pip install sglang -U
+        然后将tuning生成在当前目录下的json文件（如E=64,N=640,device_name=NVIDIA_GeForce_RTX_4090,dtype=fp8_w8a8.json）复制到sglang/srt/layers/fused_moe_triton/configs/，运行sglang时好用
