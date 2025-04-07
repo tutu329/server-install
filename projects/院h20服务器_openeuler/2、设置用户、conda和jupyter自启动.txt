@@ -10,6 +10,7 @@
         alias p='ps aux | grep -v "grep" | grep $1'
         alias s='systemctl list-unit-files | grep $1'
         alias d='du -sh .; df -h .'
+        alias pw='sudo ipmitool sdr | grep -i watt'
 
 3、安装mini-conda
     wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh

@@ -12,6 +12,9 @@
     1)https://developer.nvidia.com/cuda-downloads选择: Linux->x86_64->KylinOS->10->runfile(local)
     2)wget https://developer.download.nvidia.com/compute/cuda/12.8.1/local_installers/cuda_12.8.1_570.124.06_linux.run
     3)sudo sh cuda_12.8.1_570.124.06_linux.run
+        1）输入accept。
+        2）直接选择install。（注意不要安装nvidia-fs，否则好像安装失败（是需要安装一些前置程序））
+        3）安装中每一步的等待时间都比较长。
     4)vi ~/.bashrc(在"export PATH"这一行后面增加)
         export PATH=/usr/local/cuda-12.8/bin:$PATH
         export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
@@ -36,6 +39,7 @@ EOF
         sudo systemctl enable nvidia-persistenced    # 设为开机自启
         sudo systemctl daemon-reload
         sudo systemctl enable --now nvidia-persistenced
+        sudo systemctl status nvidia-persistenced
 4、查看功耗
     1)sudo yum install ipmitool
     2)查看sensor: sudo ipmitool sensor
@@ -43,16 +47,13 @@ EOF
     4)nvidia-smi查看nvlink情况: nvidia-smi topo -m
 
 5、关于torch.cuda.is_available()报错，是因为sxm服务器必须启动nvidia-fabricmanager才行
-    wget https://developer.download.nvidia.com/compute/cuda/repos/kylin10/x86_64/nvidia-fabric-manager-570.124.06-1.x86_64.rpm
-    wget https://developer.download.nvidia.com/compute/cuda/repos/kylin10/x86_64/nvidia-persistenced-570.124.06-1.ky10.x86_64.rpm
-
     # 1. 写入 Kylin10 repo 文件
     sudo wget -O /etc/yum.repos.d/cuda-kylin10.repo https://developer.download.nvidia.com/compute/cuda/repos/kylin10/x86_64/cuda-kylin10.repo
     # 2. 导入 NVIDIA 公钥
     sudo rpm --import https://developer.download.nvidia.com/compute/cuda/repos/kylin10/x86_64/D42D0685.pub
     # 3. 刷新缓存
     sudo dnf clean all && sudo dnf makecache
-    # 安装与驱动同版号的 Fabric Manager和Persistenced
+    # 安装与驱动同版号的 Fabric Manager和Persistenced（版本号用nvidia-smi查看，左上角）
     sudo dnf install -y nvidia-driver-libs-570.124.06
     sudo dnf install -y nvidia-fabric-manager-570.124.06 nvidia-persistenced-570.124.06
     sudo systemctl enable --now nvidia-fabricmanager
@@ -60,13 +61,13 @@ EOF
     验证：
         systemctl status nvidia-fabricmanager
         nvidia-smi nvlink -s         # NVSwitch 状态应为 Active
+        安装torch后的python验证：
 python - <<'EOF'
 import torch, subprocess, os, platform
 print("torch:", torch.__version__, "cuda libs:", torch.version.cuda)
 print("is_available:", torch.cuda.is_available())
 print("device_count:", torch.cuda.device_count())
 EOF
-
     成功！
 
 6、sglang推理deepseek r1需要g++
