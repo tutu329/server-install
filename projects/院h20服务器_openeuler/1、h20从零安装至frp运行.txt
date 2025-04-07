@@ -112,8 +112,9 @@
 7、然后就可以通过powerai.cc:26000登录服务器ssh了
 
 8、更新dnf和yum的源(安装git、cuda-toolkit(显卡驱动)必须要)
-    更换yum的国内镜像
+    更换yum的国内镜像（注释掉metalink非常关键，因为系统优先调用metalink而不是baseurl）
         sudo cp /etc/yum.repos.d/openEuler.repo /etc/yum.repos.d/openEuler.repo.bak
         sudo sed -i 's|http://repo.openeuler.org|https://mirrors.aliyun.com/openeuler|g' /etc/yum.repos.d/openEuler.repo
+        sudo sed -i 's/^metalink=/# metalink=/' /etc/yum.repos.d/openEuler.repo
         sudo yum clean all（如果报错：Waiting for process with pid 6450 to finish.，直接kill）
         sudo yum makecache（可能要多试几次，os、everything、update这类都刷新才行）
