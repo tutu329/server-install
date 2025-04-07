@@ -14,4 +14,3 @@ conda create -n git git
 conda activate git
 conda install -c conda-forge git-lfs
 git lfs version
-
