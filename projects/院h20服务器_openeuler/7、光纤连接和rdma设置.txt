@@ -1,0 +1,27 @@
+1、每个服务器有2个25Gbps的光纤模块，用2根光纤直连（不需要交换机，但需要注意tx和rx的对接）
+    查看设备情况：
+        ifconfig
+    查看光纤网卡情况：
+        lspci | grep -i ether
+        lspci | grep -i infiniband（返回空）
+        ethtool -i ens19f0np0
+2、设置ip
+    服务器A：
+        ip addr add 192.168.88.1/24 dev ens19f0np0
+        ip link set ens19f0np0 up
+        ip addr add 192.168.88.11/24 dev ens19f1np1
+        ip link set ens19f1np1 up
+    服务器B：
+        ip addr add 192.168.88.2/24 dev ens19f0np0
+        ip link set ens19f0np0 up
+        ip addr add 192.168.88.22/24 dev ens19f1np1
+        ip link set ens19f1np1 up
+    测试：
+        ping 192.168.88.2
+        服务器B:
+            iperf3 -s
+        服务器A:
+            iperf3 -c 192.168.88.2
+            iperf3 -c 192.168.88.22
+            可以测得25Gbps的速度
+
