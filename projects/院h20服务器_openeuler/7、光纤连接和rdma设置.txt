@@ -9,7 +9,7 @@
         cd MLNX_OFED_LINUX-24.10-2.1.8.0-openeuler22.03sp3-x86_64/
         sudo ./mlnxofedinstall
         sudo dracut -f
-        /etc/init.d/openibd restart(似乎不需要)
+        sudo /etc/init.d/openibd restart(似乎不需要)
         sudo reboot
     测试
         ibstat
