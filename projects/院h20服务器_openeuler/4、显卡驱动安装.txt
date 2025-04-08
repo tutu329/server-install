@@ -114,7 +114,7 @@ EOF
     具体操作：
         git clone https://github.com/sgl-project/sglang
         cd sglang
-        conda activate sgl44
+        conda activate sgl45
         pip install ray
         关闭所有gpu应用，nvidia-smi查看gpu都空载
         然后运行下面指令（dtype查看tuning_fused_moe.py确认，目前可选"fp8_w8a8"、"int8_w8a16"、"int8_w8a8"），可能需要几个小时。
@@ -125,11 +125,11 @@ EOF
                 --tune
             关于报错：ImportError: cannot import name 'fused_experts' from partially initialized module
                 解决办法：
-                    conda activate sglang44
+                    conda activate sglang45
                     pip install sglang -U
         然后获得tuning生成在当前目录下的json文件('E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128, 128].json')
-        复制到conda环境对应的sglang下。(如/home/tutu/miniconda3/envs/sgl44/lib/python3.12/site-packages/sglang/srt/layers/moe/fused_moe_triton/configs/)
-            cp 'E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128, 128].json' /home/tutu/miniconda3/envs/sgl44/lib/python3.12/site-packages/sglang/srt/layers/moe/fused_moe_triton/configs/
+        复制到conda环境对应的sglang下。(如/home/tutu/miniconda3/envs/sgl45/lib/python3.12/site-packages/sglang/srt/layers/moe/fused_moe_triton/configs/)
+            cp 'E=256,N=256,device_name=NVIDIA_H20,dtype=fp8_w8a8,block_shape=[128, 128].json' /home/tutu/miniconda3/envs/sgl45/lib/python3.12/site-packages/sglang/srt/layers/moe/fused_moe_triton/configs/
         然后运行sglang
 
 10、关于安装ds的官方flash_mla（似乎只有H800有用）
