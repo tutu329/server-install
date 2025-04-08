@@ -25,3 +25,19 @@
             iperf3 -c 192.168.88.22
             可以测得25Gbps的速度
 
+3、安装mellanox网卡驱动
+    下载和安装（无法直接wget，要tgz的链接点进去下载后上传至服务器）
+        https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
+        tar -xvf MLNX_OFED_LINUX-24.10-2.1.8.0-openeuler22.03sp3-x86_64.tar
+        sudo yum install pciutils-devel tk fuse-devel
+        cd MLNX_OFED_LINUX-24.10-2.1.8.0-openeuler22.03sp3-x86_64/
+        sudo ./mlnxofedinstall
+        sudo dracut -f
+        /etc/init.d/openibd restart(似乎不需要)
+        sudo reboot
+    测试
+        ibstat
+        ibv_devinfo
+        rdma link show
+    此时2个网卡都没有IP
+
