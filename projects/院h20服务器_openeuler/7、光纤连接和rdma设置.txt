@@ -7,15 +7,15 @@
         ethtool -i ens19f0np0
 2、设置ip
     服务器A：
-        ip addr add 192.168.88.1/24 dev ens19f0np0
-        ip link set ens19f0np0 up
-        ip addr add 192.168.88.11/24 dev ens19f1np1
-        ip link set ens19f1np1 up
+        sudo ip addr add 192.168.88.1/24 dev ens19f0np0
+        sudo ip link set ens19f0np0 up
+        sudo ip addr add 192.168.88.11/24 dev ens19f1np1
+        sudo ip link set ens19f1np1 up
     服务器B：
-        ip addr add 192.168.88.2/24 dev ens19f0np0
-        ip link set ens19f0np0 up
-        ip addr add 192.168.88.22/24 dev ens19f1np1
-        ip link set ens19f1np1 up
+        sudo ip addr add 192.168.88.2/24 dev ens19f0np0
+        sudo ip link set ens19f0np0 up
+        sudo ip addr add 192.168.88.22/24 dev ens19f1np1
+        sudo ip link set ens19f1np1 up
     测试：
         ping 192.168.88.2
         服务器B:
@@ -41,5 +41,24 @@
             transport: InfiniBand            →  IB 模式，
             transport: iWARP or Ethernet     →  RoCE 模式（RoCEv1/v2）
         rdma link show
-    此时2个网卡都没有IP
+    设置IP（此时2个网卡都没有IP，以下设置方式似乎是临时设置方式）
+        服务器A：
+            sudo ip addr add 192.168.88.1/24 dev ens19f0np0
+            sudo ip link set ens19f0np0 up
+            sudo ip addr add 192.168.88.11/24 dev ens19f1np1
+            sudo ip link set ens19f1np1 up
+        服务器B：
+            sudo ip addr add 192.168.88.2/24 dev ens19f0np0
+            sudo ip link set ens19f0np0 up
+            sudo ip addr add 192.168.88.22/24 dev ens19f1np1
+            sudo ip link set ens19f1np1 up
+    设置IB模式（似乎不行，也可能不需要）
+        启动mellanox管理程序
+            sudo modprobe mst_pci
+            sudo mst start
+        查看设备
+            sudo mst status
+            sudo mlxconfig -d /dev/mst/mt4127_pciconf0 q | grep LINK_TYPE（这里总是返回空）
+
+
 
