@@ -37,7 +37,9 @@
         sudo reboot
     测试
         ibstat
-        ibv_devinfo
+        ibv_devinfo（可以用来看网卡是IB模式还是RoCE模式）
+            transport: InfiniBand            →  IB 模式，
+            transport: iWARP or Ethernet     →  RoCE 模式（RoCEv1/v2）
         rdma link show
     此时2个网卡都没有IP
 
