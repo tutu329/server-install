@@ -13,21 +13,19 @@
         sudo reboot
     测试
         ibstat
-        ibv_devinfo（可以用来看网卡是IB模式还是RoCE模式）
-            transport: InfiniBand            →  IB 模式，
-            transport: iWARP or Ethernet     →  RoCE 模式（RoCEv1/v2）
+        ibv_devinfo
         rdma link show
     设置IP（此时2个网卡都没有IP，以下设置方式似乎是临时设置方式）
         服务器A：
             sudo ip addr add 192.168.88.1/24 dev ens19f0np0
-            sudo ip link set ens19f0np0 up
+            sudo ip link set ens19f0np0 mtu 9000 up
             sudo ip addr add 192.168.88.11/24 dev ens19f1np1
-            sudo ip link set ens19f1np1 up
+            sudo ip link set ens19f1np1 mtu 9000 up
         服务器B：
             sudo ip addr add 192.168.88.2/24 dev ens19f0np0
-            sudo ip link set ens19f0np0 up
+            sudo ip link set ens19f0np0 mtu 9000 up
             sudo ip addr add 192.168.88.22/24 dev ens19f1np1
-            sudo ip link set ens19f1np1 up
+            sudo ip link set ens19f1np1 mtu 9000 up
     设置IB模式（似乎不行，也可能不需要）
         启动mellanox管理程序
             sudo modprobe mst_pci
@@ -72,6 +70,7 @@
     3、可以用以下命令测试不用IB模式也不用RoCE模式（当普通25Gbps网卡用，只是延时是几十ms而不是几ms）
         export NCCL_IB_DISABLE=1
         export NCCL_SOCKET_IFNAME=ens19f0np0
+        sudo systemctl stop firewalld（这里非常关键！！！：注意重启后防火墙就会打开，另外这里主要是放行IB或RoCE的端口如49152–65535）
         服务器A：torchrun --nproc-per-node=4 --nnodes=2 --node-rank=0 --master-addr=192.168.88.1 --master-port=28002 test.py
         服务器B：torchrun --nproc-per-node=4 --nnodes=2 --node-rank=1 --master-addr=192.168.88.1 --master-port=28002 test.py
 -------------------------------test.py-------------------------------
@@ -97,3 +96,32 @@ if __name__ == "__main__":
     4、以下命令用于检查2个服务器软件是否版本相同：
         ofed_info -s         # MLNX_OFED
         rpm -q rdma-core     # 发行版驱动
+    5、验证RDMA连通性（）
+        sudo yum install -y perftest rdma-core
+        服务器A：ib_write_bw -d mlx5_0 -F -x 3 192.168.88.2
+        服务器B：ib_write_bw -d mlx5_0 -F -x 3
+        服务器A和B的结果应为类似这样：
+---------------------------------------------------------------------------------------
+                    RDMA_Write BW Test
+ Dual-port       : OFF          Device         : mlx5_0
+ Number of qps   : 1            Transport type : IB
+ Connection type : RC           Using SRQ      : OFF
+ PCIe relax order: ON           Lock-free      : OFF
+ ibv_wr* API     : ON           Using DDP      : OFF
+ TX depth        : 128
+ CQ Moderation   : 1
+ Mtu             : 4096[B]
+ Link type       : Ethernet
+ GID index       : 3
+ Max inline data : 0[B]
+ rdma_cm QPs     : OFF
+ Data ex. method : Ethernet
+---------------------------------------------------------------------------------------
+ local address: LID 0000 QPN 0x00a6 PSN 0x48ddea RKey 0x1ffebc VAddr 0x007f420e49d000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:192:168:88:01
+ remote address: LID 0000 QPN 0x00b9 PSN 0x624485 RKey 0x01dbbc VAddr 0x007f155f635000
+ GID: 00:00:00:00:00:00:00:00:00:00:255:255:192:168:88:02
+---------------------------------------------------------------------------------------
+ #bytes     #iterations    BW peak[MiB/sec]    BW average[MiB/sec]   MsgRate[Mpps]
+ 65536      5000             2920.76            2920.71              0.046731
+---------------------------------------------------------------------------------------
