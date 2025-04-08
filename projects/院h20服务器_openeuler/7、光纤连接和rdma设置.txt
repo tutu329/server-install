@@ -1,31 +1,7 @@
-1、每个服务器有2个25Gbps的光纤模块，用2根光纤直连（不需要交换机，但需要注意tx和rx的对接）
-    查看设备情况：
-        ifconfig
-    查看光纤网卡情况：
-        lspci | grep -i ether
-        lspci | grep -i infiniband（返回空）
-        ethtool -i ens19f0np0
-2、设置ip
-    服务器A：
-        sudo ip addr add 192.168.88.1/24 dev ens19f0np0
-        sudo ip link set ens19f0np0 up
-        sudo ip addr add 192.168.88.11/24 dev ens19f1np1
-        sudo ip link set ens19f1np1 up
-    服务器B：
-        sudo ip addr add 192.168.88.2/24 dev ens19f0np0
-        sudo ip link set ens19f0np0 up
-        sudo ip addr add 192.168.88.22/24 dev ens19f1np1
-        sudo ip link set ens19f1np1 up
-    测试：
-        ping 192.168.88.2
-        服务器B:
-            iperf3 -s
-        服务器A:
-            iperf3 -c 192.168.88.2
-            iperf3 -c 192.168.88.22
-            可以测得25Gbps的速度
+1、硬件连接
+    每个服务器有2个25Gbps的光纤模块，用2根光纤直连（不需要交换机，但需要注意tx和rx的对接）
 
-3、安装mellanox网卡驱动
+2、安装mellanox网卡驱动
     下载和安装（无法直接wget，要tgz的链接点进去下载后上传至服务器）
         https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
         tar -xvf MLNX_OFED_LINUX-24.10-2.1.8.0-openeuler22.03sp3-x86_64.tar
@@ -60,5 +36,31 @@
             sudo mst status
             sudo mlxconfig -d /dev/mst/mt4127_pciconf0 q | grep LINK_TYPE（这里总是返回空）
 
+3、设置ip(前面IB驱动装了，且ip设置了，这一步就不需要了)
+    查看设备情况：
+        ifconfig
+    查看光纤网卡情况：
+        lspci | grep -i ether
+        lspci | grep -i infiniband（返回空）
+        ethtool -i ens19f0np0
+    服务器A：
+        sudo ip addr add 192.168.88.1/24 dev ens19f0np0
+        sudo ip link set ens19f0np0 up
+        sudo ip addr add 192.168.88.11/24 dev ens19f1np1
+        sudo ip link set ens19f1np1 up
+    服务器B：
+        sudo ip addr add 192.168.88.2/24 dev ens19f0np0
+        sudo ip link set ens19f0np0 up
+        sudo ip addr add 192.168.88.22/24 dev ens19f1np1
+        sudo ip link set ens19f1np1 up
+    测试：
+        ping 192.168.88.2
+        服务器B:
+            iperf3 -s
+        服务器A:
+            iperf3 -c 192.168.88.2
+            iperf3 -c 192.168.88.22
+            可以测得25Gbps的速度
 
-
+4、此时即可2个服务器之间快速copy（如从192.168.88.1复制sync_test文件夹到192.168.88.2）
+    rsync -avz --checksum ./sync_test tutu@192.168.88.2:/home/tutu/sync_test
