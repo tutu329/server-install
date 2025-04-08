@@ -64,3 +64,36 @@
 
 4、此时即可2个服务器之间快速copy（如从192.168.88.1复制sync_test文件夹到192.168.88.2）
     rsync -avz --checksum ./sync_test tutu@192.168.88.2:/home/tutu/sync_test
+
+5、nccl通信检查
+    1、（这条没用）没有交换机时，IB模式需要装opensm、Base lid不能为0（应为0x2之类）
+    2、（这条没用）根据检测，cx6-lx网卡不能跑IB，只能跑RoCE（mlxconfig 回答 “The Device doesn't support LINK_TYPE_P1” 的根本原因，是 这类 EN 卡硬件只支持 Ethernet /RoCE，压根没有 InfiniBand 模式，所以也就没有 LINK_TYPE_P* 参数可改。官方论坛给过同样结论：只有 VPI 型号 才能切换端口类型；DX/Lx 等 ETH‑only 卡不能切换。产品手册也明确把 ConnectX‑6 Lx 定义为 Ethernet adapter cards）
+        （但是前面的IB驱动需要，最后要确保2个服务器的NCCL_IB_HCA正确，可能是rocep39s0f0,rocep39s0f1，也可能是mlx5_0,mlx5_1，而NCCL_SOCKET_IFNAME只需要填一个网卡设备号如ens19f0np0即可（仅用于握手而非RDMA通信））
+    3、可以用以下命令测试不用IB模式也不用RoCE模式（当普通25Gbps网卡用，只是延时是几十ms而不是几ms）
+        export NCCL_IB_DISABLE=1
+        export NCCL_SOCKET_IFNAME=ens19f0np0
+        服务器A：torchrun --nproc-per-node=4 --nnodes=2 --node-rank=0 --master-addr=192.168.88.1 --master-port=28002 test.py
+        服务器B：torchrun --nproc-per-node=4 --nnodes=2 --node-rank=1 --master-addr=192.168.88.1 --master-port=28002 test.py
+-------------------------------test.py-------------------------------
+import os
+import torch
+import torch.distributed as dist
+
+def setup():
+    dist.init_process_group(backend="nccl", init_method="env://")
+    rank = dist.get_rank()
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
+
+    t = torch.tensor([rank], device='cuda')
+    dist.all_reduce(t)
+    print(f"[Rank {rank}] All-Reduced Value: {t.item()}")
+
+if __name__ == "__main__":
+    setup()
+------------------------------/test.py-------------------------------
+        test.py可以通过（此时即可用，后续RoCE或者IB模式可以延时再低一个数量级）
+
+    4、以下命令用于检查2个服务器软件是否版本相同：
+        ofed_info -s         # MLNX_OFED
+        rpm -q rdma-core     # 发行版驱动
