@@ -1,4 +1,4 @@
-1、硬件连接
+1、硬件连接(根据检测，mellanox cx6-lx网卡不能跑IB，只能跑RoCE)
     每个服务器有2个25Gbps的光纤模块，用2根光纤直连（不需要交换机，但需要注意tx和rx的对接）
 
 2、安装mellanox网卡驱动
@@ -15,18 +15,28 @@
         ibstat
         ibv_devinfo
         rdma link show
-    设置IP（此时2个网卡都没有IP，以下设置方式似乎是临时设置方式）
+    设置IP（RoCE时2个服务器的设置mtu 9000（有说>4200即可）很重要，IB时设置mtu 4096）
         服务器A：
-            sudo ip addr add 192.168.88.1/24 dev ens19f0np0
-            sudo ip link set ens19f0np0 mtu 9000 up
-            sudo ip addr add 192.168.88.11/24 dev ens19f1np1
-            sudo ip link set ens19f1np1 mtu 9000 up
+            sudo nmcli con add type ethernet ifname ens19f0np0 con-name ens19f0np0 ip4 192.168.88.1/24
+            sudo nmcli con mod ens19f0np0 802-3-ethernet.mtu 9000
+            sudo nmcli con up  ens19f0np0
+                如果sudo nmcli con add报错有其他联接：
+                    查看所有关联的uuid：nmcli -f NAME,UUID,TYPE,DEVICE,AUTOCONNECT connection show | grep ens19f0np0
+                    删除所有关联：sudo nmcli connection delete uuid xxxx（如552b586d-02c7-410e-be0f-464a442d6f63）
+
+            sudo nmcli con add type ethernet ifname ens19f1np1 con-name ens19f1np1 ip4 192.168.88.11/24
+            sudo nmcli con mod ens19f1np1 802-3-ethernet.mtu 9000
+            sudo nmcli con up  ens19f1np1
         服务器B：
-            sudo ip addr add 192.168.88.2/24 dev ens19f0np0
-            sudo ip link set ens19f0np0 mtu 9000 up
-            sudo ip addr add 192.168.88.22/24 dev ens19f1np1
-            sudo ip link set ens19f1np1 mtu 9000 up
-    设置IB模式（似乎不行，也可能不需要）
+            sudo nmcli con add type ethernet ifname ens19f0np0 con-name ens19f0np0 ip4 192.168.88.2/24
+            sudo nmcli con mod ens19f0np0 802-3-ethernet.mtu 9000
+            sudo nmcli con up  ens19f0np0
+
+            sudo nmcli con add type ethernet ifname ens19f1np1 con-name ens19f1np1 ip4 192.168.88.22/24
+            sudo nmcli con mod ens19f1np1 802-3-ethernet.mtu 9000
+            sudo nmcli con up  ens19f1np1
+        此时可以ping 192.168.88.2
+    （RoCE卡不需要）设置IB模式（似乎不行，也可能不需要）
         启动mellanox管理程序
             sudo modprobe mst_pci
             sudo mst start
@@ -34,36 +44,10 @@
             sudo mst status
             sudo mlxconfig -d /dev/mst/mt4127_pciconf0 q | grep LINK_TYPE（这里总是返回空）
 
-3、设置ip(前面IB驱动装了，且ip设置了，这一步就不需要了)
-    查看设备情况：
-        ifconfig
-    查看光纤网卡情况：
-        lspci | grep -i ether
-        lspci | grep -i infiniband（返回空）
-        ethtool -i ens19f0np0
-    服务器A：
-        sudo ip addr add 192.168.88.1/24 dev ens19f0np0
-        sudo ip link set ens19f0np0 up
-        sudo ip addr add 192.168.88.11/24 dev ens19f1np1
-        sudo ip link set ens19f1np1 up
-    服务器B：
-        sudo ip addr add 192.168.88.2/24 dev ens19f0np0
-        sudo ip link set ens19f0np0 up
-        sudo ip addr add 192.168.88.22/24 dev ens19f1np1
-        sudo ip link set ens19f1np1 up
-    测试：
-        ping 192.168.88.2
-        服务器B:
-            iperf3 -s
-        服务器A:
-            iperf3 -c 192.168.88.2
-            iperf3 -c 192.168.88.22
-            可以测得25Gbps的速度
-
-4、此时即可2个服务器之间快速copy（如从192.168.88.1复制sync_test文件夹到192.168.88.2）
+3、此时即可2个服务器之间快速copy（如从192.168.88.1复制sync_test文件夹到192.168.88.2）
     rsync -avz --checksum ./sync_test tutu@192.168.88.2:/home/tutu/sync_test
 
-5、nccl通信检查
+4、nccl通信检查（主要测试不用IB和RoCE、只用socket行不行）
     1、（这条没用）没有交换机时，IB模式需要装opensm、Base lid不能为0（应为0x2之类）
     2、（这条没用）根据检测，cx6-lx网卡不能跑IB，只能跑RoCE（mlxconfig 回答 “The Device doesn't support LINK_TYPE_P1” 的根本原因，是 这类 EN 卡硬件只支持 Ethernet /RoCE，压根没有 InfiniBand 模式，所以也就没有 LINK_TYPE_P* 参数可改。官方论坛给过同样结论：只有 VPI 型号 才能切换端口类型；DX/Lx 等 ETH‑only 卡不能切换。产品手册也明确把 ConnectX‑6 Lx 定义为 Ethernet adapter cards）
         （但是前面的IB驱动需要，最后要确保2个服务器的NCCL_IB_HCA正确，可能是rocep39s0f0,rocep39s0f1，也可能是mlx5_0,mlx5_1，而NCCL_SOCKET_IFNAME只需要填一个网卡设备号如ens19f0np0即可（仅用于握手而非RDMA通信））
@@ -96,7 +80,7 @@ if __name__ == "__main__":
     4、以下命令用于检查2个服务器软件是否版本相同：
         ofed_info -s         # MLNX_OFED
         rpm -q rdma-core     # 发行版驱动
-    5、验证RDMA连通性（）
+    5、验证RDMA连通性
         sudo yum install -y perftest rdma-core
         服务器A：ib_write_bw -d mlx5_0 -F -x 3 192.168.88.2
         服务器B：ib_write_bw -d mlx5_0 -F -x 3
@@ -125,3 +109,47 @@ if __name__ == "__main__":
  #bytes     #iterations    BW peak[MiB/sec]    BW average[MiB/sec]   MsgRate[Mpps]
  65536      5000             2920.76            2920.71              0.046731
 ---------------------------------------------------------------------------------------
+
+6、RoCE的设置和测试（主要是解决NCCL的锁页内存 (memlock)问题）
+    关于报错：ibv_reg_mr_iova2 failed with error Cannot allocate memory
+        原因：
+            为什么 NCCL 需要 “锁页内存 (memlock)”？
+                RDMA 传输前必须把显存/内存注册给网卡（ibv_reg_mr），注册时会把这块内存“锁”在物理内存里，不能被换出。
+                如果 memlock 限制太小，驱动申请时就会失败，于是你看到：
+        (不需要了）临时解决：
+            2个服务器都运行sudo prlimit --pid $$ --memlock=unlimited:unlimited
+            sudo prlimit --pid $$ --memlock=unlimited:unlimited 到底做了什么？
+                prlimit 是 Linux 自带的一个工具，用来在 进程运行期间 修改它的资源限制（等价于 C 里的 setrlimit()）。
+                --pid $$ 指定要修改的进程就是你当前的 Shell（$$ 是当前 Shell 的 PID）。
+                --memlock=软限制:硬限制 把 RLIMIT_MEMLOCK 的软、硬两级限制都设成 unlimited。
+                加了 sudo 才能把「硬限制」也调高——普通用户只能降低硬限制，不能升高。
+                结果就是：
+                    当前 Shell 以及它启动的所有子进程（包括你随后运行的 torchrun）都拥有“无限制的锁页内存”；
+                    一旦退出这个 Shell，设置就消失；打开新终端还是默认的 64 MiB。
+        最终解决：
+            1、执行下述命令
+sudo tee /etc/security/limits.d/99-nccl.conf <<'EOF'
+* soft memlock unlimited
+* hard memlock unlimited
+EOF
+                此时用termius新登陆ssh，ulimit -l都是返回unlimited了
+            2、解决jupyter仍然返回65536的问题（因为jupyter启动时继承自systemd而不是PAM，而Termius→sshd→pam_limits.so）
+sudo mkdir -p /etc/systemd/system.conf.d
+sudo tee /etc/systemd/system.conf.d/90-memlock.conf <<'EOF'
+[Manager]
+DefaultLimitMEMLOCK=infinity
+EOF
+                重启后，jupyter就能返回unlimit
+            3、最终start_test.sh为
+# export NCCL_IB_DISABLE=1
+# HCA是设置RDMA通道，所以要设置mlx5_0和mlx5_1
+export NCCL_IB_HCA=mlx5_0,mlx_1
+# socket_ifname只是设置握手设备，所以只需要ens19f0np0即可
+export NCCL_SOCKET_IFNAME=ens19f0np0
+export NCCL_IB_GID_INDEX=3
+sudo systemctl stop firewalld
+source /home/tutu/miniconda3/etc/profile.d/conda.sh
+conda activate sgl45
+torchrun --nproc-per-node=4 --nnodes=2 --node-rank=1 --master-addr=192.168.88.1 --master-port=28002 test.py
+            此时运行start_test.sh，test.py就可正常返回all_reduce结果了
+
