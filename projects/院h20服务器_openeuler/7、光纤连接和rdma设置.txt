@@ -165,14 +165,14 @@ torchrun --nproc-per-node=4 --nnodes=2 --node-rank=1 --master-addr=192.168.88.1 
             此时运行start_test.sh，test.py就可正常返回all_reduce结果了
 
 7、多节点llama-factory训练
-    NCCL_IB_DISABLE=0
-    NCCL_P2P_DISABLE=0
-    NCCL_SHM_DISABLE=0
+    export NCCL_IB_DISABLE=0
+    export NCCL_P2P_DISABLE=0
+    export NCCL_SHM_DISABLE=0
 
-    NCCL_IB_GID_INDEX=3
-    NCCL_IB_HCA=mlx5_0,mlx5_1
-    NCCL_IB_TC=106
-    NCCL_SOCKET_IFNAME=ens19f0np0
+    export NCCL_IB_GID_INDEX=3
+    export NCCL_IB_HCA=mlx5_0,mlx5_1
+    export NCCL_IB_TC=106
+    export NCCL_SOCKET_IFNAME=ens19f0np0
 
     服务器A：
         FORCE_TORCHRUN=1 NNODES=2 NODE_RANK=0 MASTER_ADDR=192.168.88.1 MASTER_PORT=28011 \
