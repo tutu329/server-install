@@ -146,7 +146,18 @@ EOF
 export NCCL_IB_HCA=mlx5_0,mlx_1
 # socket_ifname只是设置握手设备，所以只需要ens19f0np0即可
 export NCCL_SOCKET_IFNAME=ens19f0np0
-export NCCL_IB_GID_INDEX=3
+# GID_INDEX设置为3或者5是因为旧版本 NCCL（<2.21）不会自己去“猜”哪个 GID 能通，为了解决系统误用INDEX 0的问题，执行show_gids可以看到下面内容(index 0和1为ipv6,4)：
+# 【因此NCCL_IB_GID_INDEX要设置为show_gids结果中IPv4有的IP的V2那个INDEX】
+# DEV     PORT    INDEX   GID                                     IPv4            VER     DEV
+# ---     ----    -----   ---                                     ------------    ---     ---
+# mlx5_0  1       0       fe80:0000:0000:0000:5aa2:e1ff:feb0:3772                 v1      ens19f0np0
+# mlx5_0  1       1       fe80:0000:0000:0000:5aa2:e1ff:feb0:3772                 v2      ens19f0np0
+# mlx5_0  1       2       fe80:0000:0000:0000:a789:516a:e270:5b33                 v1      ens19f0np0
+# mlx5_0  1       3       fe80:0000:0000:0000:a789:516a:e270:5b33                 v2      ens19f0np0
+# mlx5_0  1       4       0000:0000:0000:0000:0000:ffff:c0a8:5801 192.168.88.1    v1      ens19f0np0
+# mlx5_0  1       5       0000:0000:0000:0000:0000:ffff:c0a8:5801 192.168.88.1    v2      ens19f0np0
+# n_gids_found=6
+export NCCL_IB_GID_INDEX=5
 sudo systemctl stop firewalld
 source /home/tutu/miniconda3/etc/profile.d/conda.sh
 conda activate sgl45
