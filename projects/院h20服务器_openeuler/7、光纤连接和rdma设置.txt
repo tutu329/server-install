@@ -250,5 +250,31 @@ mpirun -np $((GPUS_PER_NODE * 2)) \
   ./build/all_reduce_perf -b 8 -e 512M -f 2 -g ${GPUS_PER_NODE}
 
 
+8、llama-factory双节点训练时，光纤口的RDMA流量监测
+    ethtool -S ens19f0np0 | grep -E "rx_bytes|tx_bytes"
+         rx_bytes: 174741976832
+         tx_bytes: 87279581400
+         tx_bytes_phy: 5819856970396
+         rx_bytes_phy: 6072703430054
+    ethtool -S ens19f1np1 | grep -E "rx_bytes|tx_bytes"
+         rx_bytes: 2722
+         tx_bytes: 4102
+         tx_bytes_phy: 5859151182792
+         rx_bytes_phy: 6024851730710
+    结果：
+        rx/tx_bytes内核看到的普通以太网流量（libpcap/iptraf 都靠它）。
+        rx/tx_bytes_phy驱动把 RoCE RDMA 数据 也累加进来，数字大 2 个数量级。
+        也就是说：第二张卡（mlx5_1）虽然没有内核可见的 UDP/TCP 包，但 RDMA 数据已经跑了 ≈5.9GB——这正是你的多卡 All‑Reduce / P2P 负载。
+
+    为什么 iptraf-ng 抓不到RDMA流量？
+        sudo dnf install iptraf-ng
+        sudo iptraf-ng
+
+        RoCEv2 把 RDMA 数据封装在 UDP/IPv4/IPv6 里，但数据通路走 kernel‑bypass（DPDK/verbs），内核几乎不碰包。
+        iptraf 通过 libpcap 从 netfilter 勾数据；kernel‑bypass 时包直接 DMA 到用户态 buffer → pcie → GPU，pcap 根本截不到。
+        同类工具（iftop、nload、bmon…）也一样抓不到 RDMA 速率，只能看到极少量 TCP/UDP 控制包，所以你看到 0kbps 很正常。
+
+
+
 
 
