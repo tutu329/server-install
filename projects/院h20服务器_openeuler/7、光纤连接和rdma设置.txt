@@ -273,10 +273,15 @@ mpirun -np $((GPUS_PER_NODE * 2)) \
         RoCEv2 把 RDMA 数据封装在 UDP/IPv4/IPv6 里，但数据通路走 kernel‑bypass（DPDK/verbs），内核几乎不碰包。
         iptraf 通过 libpcap 从 netfilter 勾数据；kernel‑bypass 时包直接 DMA 到用户态 buffer → pcie → GPU，pcap 根本截不到。
         同类工具（iftop、nload、bmon…）也一样抓不到 RDMA 速率，只能看到极少量 TCP/UDP 控制包，所以你看到 0kbps 很正常。
-    上述为RDMA累积流量，下面是实时监测2个光口RDMA流量的sh，llama-factory 2节点训练的典型结果是：
-        2025-04-10 08:59:09
-            [ens19f0np0] RX: 23198.67 Mbps | TX: 23196.53 Mbps
-            [ens19f1np1] RX: 23199.87 Mbps | TX: 23163.92 Mbps
+    上述为RDMA累积流量，下面是实时监测2个光口RDMA流量的sh:
+        llama-factory 2节点训练的典型结果是：
+            2025-04-10 08:59:09
+                [ens19f0np0] RX: 23198.67 Mbps | TX: 23196.53 Mbps
+                [ens19f1np1] RX: 23199.87 Mbps | TX: 23163.92 Mbps
+        sglang 2节点推理ds-r1-671b的典型结果是：
+            2025-04-10 09:06:20
+                [ens19f0np0] RX: 1141.56 Mbps | TX: 1147.45 Mbps
+                [ens19f1np1] RX: 1141.31 Mbps | TX: 1147.66 Mbps
 --------------------------------rdma_speed.sh--------------------------------
 #!/bin/bash
 
