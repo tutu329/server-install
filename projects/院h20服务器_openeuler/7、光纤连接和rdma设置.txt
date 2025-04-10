@@ -264,7 +264,7 @@ mpirun -np $((GPUS_PER_NODE * 2)) \
     结果：
         rx/tx_bytes内核看到的普通以太网流量（libpcap/iptraf 都靠它）。
         rx/tx_bytes_phy驱动把 RoCE RDMA 数据 也累加进来，数字大 2 个数量级。
-        也就是说：第二张卡（mlx5_1）虽然没有内核可见的 UDP/TCP 包，但 RDMA 数据已经跑了 ≈5.9GB——这正是你的多卡 All‑Reduce / P2P 负载。
+        也就是说：第二张卡（mlx5_1）虽然没有内核可见的 UDP/TCP 包，但 RDMA 数据已经跑了 ≈5.9TB——这正是你的多卡 All‑Reduce / P2P 负载。
 
     为什么 iptraf-ng 抓不到RDMA流量？
         sudo dnf install iptraf-ng
@@ -273,8 +273,54 @@ mpirun -np $((GPUS_PER_NODE * 2)) \
         RoCEv2 把 RDMA 数据封装在 UDP/IPv4/IPv6 里，但数据通路走 kernel‑bypass（DPDK/verbs），内核几乎不碰包。
         iptraf 通过 libpcap 从 netfilter 勾数据；kernel‑bypass 时包直接 DMA 到用户态 buffer → pcie → GPU，pcap 根本截不到。
         同类工具（iftop、nload、bmon…）也一样抓不到 RDMA 速率，只能看到极少量 TCP/UDP 控制包，所以你看到 0kbps 很正常。
+    上述为RDMA累积流量，下面是实时监测2个光口RDMA流量的sh，llama-factory 2节点训练的典型结果是：
+        2025-04-10 08:59:09
+            [ens19f0np0] RX: 23198.67 Mbps | TX: 23196.53 Mbps
+            [ens19f1np1] RX: 23199.87 Mbps | TX: 23163.92 Mbps
+--------------------------------rdma_speed.sh--------------------------------
+#!/bin/bash
 
+# 设置要监控的两个网卡
+IFACES=("ens19f0np0" "ens19f1np1")
 
+# 间隔时间（秒）
+INTERVAL=5
 
+echo "Monitoring interfaces: ${IFACES[*]} every $INTERVAL seconds..."
+echo "Press Ctrl+C to stop."
+echo ""
 
+# 无限循环
+while true; do
+    declare -A RX1 TX1 RX2 TX2
 
+    for IFACE in "${IFACES[@]}"; do
+        RX1[$IFACE]=$(ethtool -S $IFACE | grep rx_bytes_phy | awk '{print $2}')
+        TX1[$IFACE]=$(ethtool -S $IFACE | grep tx_bytes_phy | awk '{print $2}')
+    done
+
+    TIME1=$(date +%s)
+    sleep $INTERVAL
+    TIME2=$(date +%s)
+
+    for IFACE in "${IFACES[@]}"; do
+        RX2[$IFACE]=$(ethtool -S $IFACE | grep rx_bytes_phy | awk '{print $2}')
+        TX2[$IFACE]=$(ethtool -S $IFACE | grep tx_bytes_phy | awk '{print $2}')
+    done
+
+    TIME_DIFF=$((TIME2 - TIME1))
+
+    echo "$(date '+%Y-%m-%d %H:%M:%S')"
+    for IFACE in "${IFACES[@]}"; do
+        RX_DIFF=$(( ${RX2[$IFACE]} - ${RX1[$IFACE]} ))
+        TX_DIFF=$(( ${TX2[$IFACE]} - ${TX1[$IFACE]} ))
+
+        RX_Mbps=$(echo "scale=2; $RX_DIFF * 8 / 1000000 / $TIME_DIFF" | bc)
+        TX_Mbps=$(echo "scale=2; $TX_DIFF * 8 / 1000000 / $TIME_DIFF" | bc)
+
+        echo "[$IFACE] RX: ${RX_Mbps} Mbps | TX: ${TX_Mbps} Mbps"
+    done
+
+    echo ""
+done
+-------------------------------/rdma_speed.sh--------------------------------
