@@ -33,9 +33,12 @@
             sudo systemctl enable opensm
     测试环境：
         apt install perftest
-    测试：
+    测试1：
         服务器1：ib_write_bw -F --report_gbits
         服务器2：ib_write_bw -F 服务器1的IP --report_gbits
+    测试2（正常结果BW peak大概43018.66MiB/s）：
+        服务器1：ib_write_bw -d mlx5_0
+        服务器2：ib_write_bw -d mlx5_0 服务器1的IP
 5、sglang设置（节点0，节点1把rank改为1、模型路径改掉即可）
     1)几个关键点：
         a）NCCL_IB_HCA用于指定并行通信的IB口，NCCL_SOCKET_IFNAME和GLOO_SOCKET_IFNAME只是指定发起握手通信的网口（所以一个就行）
@@ -127,3 +130,107 @@
       done
       echo
     done
+
+8、关于nvidia-smi topo -m
+    这样有问题(此时需要测试)
+        1)sudo iblinkinfo测一下，必须要有sudo
+        2)服务器0：sudo ibping -S -C mlx5_0
+        3)服务器1：sudo ibping -C mlx5_0 8 （8为Lid，根据服务器0的rdma link show获得）
+(deepseek) zsoft2@zsoft2-G8600-V7:~/models/DeepSeek-R1-NextN$ nvidia-smi topo -m
+        GPU0    GPU1    GPU2    GPU3    GPU4    GPU5    GPU6    GPU7    NIC0    NIC1    NIC2    NIC3    NIC4    NIC5    NIC6    NIC7    CPU Affinity    NUMA Affinity   GPU NUMA ID
+GPU0     X      NV18    NV18    NV18    NV18    NV18    NV18    NV18    PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS     0-47,96-143     0               N/A
+GPU1    NV18     X      NV18    NV18    NV18    NV18    NV18    NV18    SYS     PIX     SYS     SYS     SYS     SYS     SYS     SYS     0-47,96-143     0               N/A
+GPU2    NV18    NV18     X      NV18    NV18    NV18    NV18    NV18    SYS     SYS     PIX     SYS     SYS     SYS     SYS     SYS     0-47,96-143     0               N/A
+GPU3    NV18    NV18    NV18     X      NV18    NV18    NV18    NV18    SYS     SYS     SYS     PIX     SYS     SYS     SYS     SYS     0-47,96-143     0               N/A
+GPU4    NV18    NV18    NV18    NV18     X      NV18    NV18    NV18    SYS     SYS     SYS     SYS     PIX     SYS     SYS     SYS     48-95,144-191   1               N/A
+GPU5    NV18    NV18    NV18    NV18    NV18     X      NV18    NV18    SYS     SYS     SYS     SYS     SYS     PIX     SYS     SYS     48-95,144-191   1               N/A
+GPU6    NV18    NV18    NV18    NV18    NV18    NV18     X      NV18    SYS     SYS     SYS     SYS     SYS     SYS     PIX     SYS     48-95,144-191   1               N/A
+GPU7    NV18    NV18    NV18    NV18    NV18    NV18    NV18     X      SYS     SYS     SYS     SYS     SYS     SYS     SYS     PIX     48-95,144-191   1               N/A
+NIC0    PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS      X      SYS     SYS     SYS     SYS     SYS     SYS     SYS
+NIC1    SYS     PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS      X      SYS     SYS     SYS     SYS     SYS     SYS
+NIC2    SYS     SYS     PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS      X      SYS     SYS     SYS     SYS     SYS
+NIC3    SYS     SYS     SYS     PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS      X      SYS     SYS     SYS     SYS
+NIC4    SYS     SYS     SYS     SYS     PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS      X      SYS     SYS     SYS
+NIC5    SYS     SYS     SYS     SYS     SYS     PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS      X      SYS     SYS
+NIC6    SYS     SYS     SYS     SYS     SYS     SYS     PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS      X      SYS
+NIC7    SYS     SYS     SYS     SYS     SYS     SYS     SYS     PIX     SYS     SYS     SYS     SYS     SYS     SYS     SYS      X
+
+Legend:
+
+  X    = Self
+  SYS  = Connection traversing PCIe as well as the SMP interconnect between NUMA nodes (e.g., QPI/UPI)
+  NODE = Connection traversing PCIe as well as the interconnect between PCIe Host Bridges within a NUMA node
+  PHB  = Connection traversing PCIe as well as a PCIe Host Bridge (typically the CPU)
+  PXB  = Connection traversing multiple PCIe bridges (without traversing the PCIe Host Bridge)
+  PIX  = Connection traversing at most a single PCIe bridge
+  NV#  = Connection traversing a bonded set of # NVLinks
+
+NIC Legend:
+
+  NIC0: mlx5_0
+  NIC1: mlx5_1
+  NIC2: mlx5_2
+  NIC3: mlx5_3
+  NIC4: mlx5_4
+  NIC5: mlx5_5
+  NIC6: mlx5_6
+  NIC7: mlx5_7
+
+9、nccl-test（只有IB设备可以，roce不能用）
+    1)安装mpi
+        sudo apt install -y openmpi-bin libopenmpi-dev
+        mpicc --version
+        查找mpi.h: find /usr -name mpi.h 2>/dev/null
+        vi ~/.bashrc
+            export CPATH=/usr/lib/x86_64-linux-gnu/openmpi/include/:$CPATH
+            export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/openmpi/lib:$LD_LIBRARY_PATH
+            export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/openmpi/lib:$LIBRARY_PATH
+        source ~/.bashrc
+    2)安装编译nccl-test
+        git clone https://github.com/NVIDIA/nccl-tests.git
+        cd nccl-tests
+        make MPI=1
+        mpirun
+    3)服务器2设置SSH
+        ssh-keygen（全部回车）
+        ssh-copy-id zsoft@10.150.66.10(要输入密码A@zhongsoft)
+        ssh-copy-id zsoft2@10.150.66.11(要输入密码A@zhongsoft)
+        测试：
+            ssh zsoft@10.150.66.10 hostname(免密)
+            ssh zsoft2@10.150.66.11 hostname(免密)
+    4)1节点测试
+        ./build/all_reduce_perf -b 8 -e 128M -f 2 -g 8
+    5)2节点测试(【注意】：如果2个服务器username不一样，mpirun就会卡死，此时需要把nccl-test文件夹复制到一样的地方如/mnt/share/nccl-test，不然会因为/home/zsoft/nccl-test和/home/zsoft2/nccl-test不一样导致mpirun卡死)
+        vi ~/.ssh/config(因为mpirun -np 2 -H zsoft@10.150.66.10,zsoft2@10.150.66.11这样报错)
+            # ~/.ssh/config
+            Host 10.150.66.10
+              User zsoft
+
+            Host 10.150.66.11
+              User zsoft2
+        mpirun -np 2 -H 10.150.66.10,10.150.66.11 hostname
+        # mpirun -np 2 -H zsoft@10.150.66.10,zsoft2@10.150.66.11 hostname
+
+        测试1：
+            mpirun -np 4 \
+              -H 10.150.66.10:2,10.150.66.11:2 \
+              --mca oob_tcp_if_include ens10f0np0 \
+              --mca btl tcp,self \
+              --mca btl_tcp_if_include ens10f0np0 \
+              ./build/all_reduce_perf -b 8 -e 128M -f 2 -g 1
+        测试2：
+            HCA_LIST="mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7" \
+            mpirun -np 4 \
+              -H 10.150.66.10:2,10.150.66.11:2 \
+              --mca pml ucx \
+              --mca osc ucx \
+              -x NCCL_DEBUG=WARN \
+              -x NCCL_IB_DISABLE=0 \
+              -x NCCL_IB_HCA=$HCA_LIST \
+              -x NCCL_NET_GDR_LEVEL=2 \
+              -x NCCL_IB_GID_INDEX=3 \
+              -x NCCL_IB_PCI_RELAXED_ORDERING=1 \
+              -x NCCL_SOCKET_IFNAME=ens10f0np0 \
+              -x UCX_TLS=rc \
+              -x UCX_NET_DEVICES=mlx5_0:1 \
+              ./build/all_reduce_perf -b 8 -e 128M -f 2 -g 1
