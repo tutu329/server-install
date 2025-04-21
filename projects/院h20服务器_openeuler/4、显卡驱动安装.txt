@@ -15,6 +15,13 @@
         1）输入accept。
         2）直接选择install。（注意不要安装nvidia-fs，否则好像安装失败（是需要安装一些前置程序））
         3）安装中每一步的等待时间都比较长。
+        4）如果安装failed，查看log文件，问gpt，可能如下操作即可：
+            sudo apt update
+            sudo apt install g++
+            sudo apt install gcc
+            sudo apt install make
+            sudo apt install -y build-essential dkms linux-headers-$(uname -r)
+
     4)vi ~/.bashrc(在"export PATH"这一行后面增加)
         export PATH=/usr/local/cuda-12.8/bin:$PATH
         export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
