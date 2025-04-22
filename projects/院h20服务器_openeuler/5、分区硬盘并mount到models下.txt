@@ -25,7 +25,7 @@
             # 创建一个共享组（如果没有）
             sudo groupadd datagroup
             # 把当前用户加入组
-            sudo usermod -aG datagroup 你的用户名
+            sudo usermod -aG datagroup $USER
             # 改变/data的属组
             sudo chown -R root:datagroup /data
             # 赋予写权限
