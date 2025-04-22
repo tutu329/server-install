@@ -34,12 +34,54 @@
                 sudo mlxconfig -d /dev/mst/mt4123_pciconf0 set LINK_TYPE_P1=1 LINK_TYPE_P2=1
                 sudo mlxfwreset -d /dev/mst/mt4123_pciconf0 --yes 或者 sudo reboot
         5）启动opensm（opensm是ib网联通的关键，且只有一个节点需要启动opensm）
+            a）确认opensm
+                sudo opensm -v
+                which opensm
+            b）创建opensm服务
+                vi /etc/systemd/system/opensm.service
+[Unit]
+Description=OpenSM InfiniBand Subnet Manager
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/sbin/opensm
+Restart=always
+User=root
+# 如果需要指定配置文件，可以在 ExecStart 后面加上 -c /etc/opensm/opensm.conf
+
+[Install]
+WantedBy=multi-user.target
             sudo systemctl daemon-reload
-            sudo systemctl status opensm
             sudo systemctl start opensm
             sudo systemctl enable opensm
+            sudo systemctl status opensm
+        6）如果nvidia-smi又报错（NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. ）：
+            检查结果发给gpt
+                uname -r
+                lsmod | grep nvidia
+                sudo modprobe nvidia
+                sudo dmesg | grep -i -E "nvidia|NVRM"
+                dkms status
+            gpt可能的解决方式
+                sudo apt update
+                sudo apt install linux-headers-$(uname -r)
+                sudo dkms autoinstall
+                sudo update-initramfs -u
+                sudo reboot
+            验证
+                lsmod | grep nvidia
+                nvidia-smi
+
     测试环境：
         apt install perftest
+    测试0：
+        ibstat
+        lspci | grep -i infiniband
+        show_gids
+        nvidia-smi topo -m
+        nvidia-smi nvlink -s
+
     测试1：
         服务器1：ib_write_bw -F --report_gbits
         服务器2：ib_write_bw -F 服务器1的IP --report_gbits
@@ -53,7 +95,7 @@
         c）tp 16是2台服务器并行推理的关键
         d）mem-fraction-static是sglang预分配多少显存给模型，max-total-tokens是给模型分配多大的上下文空间（对显存容量影响较大），max-running-requests就是给模型开多大的并发访问数
         e）enable-torch-compile、enable-ep-moe和speculative是sglang对deepseek-r1这类模型的关键加速（单节点推理时，这几个参数影响很大，双节点不清楚为何没影响，还需要测试，可能和IB有关）
-    2)2node-ds-r1-671b-8.sh（注意：sh文件里不能有#，否则后续参数无视！）：
+    2)2node-ds-r1-671b-8.sh（注意：sh文件里\之后的内容中不能有#，否则后续参数无视！）：
         export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
         export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
 
