@@ -12,6 +12,12 @@
     基本配置：
         1）安装IB驱动（后续官方仅维护DOCA-ofed，安装老的mlnx_ofed也可以）
             DOCA-ofed：https://developer.nvidia.com/doca-downloads（Host-Server->DOCA-Host->Linux->x86_64->doca-ofed->对应linux）
+                【ubuntu22.04】
+                    wget https://www.mellanox.com/downloads/DOCA/DOCA_v2.10.0/host/doca-host_2.10.0-093000-25.01-ubuntu2204_amd64.deb
+                    sudo dpkg -i doca-host_2.10.0-093000-25.01-ubuntu2204_amd64.deb
+                    sudo apt update
+                    sudo apt -y install doca-ofed
+                    sudo reboot(之后ifconfig就能显示8个ib网卡)
             mlnx_ofed:https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
         2）安装工具
             sudo apt update
@@ -28,6 +34,7 @@
                 sudo mlxconfig -d /dev/mst/mt4123_pciconf0 set LINK_TYPE_P1=1 LINK_TYPE_P2=1
                 sudo mlxfwreset -d /dev/mst/mt4123_pciconf0 --yes 或者 sudo reboot
         5）启动opensm（opensm是ib网联通的关键，且只有一个节点需要启动opensm）
+            sudo systemctl daemon-reload
             sudo systemctl status opensm
             sudo systemctl start opensm
             sudo systemctl enable opensm
