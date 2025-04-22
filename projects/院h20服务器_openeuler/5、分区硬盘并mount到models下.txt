@@ -1,10 +1,40 @@
 1、查看ssd情况
-    sudo fdisk -l
+    lsblk(直接查看所有分区情况和mount情况)
+    lsblk -d -o NAME,SIZE,MODEL（看分区信息方便）
+    sudo fdisk -l（信息比较杂）
 
 2、mount
-    sudo mkdir -p /home/tutu/models
-    sudo mount /dev/mapper/docker-lv_docker /home/tutu/models
-    开机自动mount：echo "/dev/mapper/docker-lv_docker /home/tutu/models ext4 defaults 0 0" | sudo tee -a /etc/fstab
+    【raid情况】
+        如lsblk：
+            sda           8:0    0 893.8G  0 disk
+            ├─sda1        8:1    0   512M  0 part   /boot/efi
+            └─sda2        8:2    0 893.2G  0 part   /
+            nvme0n1     259:0    0   3.5T  0 disk
+            └─nvme0n1p1 259:3    0   3.5T  0 part
+              └─md0       9:0    0     7T  0 raid10 /data
+            nvme1n1     259:1    0   3.5T  0 disk
+            └─nvme1n1p1 259:2    0   3.5T  0 part
+              └─md0       9:0    0     7T  0 raid10 /data
+            nvme2n1     259:4    0   3.5T  0 disk
+            └─nvme2n1p1 259:6    0   3.5T  0 part
+              └─md0       9:0    0     7T  0 raid10 /data
+            nvme3n1     259:5    0   3.5T  0 disk
+            └─nvme3n1p1 259:7    0   3.5T  0 part
+              └─md0       9:0    0     7T  0 raid10 /data
+        因为是共享文件夹，所以用组权限控制：
+            # 创建一个共享组（如果没有）
+            sudo groupadd datagroup
+            # 把当前用户加入组
+            sudo usermod -aG datagroup 你的用户名
+            # 改变/data的属组
+            sudo chown -R root:datagroup /data
+            # 赋予写权限
+            sudo chmod -R 775 /data
+            # 重启或重新登录生效用户组变更
+            newgrp datagroup
 
-3、修改models的权限
-    sudo chown -R tutu:tutu /home/tutu/models
+    【无raid情况】
+        sudo mkdir -p /home/xxx/models
+        sudo mount /dev/yyy /home/xxx/models
+        开机自动mount：echo "/dev/yyy /home/xxx/models ext4 defaults 0 0" | sudo tee -a /etc/fstab
+        sudo chown -R xxx:xxx /home/xxx/models
