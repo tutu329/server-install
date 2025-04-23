@@ -73,6 +73,7 @@ WantedBy=multi-user.target
                 lsmod | grep nvidia
                 nvidia-smi
 
+
     测试环境：
         apt install perftest
     测试0：
