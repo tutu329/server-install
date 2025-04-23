@@ -46,6 +46,13 @@
 
 3、此时即可2个服务器之间快速copy（如从192.168.88.1复制sync_test文件夹到192.168.88.2,【注意"./models"后不能加"/"，否则models里的文件会直接同步在/home/tutu/下而不是/home/tutu/models下】）
     rsync -avz --checksum ./models tutu@192.168.88.2:/home/tutu/
+     如果涉及ssh问题：
+        ssh-keygen（全部回车）
+        ssh-copy-id ynpdai@10.180.112.99(要输入密码ynpd@123)
+        ssh-copy-id ynpdai2@10.180.112.100(要输入密码ynpd@123)
+        测试：
+            ssh ynpdai@10.180.112.99 hostname(免密)
+            ssh ynpdai2@10.180.112.100 hostname(免密)
 
 4、nccl通信检查（主要测试不用IB和RoCE、只用socket行不行）
     1、（这条没用）没有交换机时，IB模式需要装opensm、Base lid不能为0（应为0x2之类）
