@@ -1,7 +1,7 @@
 1、硬件连接(根据检测，mellanox cx6-lx网卡不能跑IB，只能跑RoCE)
     每个服务器有2个25Gbps的光纤模块，用2根光纤直连（不需要交换机，但需要注意tx和rx的对接）
 
-2、安装mellanox网卡驱动
+2、安装mellanox网卡驱动（此为roce安装，ib安装见"8、IB设置和sglang对应设置.txt"）
     下载和安装（无法直接wget，要tgz的链接点进去下载后上传至服务器）
         https://network.nvidia.com/products/infiniband-drivers/linux/mlnx_ofed/
         tar -xvf MLNX_OFED_LINUX-24.10-2.1.8.0-openeuler22.03sp3-x86_64.tar
