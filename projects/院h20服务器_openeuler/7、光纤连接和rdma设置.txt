@@ -44,8 +44,8 @@
             sudo mst status
             sudo mlxconfig -d /dev/mst/mt4127_pciconf0 q | grep LINK_TYPE（这里总是返回空）
 
-3、此时即可2个服务器之间快速copy（如从192.168.88.1复制sync_test文件夹到192.168.88.2）
-    rsync -avz --checksum ./sync_test tutu@192.168.88.2:/home/tutu/sync_test
+3、此时即可2个服务器之间快速copy（如从192.168.88.1复制sync_test文件夹到192.168.88.2,【注意"./models"后不能加"/"，否则models里的文件会直接同步在/home/tutu/下而不是/home/tutu/models下】）
+    rsync -avz --checksum ./models tutu@192.168.88.2:/home/tutu/
 
 4、nccl通信检查（主要测试不用IB和RoCE、只用socket行不行）
     1、（这条没用）没有交换机时，IB模式需要装opensm、Base lid不能为0（应为0x2之类）

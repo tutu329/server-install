@@ -75,6 +75,7 @@ EOF
             sudo dpkg -i nvidia-fabricmanager-570_570.124.06-1_amd64.deb
             sudo systemctl enable nvidia-fabricmanager.service
             sudo systemctl restart nvidia-fabricmanager.service
+            sudo systemctl status nvidia-fabricmanager.service
             查看日志
             journalctl -u nvidia-fabricmanager
 
