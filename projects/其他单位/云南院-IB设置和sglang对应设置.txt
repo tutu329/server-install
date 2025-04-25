@@ -1,0 +1,221 @@
+1、安装gcc
+    sudo apt update
+    sudo apt install g++
+    sudo apt install gcc
+    sudo apt install make
+2、官网下载安装cuda-toolkit（包含驱动和运行库）
+    此时nvidia-smi和nvcc -V正常
+3、安装nvidia-fabric-manager（sxm服务器只有这个安装完才能正常nvidia-smi）
+    sudo apt install nvidia-fabricmanager-570 nvidia-persistenced-570
+    找到对应驱动版本的fabricmanager：https://developer.download.nvidia.cn/compute/cuda/repos/ubuntu2204/x86_64/
+    下载和安装(注意是：nvidia-fabricmanager-xxx，不是cuda-drivers-fabricmanager-xxx
+        wget https://developer.download.nvidia.cn/compute/cuda/repos/ubuntu2204/x86_64/nvidia-fabricmanager-570_570.124.06-1_amd64.deb
+        sudo dpkg -i nvidia-fabricmanager-570_570.124.06-1_amd64.deb
+        sudo systemctl enable nvidia-fabricmanager.service
+        sudo systemctl restart nvidia-fabricmanager.service
+        sudo systemctl status nvidia-fabricmanager.service
+    查看日志
+        journalctl -u nvidia-fabricmanager
+    验证
+        systemctl status nvidia-fabricmanager
+        nvidia-smi nvlink -s         # NVSwitch 状态应为 Active
+        安装torch后的python验证：
+            python - <<'EOF'
+            import torch, subprocess, os, platform
+            print("torch:", torch.__version__, "cuda libs:", torch.version.cuda)
+            print("is_available:", torch.cuda.is_available())
+            print("device_count:", torch.cuda.device_count())
+            EOF
+        成功.
+4、IB环境安装
+    基本配置：
+        1）安装IB驱动（后续官方仅维护DOCA-ofed，安装老的mlnx_ofed也可以）
+            DOCA-ofed：https://developer.nvidia.com/doca-downloads（Host-Server->DOCA-Host->Linux->x86_64->doca-ofed->对应linux）
+        2）安装工具
+            sudo apt update
+            sudo apt install -y opensm infiniband-diags rdma-core ibverbs-utils ibutils
+        3）物理联通情况
+            a）查看交换机是否均为绿灯
+            b)rdma link show（查看连通情况和roce/ib模式）
+        4)IB网卡的IB模式的确认（ibstat查看。通常装完IB驱动，网卡为IB模式。）
+            若为roce（Ethernet）模式，切换为ib模式：
+                sudo apt install mstflint
+                sudo mst start
+                mst status
+                sudo mlxconfig -d /dev/mst/mt4123_pciconf0 q | grep LINK_TYPE
+                sudo mlxconfig -d /dev/mst/mt4123_pciconf0 set LINK_TYPE_P1=1 LINK_TYPE_P2=1
+                sudo mlxfwreset -d /dev/mst/mt4123_pciconf0 --yes 或者 sudo reboot
+        5）启动opensm（opensm是ib网联通的关键，且只有一个节点需要启动opensm）
+            a）确认opensm
+                sudo opensm -v
+                which opensm
+            b）创建opensm服务
+                vi /etc/systemd/system/opensm.service
+                    [Unit]
+                    Description=OpenSM InfiniBand Subnet Manager
+                    After=network.target
+
+                    [Service]
+                    Type=simple
+                    ExecStart=/usr/sbin/opensm
+                    Restart=always
+                    User=root
+                    # 如果需要指定配置文件，可以在 ExecStart 后面加上 -c /etc/opensm/opensm.conf
+
+                    [Install]
+                    WantedBy=multi-user.target
+                                sudo systemctl daemon-reload
+                                sudo systemctl start opensm
+                                sudo systemctl enable opensm
+                                sudo systemctl status opensm
+        6）如果nvidia-smi又报错（NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. ）：
+            检查结果发给gpt
+                uname -r
+                lsmod | grep nvidia
+                sudo modprobe nvidia
+                sudo dmesg | grep -i -E "nvidia|NVRM"
+                dkms status
+            gpt可能的解决方式
+                sudo apt update
+                sudo apt install linux-headers-$(uname -r)
+                sudo dkms autoinstall
+                sudo update-initramfs -u
+                sudo reboot
+            验证
+                lsmod | grep nvidia
+                nvidia-smi    测试环境：
+    测试环境：
+        apt install perftest
+    测试0：
+        ibstat
+        lspci | grep -i infiniband
+        show_gids
+        nvidia-smi topo -m
+        nvidia-smi nvlink -s
+
+    测试1：
+        服务器1：ib_write_bw -F --report_gbits
+        服务器2：ib_write_bw -F 服务器1的IP --report_gbits
+    测试2（正常结果BW peak大概43018.66MiB/s）：
+        服务器1：ib_write_bw -d mlx5_0
+        服务器2：ib_write_bw -d mlx5_0 服务器1的IP
+
+5、sglang设置（节点0，节点1把rank改为1、模型路径改掉即可）
+    1)几个关键点：
+        a）NCCL_IB_HCA用于指定并行通信的IB口，NCCL_SOCKET_IFNAME和GLOO_SOCKET_IFNAME只是指定发起握手通信的网口（所以一个就行）
+        b）NCCL_IB_GID_INDEX=3在roce环境下很关键（roce下系统默认情况会找错GID，GID可通过show_gids查看），ib不一定需要
+        c）tp 16是2台服务器并行推理的关键
+        d）mem-fraction-static是sglang预分配多少显存给模型，max-total-tokens是给模型分配多大的上下文空间（对显存容量影响较大），max-running-requests就是给模型开多大的并发访问数
+        e）enable-torch-compile、enable-ep-moe和speculative是sglang对deepseek-r1这类模型的关键加速（单节点推理时，这几个参数影响很大，双节点不清楚为何没影响，还需要测试，可能和IB有关）
+    2)2node-ds-r1-671b-8.sh：
+        export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+        export SGL_ENABLE_JIT_DEEPGEMM=1
+        export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
+        # export NCCL_IB_HCA=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1
+        # export NCCL_IB_GID_INDEX=3
+
+        export NCCL_SOCKET_IFNAME=ens10f0np0
+        export GLOO_SOCKET_IFNAME=ens10f0np0
+
+        source /home/ynpdai1/miniconda3/etc/profile.d/conda.sh
+        conda activate sgl45
+        python -m sglang.launch_server --served-model-name=ds-v3-0324 --model-path=/data/models/DeepSeek-V3-0324 \
+        --enable-p2p-check \
+        --reasoning-parser=deepseek-r1 --trust-remote-code \
+        --tp 16 \
+        --dist-init-addr 10.180.112.99:8002 \
+        --nnodes 2 \
+        --node-rank 0 \
+        --host=0.0.0.0 --port=8001 \
+        --mem-fraction-static=0.7 \
+        --max-total-tokens=65000 --max-running-requests=64 \
+        --enable-torch-compile --torch-compile-max-bs 1 \
+        --enable-ep-moe \
+        --cuda-graph-max-bs=32
+
+6、vllm双节点设置
+    2个节点都须额外安装：
+        conda activate vllm84
+        pip install pyarrow
+        pip install pandas
+    server:
+        # export VLLM_HOST_IP=$WORK_IP
+        export NCCL_SOCKET_IFNAME=ens10f0np0
+        export GLOO_SOCKET_IFNAME=ens10f0np0
+        export NCCL_IB_DISABLE=0
+        export NCCL_IB_HCA=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1
+        # export NCCL_IB_GID_INDEX=3
+        # export CUDA_DEVICE_MAX_CONNECTIONS=4
+        # export NCCL_IB_QPS_PER_CONNECTION=2
+        # export NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME=ens10f0np0
+        # export NVSHMEM_HCA_LIST=mlx5_0:1,mlx5_1:1,mlx5_2:1,mlx5_3:1,mlx5_4:1,mlx5_5:1,mlx5_6:1,mlx5_7:1
+        # export NCCL_IB_TC=160
+        # export NVSHMEM_IB_TRAFFIC_CLASS=160
+        # export CUDA_LAUNCH_BLOCKING=1
+        # export VLLM_LOGGING_LEVEL=DEBUG
+        # export RAY_DEDUP_LOGS=0
+        # export VLLM_TRACE_FUNCTION=1
+        # export NCCL_DEBUG=TRACE
+
+        export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+        # export VLLM_USE_V1=0
+        source /home/ynpdai1/miniconda3/etc/profile.d/conda.sh
+        conda activate vllm84
+
+        ray start --head --port=8002  && \
+        python -m vllm.entrypoints.openai.api_server \
+        --served-model-name=ds-v3-0324 --model=/data/models/DeepSeek-V3-0324 --gpu-memory-utilizatio=0.95 --tensor-parallel-size=16 --trust-remote-code \
+        --host=0.0.0.0 --port=8001 --max-log-len=1000 --max-model-len=64000
+    client(注意只有这一行):
+        ray start --block --address=10.180.112.99:8002
+
+7、llm的api调用测试
+    curl -X POST http://10.180.112.99:8001/v1/chat/completions \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer empty" \
+      -d '{
+        "model": "ds-v3-0324",
+        "messages": [
+          {"role": "system", "content": "You are a helpful assistant."},
+          {"role": "user", "content": "写一首长诗"}
+        ],
+        "temperature": 0.6,
+        "max_tokens": 1000
+      }'
+
+8、rdma_speed_ib.sh(用于实时监测8个ib网卡的流量，用于推理和训练的调试、优化)
+    #!/usr/bin/env bash
+    DEVICES=(mlx5_0 mlx5_1 mlx5_2 mlx5_3 mlx5_4 mlx5_5 mlx5_6 mlx5_7)
+    PORT=1
+    INTERVAL=5
+
+    bytes(){ cat /sys/class/infiniband/$1/ports/$PORT/counters/$2; }
+
+    while true; do
+      declare -A TX1 RX1 TX2 RX2
+      for D in "${DEVICES[@]}"; do
+          RX1[$D]=$(bytes $D port_rcv_data)
+          TX1[$D]=$(bytes $D port_xmit_data)
+      done
+      sleep $INTERVAL
+      for D in "${DEVICES[@]}"; do
+          RX2[$D]=$(bytes $D port_rcv_data)
+          TX2[$D]=$(bytes $D port_xmit_data)
+      done
+
+      echo "$(date '+%F %T')"
+      for D in "${DEVICES[@]}"; do
+          RX_B=$(( ( ${RX2[$D]} - ${RX1[$D]} ) * 4 ))   # octets→bytes
+          TX_B=$(( ( ${TX2[$D]} - ${TX1[$D]} ) * 4 ))
+          RX_Mbps=$(echo "scale=1; $RX_B*8/1000000/$INTERVAL" | bc)
+          TX_Mbps=$(echo "scale=1; $TX_B*8/1000000/$INTERVAL" | bc)
+          printf "[%-6s] RX: %6s Mb/s | TX: %6s Mb/s\n" "$D" "$RX_Mbps" "$TX_Mbps"
+      done
+      echo
+    done
+
+9、如果sglang运行报错如：gcc: fatal error: cannot execute ‘cc1plus’: execvp: No such file or directory
+        1）确保cuda-toolkit安装正常(nvcc)
+        2）确保gcc、g++安装正常(gcc和cc1plus)
+    涉及gcc、g++重新安装的解决办法：
+        sudo apt install --reinstall build-essential g++ gcc

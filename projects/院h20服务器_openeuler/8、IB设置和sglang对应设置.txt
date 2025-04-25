@@ -25,7 +25,7 @@
         3）物理联通情况
             a）查看交换机是否均为绿灯
             b)rdma link show（查看连通情况和roce/ib模式）
-        4)IB网卡的IB模式的确认
+        4)IB网卡的IB模式的确认（ibstat查看。通常装完IB驱动，网卡为IB模式。）
             若为roce（Ethernet）模式，切换为ib模式：
                 sudo apt install mstflint
                 sudo mst start
@@ -39,23 +39,23 @@
                 which opensm
             b）创建opensm服务
                 vi /etc/systemd/system/opensm.service
-[Unit]
-Description=OpenSM InfiniBand Subnet Manager
-After=network.target
+                    [Unit]
+                    Description=OpenSM InfiniBand Subnet Manager
+                    After=network.target
 
-[Service]
-Type=simple
-ExecStart=/usr/sbin/opensm
-Restart=always
-User=root
-# 如果需要指定配置文件，可以在 ExecStart 后面加上 -c /etc/opensm/opensm.conf
+                    [Service]
+                    Type=simple
+                    ExecStart=/usr/sbin/opensm
+                    Restart=always
+                    User=root
+                    # 如果需要指定配置文件，可以在 ExecStart 后面加上 -c /etc/opensm/opensm.conf
 
-[Install]
-WantedBy=multi-user.target
-            sudo systemctl daemon-reload
-            sudo systemctl start opensm
-            sudo systemctl enable opensm
-            sudo systemctl status opensm
+                    [Install]
+                    WantedBy=multi-user.target
+                                sudo systemctl daemon-reload
+                                sudo systemctl start opensm
+                                sudo systemctl enable opensm
+                                sudo systemctl status opensm
         6）如果nvidia-smi又报错（NVIDIA-SMI has failed because it couldn't communicate with the NVIDIA driver. ）：
             检查结果发给gpt
                 uname -r
