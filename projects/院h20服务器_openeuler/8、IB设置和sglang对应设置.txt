@@ -219,8 +219,28 @@ NIC Legend:
 9、nccl-test（只有IB设备可以，roce不能用）
     1)安装mpi
         sudo apt install -y openmpi-bin libopenmpi-dev
+            如果安装报错，就源码安装：
+                wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-5.0.1.tar.gz
+                tar -xf openmpi-5.0.1.tar.gz
+                cd openmpi-5.0.1
+
+                # 指定安装前缀，按需启用 UCX/PMIx/CUDA
+                ./configure --prefix=/opt/openmpi-5.0.1 \
+                            --with-ucx=/usr --with-cuda=/usr/local/cuda
+                make -j$(nproc)
+                sudo make install
+
+                # 更新环境变量
+                echo 'export PATH=/opt/openmpi-5.0.1/bin:$PATH' | sudo tee /etc/profile.d/openmpi.sh
+                echo 'export LD_LIBRARY_PATH=/opt/openmpi-5.0.1/lib:$LD_LIBRARY_PATH' | sudo tee -a /etc/profile.d/openmpi.sh
+                echo 'export LIBRARY_PATH=/opt/openmpi-5.0.1/lib:$LIBRARY_PATH' | sudo tee -a /etc/profile.d/openmpi.sh
+                source /etc/profile.d/openmpi.sh
+                mpicc --version
+                mpirun
+                这里就不需要处理~/.bashrc了
         mpicc --version
-        查找mpi.h: find /usr -name mpi.h 2>/dev/null
+        mpirun
+        查找mpi.h: find / -name mpi.h 2>/dev/null
         vi ~/.bashrc
             export CPATH=/usr/lib/x86_64-linux-gnu/openmpi/include/:$CPATH
             export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu/openmpi/lib:$LD_LIBRARY_PATH
@@ -231,6 +251,25 @@ NIC Legend:
         cd nccl-tests
         make MPI=1
         mpirun
+            如果nccl没有（且装了cuda-toolkit）：
+                wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+                sudo dpkg -i cuda-keyring_1.1-1_all.deb     # 注册公钥并写入 /etc/apt/sources.list.d/cuda-*.list
+                sudo apt update                         # 重新抓取软件索引
+                sudo apt install libnccl2 libnccl-dev
+                查看lib的位置：ldconfig -p | grep nccl
+                    libvncclient.so.1 (libc6,x86-64) => /lib/x86_64-linux-gnu/libvncclient.so.1
+                    libnccl.so.2 (libc6,x86-64) => /lib/x86_64-linux-gnu/libnccl.so.2
+                    libnccl.so (libc6,x86-64) => /lib/x86_64-linux-gnu/libnccl.so
+                查看nccl.h位置(/usr/include)：
+                    sudo find / -name nccl.h
+                查看mpi.h位置(/opt/openmpi-5.0.1/include):
+                    sudo find / -name mpi.h
+
+                export CPATH=/usr/include:/opt/openmpi-5.0.1/include:$CPATH
+                export LIBRARY_PATH=/lib/x86_64-linux-gnu:$LIBRARY_PATH   # 给 ld 用
+                export LD_LIBRARY_PATH=/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH   # 给运行期用
+                make clean
+                make MPI=1
     3)服务器2设置SSH
         ssh-keygen（全部回车）
         ssh-copy-id zsoft@10.150.66.10(要输入密码A@zhongsoft)
@@ -239,7 +278,7 @@ NIC Legend:
             ssh zsoft@10.150.66.10 hostname(免密)
             ssh zsoft2@10.150.66.11 hostname(免密)
     4)1节点测试
-        ./build/all_reduce_perf -b 8 -e 128M -f 2 -g 8
+        NCCL_SOCKET_IFNAME=ens10f0np0 ./build/all_reduce_perf -b 8 -e 128M -f 2 -g 8
     5)2节点测试(【注意】：如果2个服务器username不一样，mpirun就会卡死，此时需要把nccl-test文件夹复制到一样的地方如/mnt/share/nccl-test，不然会因为/home/zsoft/nccl-test和/home/zsoft2/nccl-test不一样导致mpirun卡死)
         vi ~/.ssh/config(因为mpirun -np 2 -H zsoft@10.150.66.10,zsoft2@10.150.66.11这样报错)
             # ~/.ssh/config
