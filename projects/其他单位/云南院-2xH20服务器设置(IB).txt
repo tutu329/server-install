@@ -133,7 +133,7 @@
         --enable-ep-moe \
         --cuda-graph-max-bs=32
 
-6、vllm双节点设置
+6、vllm双节点设置（目前vllm0.84和0.85post1，双节点tp16、开nccl_p2p，能启动服务，但推理都报错，issue上有相同报错，尚未解决，只能tp8、pp2或者关nccl_p2p）
     2个节点都须额外安装：
         conda activate vllm84
         pip install pyarrow

@@ -96,30 +96,30 @@
         d）mem-fraction-static是sglang预分配多少显存给模型，max-total-tokens是给模型分配多大的上下文空间（对显存容量影响较大），max-running-requests就是给模型开多大的并发访问数
         e）enable-torch-compile、enable-ep-moe和speculative是sglang对deepseek-r1这类模型的关键加速（单节点推理时，这几个参数影响很大，双节点不清楚为何没影响，还需要测试，可能和IB有关）
     2)2node-ds-r1-671b-8.sh（注意：sh文件里\之后的内容中不能有#，否则后续参数无视！）：
-        export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-        export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
 
-        export NCCL_SOCKET_FAMILY=AF_INET
+export NCCL_SOCKET_FAMILY=AF_INET
 
-        export NCCL_SOCKET_IFNAME=ens10f0np0
-        export GLOO_SOCKET_IFNAME=ens10f0np0
+export NCCL_SOCKET_IFNAME=ens10f0np0
+export GLOO_SOCKET_IFNAME=ens10f0np0
 
-        source /home/zsoft2/miniconda3/etc/profile.d/conda.sh
-        conda activate deepseek
-        cd ~/.cache/huggingface
-        python -m sglang.launch_server --served-model-name=ds-r1-671b --model-path=deepseek-ai/DeepSeek-R1 \
-        --enable-p2p-check \
-        --reasoning-parser=deepseek-r1 --trust-remote-code \
-        --tp 16 \
-        --dist-init-addr 10.150.66.10:5000 \
-        --nnodes 2 \
-        --node-rank 1 \
-        --host=0.0.0.0 --port=30000 \
-        --mem-fraction-static=0.9 \
-        --max-total-tokens=64000 --max-running-requests=256 \
-        --disable-radix-cache \
-        --enable-flashinfer-mla \
-        --enable-ep-moe \
+source /home/zsoft2/miniconda3/etc/profile.d/conda.sh
+conda activate deepseek
+cd ~/.cache/huggingface
+python -m sglang.launch_server --served-model-name=ds-r1-671b --model-path=deepseek-ai/DeepSeek-R1 \
+--enable-p2p-check \
+--reasoning-parser=deepseek-r1 --trust-remote-code \
+--tp 16 \
+--dist-init-addr 10.150.66.10:5000 \
+--nnodes 2 \
+--node-rank 1 \
+--host=0.0.0.0 --port=30000 \
+--mem-fraction-static=0.9 \
+--max-total-tokens=64000 --max-running-requests=256 \
+--disable-radix-cache \
+--enable-flashinfer-mla \
+--enable-ep-moe \
         --speculative-algo NEXTN \
         --speculative-draft /home/zsoft2/models/DeepSeek-R1-NextN \
         --speculative-num-steps 3 \
