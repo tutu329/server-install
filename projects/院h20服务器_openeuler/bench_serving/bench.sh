@@ -5,14 +5,15 @@ python -m sglang.bench_serving --backend vllm \
 --dataset-path /home/tutu/dataset/data.json \
 --random-input 128 \
 --random-output 1024 \
---num-prompts 1  \
+--num-prompts 1000  \
+--max-concurrency 1000 \
 --host 172.19.80.137 --port 28002 \
 --tokenizer /home/tutu/models/QwQ-32B \
 --output-file "sglang_bench.txt"
 
 # 1)如果是vllm开的api，就要指定--backend vllm
 # 2)dataset-path时，运行后会下载：https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
-# 3)json文件内容格式：
+# 3)json中的数据条数要大于num-prompts才行，json文件内容格式如下：
 [
   {
     "id": "QWJhYvA_0",
