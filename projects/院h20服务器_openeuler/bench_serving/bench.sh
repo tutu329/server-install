@@ -2,7 +2,7 @@ source /home/tutu/miniconda3/etc/profile.d/conda.sh
 conda activate sgl45
 python -m sglang.bench_serving --backend vllm \
 --dataset-name random \
---dataset-path /home/tutu/dataset/data.json \
+--dataset-path /home/tutu/dataset/dataset-1000.json \
 --random-input 128 \
 --random-output 1024 \
 --num-prompts 1000  \
