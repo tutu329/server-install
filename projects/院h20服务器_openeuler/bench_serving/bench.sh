@@ -2,7 +2,7 @@ source /home/tutu/miniconda3/etc/profile.d/conda.sh
 conda activate sgl45
 python -m sglang.bench_serving --backend vllm \
 --dataset-name random \
---dataset-path /home/tutu/dataset/ShareGPT_V3_unfiltered_cleaned_split.json \
+--dataset-path /home/tutu/dataset/data.json \
 --random-input 128 \
 --random-output 1024 \
 --num-prompts 1  \
@@ -11,8 +11,7 @@ python -m sglang.bench_serving --backend vllm \
 --output-file "sglang_bench.txt"
 
 # 1)如果是vllm开的api，就要指定--backend vllm
-# 2)dataset下载地址：https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
-#     不指定--dataset-path时，运行后会下载：https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
+# 2)dataset-path时，运行后会下载：https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered/resolve/main/ShareGPT_V3_unfiltered_cleaned_split.json
 # 3)json文件内容格式：
 [
   {
