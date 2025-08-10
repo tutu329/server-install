@@ -1,0 +1,54 @@
+【软硬件情况】
+GPU：3090 x 1（20b模型的推理速度大概85t/s，3090x2的推理速度估计在120t/s左右；由于blackwell对fp4的硬件加速，5090x1的推理速度估计在200t/s以上）
+OS：window(系统为win下的wsl，若为linux如ubuntu则更没有问题。)
+
+【gpt-oss-20b原生MXFP4模型下载（扑克牌问题稳定过，且不像ds或qwen模型有翻来覆去论证的情况）】
+下载模型（其文件夹包含了metal、origin等版本权重，因此大概需要40GB空间）：
+	git clone https://www.modelscope.cn/openai-mirror/gpt-oss-20b.git
+
+【安装与推理】
+一、win的wsl下安装vllm（这里采用了python venv虚拟环境，若用conda虚拟环境也可；若没有虚拟环境，则python、torch、vllm等库的版本会非常混乱。）
+pip install uv #安装uv
+uv venv --python 3.12 --seed #创建环境
+source ./.venv/bin/activate #激活
+UV_HTTP_TIMEOUT=500 #设置超时时间
+uv pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
+uv pip install "transformers[torch]"
+git clone https://github.com/zyongye/vllm.git
+cd vllm
+git checkout 8260948cdc379d13bf4b80d3172a03d21a983e05
+python use_existing_torch.py
+uv pip install -r requirements/build.txt
+
+CCACHE_NOHASHDIR="true" uv pip install --no-build-isolation -e . -v # 大概需要几个小时（需注意编译时有没有'killed'这个错误，解决方案见后续）
+uv pip uninstall triton
+uv pip uninstall pytorch-triton
+uv pip install triton==3.4.0
+uv pip install openai_harmony
+uv pip install mcp
+git clone https://github.com/openai/triton.git
+pushd triton
+uv pip install -e python/triton_kernels --no-deps
+popd
+
+二、运行（/data/gpt/gpt-oss-20b为存放模型的文件夹位置，host=0.0.0.0是为了避免同网段其他ip访问不了，port设置为8002，max-model-len为模型上下文最大长度，tensor-parallel-size设置你的gpu数量）
+VLLM_ATTENTION_BACKEND=TRITON_ATTN_VLLM_V1 vllm serve \
+	--served-model-name=gpt-oss-20b-mxfp4 \
+	--model=/data/gpt/gpt-oss-20b \
+	--gpu-memory-utilizatio=0.9 \
+	--tensor-parallel-size=1 \
+	--trust-remote-code \
+	--host=0.0.0.0 --port=8002 \
+	--max-log-len=1000 \
+	--max-model-len=32000
+
+注、如果编译有killed情况（内存不足），在编译前设置：
+	export CMAKE_BUILD_PARALLEL_LEVEL=2
+	export MAX_JOBS=2
+	export TORCH_CUDA_ARCH_LIST="8.6"	# 3090的计算力是8.6
+
+	清理然后重新编译
+	rm -rf ~/.cache/uv/builds-v0/*
+
+	# 继续在你原来的目录编译
+	CCACHE_NOHASHDIR="true" uv pip install --no-build-isolation -e . -v
