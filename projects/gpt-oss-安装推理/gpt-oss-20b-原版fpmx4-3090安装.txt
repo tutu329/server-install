@@ -42,7 +42,7 @@ VLLM_ATTENTION_BACKEND=TRITON_ATTN_VLLM_V1 vllm serve \
 	--max-log-len=1000 \
 	--async-scheduling \
 	--max-model-len=32000
-# 注：--async-scheduling能解决该类问题：“openai_harmony.HarmonyError: Unexpected token 200012 while expecting start token 200006”
+# 【注】目前该类问题还未解决，github上尚无解决反馈：“openai_harmony.HarmonyError: Unexpected token 200012 while expecting start token 200006”
 
 注、如果编译有killed情况（内存不足），在编译前设置：
 	export CMAKE_BUILD_PARALLEL_LEVEL=2
