@@ -6,7 +6,6 @@ OS：window(系统为win下的wsl，若为linux如ubuntu则更没有问题。)
 下载模型（其文件夹包含了metal、origin等版本权重，因此大概需要40GB空间）：
 	git clone https://www.modelscope.cn/openai-mirror/gpt-oss-20b.git
 
-
 【安装与推理】
 一、win的wsl下安装vllm（这里采用了python venv虚拟环境，若用conda虚拟环境也可；若没有虚拟环境，则python、torch、vllm等库的版本会非常混乱。）
 pip install uv #安装uv
