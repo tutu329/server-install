@@ -1,0 +1,26 @@
+一、在可联网机器上准备镜像
+1、拉取镜像
+    docker pull hiyouga/llamafactory:latest
+2、导出镜像为 tar
+    docker image save -o llamafactory.tar hiyouga/llamafactory:latest
+
+二、在内网机器上
+1、加载镜像
+    docker image load -i llamafactory.tar
+2、启动llama-factory
+    # 1) 运行容器（按你的镜像名替换）
+    docker run -dit --name llamafactory \
+      --gpus '"device=0,1,2,3,4,5,6,7"' \
+      --ipc=host --shm-size 16g \
+      -e TRANSFORMERS_OFFLINE=1 -e HF_DATASETS_OFFLINE=1 -e WANDB_DISABLED=true \
+      -v /data/hf_cache:/root/.cache/huggingface \
+      -v /data/models:/models \
+      -v /data/llamafactory/data:/app/data \
+      -v /data/llamafactory/output:/app/output \
+      hiyouga/llamafactory:latest
+
+    # 2) 进入容器
+    docker exec -it llamafactory bash
+
+    # 3) 开训（以 Llama3 LoRA SFT 示例为例，确保 yaml 里已改为本地路径/数据名）
+    llamafactory-cli train examples/train_lora/llama3_lora_sft.yaml

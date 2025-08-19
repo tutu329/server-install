@@ -1,3 +1,21 @@
+tmux的alias（下述代码放在.bashrc中）
+tm() {
+            tmux new -s "$1"
+    }
+
+tmt() {
+            tmux attach -t "$1"
+    }
+
+tms() {
+            tmux ls
+    }
+
+tmk() {
+            tmux kill-session -t "$1"
+    }
+
+
 一、在可联网机器上准备镜像
 1、拉取镜像并记下 digest（便于校验一致性）
 docker pull vllm/vllm-openai:gptoss
