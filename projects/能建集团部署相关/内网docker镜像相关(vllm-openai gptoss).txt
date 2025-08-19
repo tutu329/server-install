@@ -26,5 +26,54 @@ docker image load -i vllm_gptoss.tar.gz
 # 观察输出会显示已加载的 REPOSITORY:TAG
 docker images | grep vllm-openai
 
+三、启动vllm推理gpt-oss-120b
+    gpt_up.sh(后台运行的话，sudo docker run -d)
+        sudo docker run  \
+          --name vllm-gptoss-120b \
+          --pull=never \
+          --gpus '"device=0,1,2,3,4,5,6,7"' \
+          --ipc=host \
+          -p 18001:18001 \
+          -v /data/models/gpt-oss-120b:/models/gpt-oss-120b:ro \
+          -v /data/models/encodings/:/etc/encodings/:ro \
+          -e VLLM_ATTENTION_BACKEND=TRITON_ATTN_VLLM_V1 \
+          -e TIKTOKEN_ENCODINGS_BASE=/etc/encodings \
+          --restart unless-stopped \
+          vllm/vllm-openai:gptoss \
+          --served-model-name gpt-oss-120b \
+          --tensor-parallel-size=8 \
+          --model /models/gpt-oss-120b \
+          --gpu-memory-utilizatio=0.7 \
+          --max-log-len=1000 \
+          --port 18001
+        # --ulimit memlock=-1 --ulimit stack=67108864 --ulimit nofile=1048576:1048576 \
+        # -v /data/vllm-cache:/root/.cache \
+        # -e HF_HOME=/root/.cache/huggingface \
+        # -e TRITON_CACHE_DIR=/root/.cache/triton \
+        # -e TORCHINDUCTOR_CACHE_DIR=/root/.cache/torchinductor \
+        # -e NCCL_IB_DISABLE=1 \
+        # -e TRANSFORMERS_OFFLINE=1 \
+        # -e HF_HUB_OFFLINE=1 \
 
+    gpt_down.sh
+        sudo docker stop vllm-gptoss-120b
+        sudo docker rm vllm-gptoss-120b
+
+四、关于报错openai_harmony.HarmonyError: error downloading or loading vocab file: failed to download or load vocab file：
+    参考：https://github.com/vllm-project/vllm/issues/22525
+        @andresC98 @YangloveBaoer Found a fix for this:
+
+        The problem is caused by the OpenAI Harmony library here:
+            https://github.com/openai/harmony/blob/main/src/tiktoken_ext/public_encodings.rs#L29
+        You need to manually download the following 2 files (src https://github.com/openai/harmony/blob/main/src/tiktoken_ext/public_encodings.rs#L240):
+            https://openaipublic.blob.core.windows.net/encodings/o200k_base.tiktoken
+            https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken
+        Put both files in a directory named encodings
+        Then in your Docker deployment mount your directory as read-only:
+         -v /tmp/encodings/:/etc/encodings/:ro
+        Also set the ENV variable TIKTOKEN_ENCODINGS_BASE  with the value /etc/encodings.
+    解决：
+        1）o200k_base.tiktoken和cl100k_base.tiktoken复制到如/data/models/encodings/下
+        2）docker映射：-v /data/models/encodings/:/etc/encodings/:ro
+        3）docker增加环境变量：-e TIKTOKEN_ENCODINGS_BASE=/etc/encodings
 
