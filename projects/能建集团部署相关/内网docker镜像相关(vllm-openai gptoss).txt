@@ -15,7 +15,6 @@ pigz -9 vllm_gptoss.tar           # 生成 vllm_gptoss.tar.gz
 3、生成校验值，避免拷贝损坏
 sha256sum vllm_gptoss.tar.gz > vllm_gptoss.tar.gz.sha256
 
-
 二、在内网机器加载镜像
 1、把文件从移动硬盘拷到服务器（例如 /data/images）
 mkdir -p /data/images && cd /data/images
