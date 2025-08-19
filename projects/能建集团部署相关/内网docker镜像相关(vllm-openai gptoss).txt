@@ -1,0 +1,30 @@
+一、在可联网机器上准备镜像
+1、拉取镜像并记下 digest（便于校验一致性）
+docker pull vllm/vllm-openai:gptoss
+docker image inspect --format='{{index .RepoDigests 0}}' vllm/vllm-openai:gptoss
+# 例：得到 vllm/vllm-openai@sha256:xxxxxxxx...
+
+2、导出镜像为 tar（可选：用 pigz 压缩，体积会小很多，拷贝更快）
+# 仅打包
+docker image save -o vllm_gptoss.tar vllm/vllm-openai:gptoss
+
+# 推荐：压缩（需要已安装 pigz（mac下是brew install pigz），没有就用 gzip）
+pigz -9 vllm_gptoss.tar           # 生成 vllm_gptoss.tar.gz
+# 或：docker image save vllm/vllm-openai:gptoss | pigz -9 > vllm_gptoss.tar.gz
+
+3、生成校验值，避免拷贝损坏
+sha256sum vllm_gptoss.tar.gz > vllm_gptoss.tar.gz.sha256
+
+
+二、在内网机器加载镜像
+1、把文件从移动硬盘拷到服务器（例如 /data/images）
+mkdir -p /data/images && cd /data/images
+# 拷贝后验证完整性
+sha256sum -c vllm_gptoss.tar.gz.sha256   # 或校验各分片的 parts.sha256
+
+2、加载镜像
+docker image load -i vllm_gptoss.tar.gz
+# 观察输出会显示已加载的 REPOSITORY:TAG
+docker images | grep vllm-openai
+
+

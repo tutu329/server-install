@@ -541,6 +541,12 @@ rs.initiate({
     0) 安装后的测试:
         curl -x http://localhost:7890 https://www.google.com
         curl -x http://localhost:7890 https://huggingface.co
+    0) 安装v2ray或clash/shadowsocket后的alias设置（注意！：export单独放在一个sh中，运行这个sh后，环境变量其实无效，因此要放在~/.bashrc或~/.zshrc的alias中）
+        .bashrc文件：
+            alias vpn_on='export http_proxy="http://127.0.0.1:7890"; export https_proxy="http://127.0.0.1:7890"; echo "VPN已启用（终端流量走ClashX）"'
+            alias vpn_off='unset http_proxy; unset https_proxy; echo "VPN已关闭（终端恢复直连）"'
+        source ~/.bashrc
+        然后就可以使用控制台的一些tz应用如claude code、docker（当然要确保clash/v2ray开着，且所开http端口为7890）
     1) mkdir v2ray && cd v2ray
     2) curl -O https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh
     3) sudo bash install-release.sh
