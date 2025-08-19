@@ -43,9 +43,11 @@ docker images | grep vllm-openai
           --served-model-name gpt-oss-120b \
           --tensor-parallel-size=8 \
           --model /models/gpt-oss-120b \
-          --gpu-memory-utilizatio=0.7 \
+          --gpu-memory-utilizatio=0.9 \
           --max-log-len=1000 \
+          --host=0.0.0.0 \
           --port 18001
+
         # --ulimit memlock=-1 --ulimit stack=67108864 --ulimit nofile=1048576:1048576 \
         # -v /data/vllm-cache:/root/.cache \
         # -e HF_HOME=/root/.cache/huggingface \
