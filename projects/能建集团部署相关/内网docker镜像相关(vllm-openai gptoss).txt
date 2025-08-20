@@ -97,3 +97,264 @@ docker images | grep vllm-openai
         2）docker映射：-v /data/models/encodings/:/etc/encodings/:ro
         3）docker增加环境变量：-e TIKTOKEN_ENCODINGS_BASE=/etc/encodings
 
+五、docker内的gpt-oss的benchmark测试
+    1、sudo docker ps
+    2、sudo docker exec -it vllm-gptoss-120b bash
+    3、运行不依赖pandas等库的最小测试代码(直接容器里执行下面代码)：
+
+docker exec -it vllm-gptoss-120b bash -lc 'cat >/tmp/bench_tokens.py << "PY"
+# /tmp/bench_tokens.py
+import json, time, threading, queue, http.client, math, statistics
+from urllib.parse import urlparse
+
+# ========= 可按需修改的配置 =========
+ENDPOINT = "http://127.0.0.1:18001/v1/chat/completions"
+MODEL = "gpt-oss-120b"
+API_KEY = None   # 有鉴权就填字符串；无鉴权保持 None
+
+# 批次请求数（=并发数）
+BATCH_SIZES = [10, 100, 1000]
+
+# 每个请求“目标输入 token 数量”（近似值，用构造长 prompt 实现）
+MAX_PROMPT_TOKENS_LIST = [100, 1000, 10000]
+
+# 每个请求的“输出 token 上限”固定为 1000
+FIXED_OUTPUT_TOKENS = 1000
+
+# 每个请求超时时间（秒）：大 prompt 或大输出时适当加大
+TIMEOUT = 600
+# ==================================
+
+parsed = urlparse(ENDPOINT)
+HOST, PORT = parsed.hostname, parsed.port or (443 if parsed.scheme=="https" else 80)
+PATH = parsed.path or "/v1/chat/completions"
+USE_HTTPS = (parsed.scheme == "https")
+
+def now():
+    return time.perf_counter()
+
+def pct(values, p):
+    """返回百分位（p 为 50、90、95、99 等），values 为秒"""
+    if not values:
+        return float("nan")
+    arr = sorted(values)
+    k = max(0, min(len(arr)-1, int(math.ceil(p/100*len(arr)))-1))
+    return arr[k]
+
+def build_prompt(n_tokens: int) -> str:
+    """
+    构造一个大约 n_tokens 长度的中文 prompt。
+    说明：实际 tokenizer 的切分与此近似值可能有偏差，但对压测足够。
+    如需更严谨，可换英文单词或实际 tokenizer 统计后微调。
+    """
+    # 为避免超长行影响打印，分段换行
+    chunk = ("你好，请回答这个问题。")  # 估约 8~12 tokens，因模型/分词不同会有差异
+    reps = max(1, n_tokens)  # 近似按 token 数重复
+    s = (chunk + " ") * reps
+    # 前置一个说明性问题，避免全是重复字符
+    prefix = "请用简洁中文回答：你是谁？\n\n"
+    return prefix + s
+
+def do_one_request(prompt_tokens_target: int):
+    """
+    发送一个流式请求，返回字典：
+    {
+      'ok': bool,
+      'ttft': 首token延迟（秒）或 None,
+      'prefill_tps': 每请求输入吞吐（tokens/s）或 None,
+      'decode_tps': 每请求输出吞吐（tokens/s）或 None,
+      'compl_tokens': completion_tokens,
+      'prompt_tokens': prompt_tokens
+    }
+    """
+    headers = {"Content-Type": "application/json"}
+    if API_KEY:
+        headers["Authorization"] = f"Bearer {API_KEY}"
+
+    body = {
+        "model": MODEL,
+        "messages": [{"role": "user", "content": build_prompt(prompt_tokens_target)}],
+        "max_tokens": FIXED_OUTPUT_TOKENS,        # 输出上限固定为 1000
+        "temperature": 0,
+        "stream": True,
+        "stream_options": {"include_usage": True} # 需要流式 usage 支持
+    }
+    data = json.dumps(body)
+
+    conn = http.client.HTTPSConnection(HOST, PORT, timeout=TIMEOUT) if USE_HTTPS \
+           else http.client.HTTPConnection(HOST, PORT, timeout=TIMEOUT)
+
+    t_start = now()
+    first_time = None
+    prompt_tokens = 0
+    compl_tokens = 0
+    ok = True
+
+    try:
+        conn.request("POST", PATH, body=data, headers=headers)
+        resp = conn.getresponse()
+        if resp.status >= 400:
+            _ = resp.read()
+            return {"ok": False, "ttft": None, "prefill_tps": None, "decode_tps": None,
+                    "compl_tokens": 0, "prompt_tokens": 0}
+
+        buf = b""
+        done = False
+        while True:
+            chunk = resp.read(4096)
+            if not chunk:
+                break
+            buf += chunk
+            while True:
+                pos = buf.find(b"\n")
+                if pos == -1:
+                    break
+                line = buf[:pos].decode("utf-8", errors="ignore").strip()
+                buf = buf[pos+1:]
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    done = True
+                    break
+                try:
+                    j = json.loads(payload)
+                except Exception:
+                    continue
+
+                # 首 token 时间：第一次看到 delta.content 非空或 role=assistant
+                try:
+                    delta = j["choices"][0].get("delta", {})
+                    if first_time is None:
+                        if delta.get("content") not in (None, "") or delta.get("role") == "assistant":
+                            first_time = now()
+                except Exception:
+                    pass
+
+                # usage 通常只在流的最后事件里出现
+                if "usage" in j:
+                    u = j["usage"]
+                    prompt_tokens = u.get("prompt_tokens", 0) or 0
+                    compl_tokens  = u.get("completion_tokens", 0) or 0
+
+            if done:
+                break
+
+        t_end = now()
+
+    except Exception:
+        ok = False
+        t_end = now()
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    ttft = None
+    prefill_tps = None
+    decode_tps = None
+
+    if ok and first_time is not None:
+        ttft = first_time - t_start
+        if ttft > 0 and prompt_tokens > 0:
+            prefill_tps = prompt_tokens / ttft
+        if t_end > first_time and compl_tokens > 0:
+            decode_tps = compl_tokens / (t_end - first_time)
+
+    return {
+        "ok": ok,
+        "ttft": ttft,
+        "prefill_tps": prefill_tps,
+        "decode_tps": decode_tps,
+        "compl_tokens": compl_tokens,
+        "prompt_tokens": prompt_tokens
+    }
+
+def run_batch(batch_size, prompt_tokens_target):
+    """
+    跑一批 batch_size 个请求，并发数=批次规模（全部同时发）
+    返回 (results, wall_start, wall_end)
+    """
+    qjobs = queue.Queue()
+    for i in range(batch_size):
+        qjobs.put(i)
+
+    results = [None] * batch_size
+    wall_start = now()
+
+    def worker():
+        while True:
+            try:
+                idx = qjobs.get_nowait()
+            except queue.Empty:
+                break
+            r = do_one_request(prompt_tokens_target)
+            results[idx] = r
+            qjobs.task_done()
+
+    # 并发=批次规模：一次性创建 batch_size 条线程（资源不足请降低批次或拆分）
+    threads = [threading.Thread(target=worker, daemon=True) for _ in range(batch_size)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+
+    wall_end = now()
+    return results, wall_start, wall_end
+
+def summarize(batch_size, prompt_tokens_target, results, wall_start, wall_end):
+    oks = [r for r in results if r and r["ok"]]
+    errs = len(results) - len(oks)
+
+    ttfts = [r["ttft"] for r in oks if r["ttft"] is not None]
+    prefill = [r["prefill_tps"] for r in oks if r["prefill_tps"] is not None]
+    decode = [r["decode_tps"] for r in oks if r["decode_tps"] is not None]
+
+    total_prompt = sum(r["prompt_tokens"] for r in oks)
+    total_completion = sum(r["compl_tokens"] for r in oks)
+    n_ok = max(1, len(oks))
+    avg_prompt_per_req = total_prompt / n_ok
+    avg_completion_per_req = total_completion / n_ok
+
+    wall_sec = max(1e-9, wall_end - wall_start)
+    overall_decode_tps = total_completion / wall_sec
+
+    print("\n" + "="*72)
+    print(f"模型 {MODEL} | 目标输入 tokens≈{prompt_tokens_target} | 输出上限 {FIXED_OUTPUT_TOKENS}")
+    print(f"批次规模（并发数）：{batch_size}  | 成功：{len(oks)}  失败：{errs}")
+    print(f"总输入 tokens：{total_prompt}  | 总输出 tokens：{total_completion}")
+    print(f"单请求平均：输入 {avg_prompt_per_req:.1f}  | 输出 {avg_completion_per_req:.1f} tokens/请求")
+    print(f"批次墙钟耗时：{wall_sec:.3f} s  | 总体输出吞吐：{overall_decode_tps:.2f} tokens/s")
+
+    def stat_line(name, arr, unit=""):
+        if not arr:
+            print(f"{name}：无数据（可能该批次失败或实现不支持流式 usage）")
+            return
+        mean = statistics.fmean(arr)
+        p50 = pct(arr, 50); p90 = pct(arr, 90); p95 = pct(arr, 95); p99 = pct(arr, 99)
+        if unit == "ms":
+            print(f"{name}：均值 {mean*1000:.1f} ms | p50 {p50*1000:.1f} | p90 {p90*1000:.1f} | p95 {p95*1000:.1f} | p99 {p99*1000:.1f}")
+        else:
+            print(f"{name}：均值 {mean:.2f} | p50 {p50:.2f} | p90 {p90:.2f} | p95 {p95:.2f} | p99 {p99:.2f}")
+
+    stat_line("首 token 延迟（TTFT）", ttfts, unit="ms")
+    stat_line("平均每请求 输入吞吐（prefill tokens/s）", prefill)
+    stat_line("平均每请求 输出吞吐（decode tokens/s）", decode)
+    print("="*72)
+
+def main():
+    for tgt in MAX_PROMPT_TOKENS_LIST:
+        for n in BATCH_SIZES:
+            print(f"\n>>> 开始批次：请求数=并发数 {n} | 目标输入 tokens≈{tgt} | 输出上限 {FIXED_OUTPUT_TOKENS} | 模型 {MODEL} | 端点 {ENDPOINT}")
+            results, ws, we = run_batch(n, tgt)
+            summarize(n, tgt, results, ws, we)
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n用户中断")
+PY
+python3 /tmp/bench_tokens.py'
+
