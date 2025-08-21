@@ -121,7 +121,7 @@ import pprint
 client = OpenAI(base_url="http://10.0.10.6:28001/v1", api_key="EMPTY")
 # 如直连官方：client = OpenAI()
 
-# ✅ Responses 的“扁平”工具定义
+# Responses 的“扁平”工具定义
 tools = [
     {
         "type": "function",
@@ -194,13 +194,6 @@ else:
         print('[result]')
         pprint.pprint(result)
         print()
-
-        # ❗不要用 role:"tool"；用独立条目 function_call_output
-        input_msgs.append({
-            "type": "function_call_output",
-            "call_id": call_id,
-            "output": json.dumps(result),
-        })
 
 # --------------------------------需查看结果是否有tool_calls--------------------------------------
 
