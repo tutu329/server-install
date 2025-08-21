@@ -1,0 +1,16 @@
+一、ssh端口扩展
+# 备份主配置（以防以后需要对比）
+cp -a /etc/ssh/sshd_config /etc/ssh/sshd_config.bak.$(date +%F_%T)
+
+# 新建/覆盖一个端口配置文件（推荐方式）
+cat >/etc/ssh/sshd_config.d/ports.conf <<'EOF'
+# 同时监听 22 和 28010
+Port 22
+Port 28010
+# 如需绑定全部网卡
+ListenAddress 0.0.0.0
+EOF
+
+二、重启sshd
+sshd -t        # 无输出即通过
+systemctl reload sshd || systemctl restart sshd
