@@ -1,0 +1,25 @@
+# 普通方式
+sudo docker run -it --rm --name n8n \
+  -p 7868:5678 \
+  -v n8n_data:/home/node/.n8n \
+  -v /home/tutu/ssl:/certs \
+  -e N8N_PROTOCOL=https \
+  -e N8N_SSL_KEY=/certs/powerai.key \
+  -e N8N_SSL_CERT=/certs/powerai_public.crt \
+  docker.n8n.io/n8nio/n8n
+
+# 支持vpn方式(n8n中可以访问groq这类需要vpn的模型)
+sudo docker run -it --rm --name n8n \
+  -p 7868:5678 \
+  --add-host=host.docker.internal:host-gateway \
+  -e HTTP_PROXY=http://host.docker.internal:7890 \
+  -e HTTPS_PROXY=http://host.docker.internal:7890 \
+  -e http_proxy=http://host.docker.internal:7890 \
+  -e https_proxy=http://host.docker.internal:7890 \
+  -e NO_PROXY=localhost,127.0.0.1,::1,host.docker.internal,172.17.0.1,*.local,*.docker,10.0.0.0/8,192.168.0.0/16,172.16.0.0/12 \
+  -v n8n_data:/home/node/.n8n \
+  -v /home/tutu/ssl:/certs \
+  -e N8N_PROTOCOL=https \
+  -e N8N_SSL_KEY=/certs/powerai.key \
+  -e N8N_SSL_CERT=/certs/powerai_public.crt \
+  docker.n8n.io/n8nio/n8n
