@@ -1,0 +1,32 @@
+一、关键注意事项
+1）服务器硬盘占用不能到90%，否则登录http://powerai.cc:7869/和http://powerai.cc:7869/health会报错：连不上server
+
+二、配置（server为powerai.cc，端口为7869）
+1、cvat.sh
+cd ~/sam2/cvat
+export CVAT_HOST=powerai.cc
+export CVAT_HTTP_PORT=7869
+export CVAT_BASE_URL=http://powerai.cc:7869
+sudo -E docker compose up
+
+2、把docker-compose.yml里 traefik 服务下的 ports: 改成这样（只改第一行）：
+  traefik:
+    image: traefik:v3.3
+    container_name: traefik
+    restart: always
+    ports:
+      - "7869:8080"   # ← 由原来的 8080:8080 改为 7869:8080
+      - "8090:8090"
+
+3、默认docker-compose.yml里 CVAT_BASE_URL是空的，建议改为可插值，避免生成链接或 CORS 场景异常：
+  cvat_server:
+    ...
+    environment:
+      <<: [*backend-env, *clickhouse-env]
+      DJANGO_MODWSGI_EXTRA_ARGS: ''
+      ALLOWED_HOSTS: '*'
+      ADAPTIVE_AUTO_ANNOTATION: 'false'
+      NUMPROCS: 2
+      CVAT_ANALYTICS: 1
+      CVAT_BASE_URL: ${CVAT_BASE_URL:-http://${CVAT_HOST:-localhost}:${CVAT_HTTP_PORT:-8080}}
+      ONE_RUNNING_JOB_IN_QUEUE_PER_USER:
