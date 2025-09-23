@@ -1,3 +1,4 @@
+一、部署n8n
 # 普通方式
 sudo docker run -it --rm --name n8n \
   -p 7868:5678 \
@@ -23,3 +24,32 @@ sudo docker run -it --rm --name n8n \
   -e N8N_SSL_KEY=/certs/powerai.key \
   -e N8N_SSL_CERT=/certs/powerai_public.crt \
   docker.n8n.io/n8nio/n8n
+
+二-1、n8n的最简测试
+    1、Create Workflow（这里要等一段时间）（或者第一次使用可以用'Test a simple AI Agent example'）
+    2、首先添加“On chat message”，点击后直接点左上角"Back to canvas"退出
+    3、添加AI->AI Agent，直接退出
+    4、Chat Model这里添加OpenAI Chat Model，配置OpenAI Chat Model：
+        1）Create new Credential
+        2）API Key设置为：sk-xxx
+        3）Base URL设置为：https://api.deepseek.com/v1
+        4）Saved后自动会测试连接，退出，Model中选择提供的模型如“deepseek-chat”或“deepseek-reasoner”，点击"Back to canvas"
+    5、下方Chat可以直接输入内容，即可运行等待右侧OUTPUT
+
+二-2、n8n的agent简单联网问答测试
+    1、之前的基础上，Memory这里添加Simple Memory
+    2、tool这里添加HTTP Request Tool，URL这里点击’Let the model define this parameter‘
+    3、最简单agent已完成，在Chat里输入：https://36kr.com/p/1289170894876425这个页面内容是什么（此时即可看到问答结果）
+    4、注意：n8n的agent调用tool的过程，必须模型支持tool call，否则会报错。（前述官方deepseek模型的api已经支持tool call；如果模型是自己部署的，需要vllm、sglang这类推理器打开所推理模型的tool call功能，不是所有模型都支持的。）
+
+二-3、n8n的多层agent和agent调用mcp的测试
+    1、之前的基础上，Tool这里可以删除HTTP Request Tool，再添加AI Agent Tool，配置过程和前述配置AI Agent可以一致，用同样的deepseek模型，Prompt的设置可以点击’Let the model define this parameter‘
+    2、AI Agent Tool的Tool添加MCP Client
+    3、MCP Client的设置
+        1）安装和运行playwright的mcp：
+            npx @playwright/mcp@latest --port 7867
+        2）MCP Client设置：
+            Endpoint: http://YOUR_IP:7867/mcp
+            Server Transport: HTTP streamable
+            Tool to include: browser_navigator
+    4、最简单2层agent已完成，在Chat里输入：https://36kr.com/p/1289170894876425这个页面内容是什么
