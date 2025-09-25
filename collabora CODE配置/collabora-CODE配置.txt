@@ -1,0 +1,27 @@
+一、总体流程
+1、通过iframe的postmessage，将callpythonscript数据发送给CODE的py接口
+2、发送格式：
+          const officialFormat = {
+            'MessageId': 'CallPythonScript',
+            'SendTime': Date.now(),
+            'ScriptFile': 'office_api.py',
+            'Function': data.cmd,
+            'Values': convertedParams
+          }
+3、发送顺序（第一条必须执行，否则后续指令发送后CODE后端完全没有反应。这是最大坑。）
+	1）postMessage(JSON.stringify({'MessageId': 'Host_PostmessageReady'}), '*')
+	2）postMessage(JSON.stringify(officialFormat), collaboraUrl)
+
+二、python接口文件配置
+	py接口文件放置在CODE容器的/opt/collaboraoffice/share/Scripts/python/下，权限为cool:cool
+
+三、关于python接口的编制
+	1、获取文档的入口对象
+		1）import uno
+		2）model对象获取（估计是CODE后端做了专门的注入）
+			model=XSCRIPTCONTEXT.getDesktop().getCurrentComponent()
+			model.getText()
+			......
+	2、接口导出：py中必须作手工导出如g_exportedScripts = (search_and_format_text, insert_text, insert_title)
+	3、接口实现：参考office_api.py
+	4、官方文档极其混乱，接口实现需要依靠LLM编写
