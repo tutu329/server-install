@@ -1,0 +1,293 @@
+1、服务器信息（2025-10-20路军芳提供）
+8卡5090 服务器：临时IP：172.19.80.138
+操作系统：ubuntu 22.04   账号：hw 密码：Admin@9000，进入后切换root，密码：Admin@9000
+配置：CPU：2*8462Y CPU
+内存：512GB（16*32GB DDR5 ）
+显卡：TRX 5090（32GB显存）*8
+硬盘：2*1920G SSD +4块8T SATA机械硬盘
+
+2、添加user
+    sudo adduser tutu（密码为：jackseaver79)
+    sudo usermod -aG sudo tutu(添加sudo权限，sudo可用自己密码)
+
+3、下载frp
+    uname -m（是x86_64，然后选择frp的合适版本）
+    mkdir download
+    cd download
+    wget https://github.com/fatedier/frp/releases/download/v0.51.3/frp_0.51.3_linux_amd64.tar.gz
+    tar -zxvf frp_0.51.3_linux_amd64.tar.gz(如解开为/root/download/frp_0.51.3_linux_amd64)
+    cp -r frp_0.51.3_linux_amd64 ~/frp
+
+4、设置frpc(注意，为了防止和其他服务器的frpc冲突，这里如ssh、ftp这种名字都加了后缀2，端口号前面都加了2)
+    1) vi ~/frpc.ini
+        # frpc.ini
+        [common]
+        server_addr = powerai.cc
+        server_port = 7880
+
+        [ssh2 26000]
+        type = tcp
+        local_ip = 127.0.0.1
+        local_port = 22
+        remote_port = 26000
+
+        [ftp2 28021]
+        type = tcp
+        local_ip = 127.0.0.1
+        local_port = 21
+        remote_port = 28021
+
+        # if you want to expose multiple ports, add 'range:' prefix to the section name
+        # frpc will generate multiple proxies such as 'tcp_port_6010', 'tcp_port_6011' and so on.
+        [range:ftp_pasv2]
+        type = tcp
+        local_ip = 127.0.0.1
+        local_port = 28012-28020
+        remote_port = 28012-28020
+        use_encryption = false
+        use_compression = false
+
+        [range:sd2]
+        type = tcp
+        local_ip = 127.0.0.1
+        local_port = 25100-25120
+        remote_port = 25100-25120
+
+        [range:llm2]
+        type = tcp
+        local_ip = 127.0.0.1
+        local_port = 28001-28011
+        remote_port = 28001-28011
+
+        [range:ui2]
+        type = tcp
+        local_ip = 127.0.0.1
+        local_port = 27860-27879
+        remote_port = 27860-27879
+
+        [range:other2]
+        type = tcp
+        local_ip = 127.0.0.1
+        local_port = 29000-279200
+        remote_port = 29000-279200
+    2) 打开powerai.cc的阿里云ecs服务器对应的端口！
+    3）设置frpc自动启动
+        sudo vi /etc/systemd/system/frpc.service
+            [Unit]
+            Description=frpc Service
+            After=network.target
+            Wants=network.target
+
+            [Service]
+            Type=simple
+            User=tutu
+            Restart=always
+            RestartSec=5s
+            ExecStart=/home/tutu/frp/frpc -c /home/tutu/frp/frpc.ini
+            ExecReload=/home/tutu/frp/frpc -c /home/tutu/frp/frpc.ini
+
+            [Install]
+            WantedBy=multi-user.target
+
+        sudo systemctl daemon-reload
+        sudo systemctl start frpc.service
+        sudo systemctl enable frpc.service
+        sudo systemctl status frpc.service
+    4）然后就可以通过powerai.cc:26000登录服务器ssh
+
+5、v2ray
+    0) 安装后的测试:
+        curl -x http://localhost:7890 https://www.google.com
+        curl -x http://localhost:7890 https://huggingface.co
+    0) 安装v2ray或clash/shadowsocket后的alias设置（注意！：export单独放在一个sh中，运行这个sh后，环境变量其实无效，因此要放在~/.bashrc或~/.zshrc的alias中）
+        .bashrc文件的alias：
+            alias vpn_on='export http_proxy="http://127.0.0.1:7890"; export https_proxy="http://127.0.0.1:7890"; echo "VPN已启用（终端流量走ClashX）"'
+            alias vpn_off='unset http_proxy; unset https_proxy; echo "VPN已关闭（终端恢复直连）"'
+            alias p='ps aux | grep -v "grep" | grep $1'
+            alias s='systemctl list-unit-files | grep $1'
+            alias d='du -sh .; df -h .'
+            alias pw='sudo ipmitool sdr | grep -i watt'
+        .bashrc文件的api-key（要在文件最前面，否则有些登录方式无法获取）：
+            export GROQ_API_KEY=...
+            export TAVILY_API_KEY=...
+            export QWEN_API_KEY=...
+        source ~/.bashrc
+        然后就可以使用控制台的一些tz应用如claude code、docker（当然要确保clash/v2ray开着，且所开http端口为7890）
+    1) mkdir v2ray && cd v2ray
+    2) curl -O https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh
+    3) sudo bash install-release.sh
+    4) 常用命令:
+        sudo systemctl status v2ray
+        sudo systemctl enable v2ray
+        sudo systemctl restart v2ray
+        sudo systemctl start v2ray
+        sudo systemctl stop v2ray
+        netstat -autn | grep 7890
+
+        git config --global http.proxy http://localhost:7890
+        git config --global https.proxy http://localhost:7890
+        查看: git config --global -l
+        git config --global --unset http.proxy
+        git config --global --unset https.proxy
+
+        export http_proxy="http://127.0.0.1:7890"
+        export https_proxy="http://127.0.0.1:7890"
+
+        a) python中，若playwright需要通过v2ray代理:
+            1、搜索过程:
+                增加proxy={"server": "http://127.0.0.1:7890"}:
+                self.browser = await p.chromium.launch(
+                    channel="chrome",
+                    headless=True,
+                    proxy={"server": "http://127.0.0.1:7890"},
+                )   # 启动chrome
+            2、获取搜索结果url内容的过程:
+                尚未解决！
+
+        b) 如果python程序中需要访问外网，上述变量可能不起作用，需采用以下方式在程序里写入这些，用于测试：
+            import requests
+
+            proxies = {
+                'http': 'http://127.0.0.1:7890',
+                'https': 'http://127.0.0.1:7890',
+            }
+
+            try:
+                response = requests.get('https://www.google.com', proxies=proxies)
+                print(response.status_code)
+                print(response.text[:200])  # 打印前200个字符
+            except requests.exceptions.RequestException as e:
+                print(e)
+
+    5) sudo vi /usr/local/etc/v2ray/config.json (这里只放了个美国4)
+{
+    "inbounds": [
+        {
+            "port": 7890,
+            "protocol": "http",
+            "settings": {
+                "auth": "noauth",
+                "udp": true
+            }
+        }
+    ],
+    "outbounds": [
+        {
+            "protocol": "vmess",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": "node-1504.yh82l3dsytxzf8.com",
+                        "port": 30030,
+                        "users": [
+                            {
+                                "id": "1eb09c5c-7b38-3f8d-9ba8-8e1877d73c3e",
+                                "alterId": 0,
+                                "security": "auto"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        {
+            "protocol": "freedom",
+            "settings": {},
+            "tag": "direct"
+        }
+    ],
+    "routing": {
+        "domainStrategy": "AsIs",
+        "rules": [
+            {
+                "type": "field",
+                "ip": [
+                    "geoip:private"
+                ],
+                "outboundTag": "direct"
+            }
+        ]
+    }
+}
+
+6、安装mini-conda
+    vpn_on
+    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+    sh Miniconda3-latest-Linux-x86_64.sh（全部选择yes）
+    source ~/.bashrc
+    conda可用
+
+7、pip设置清华源
+    pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+
+8、jupyter
+    1)安装
+        vpn_on
+        conda create -n ju python=3.12
+        conda activate ju
+        vpn_off
+        pip install jupyterlab
+    2)jupyter自启动
+        找到jupyter：whereis jupyter-lab（/home/tutu/miniconda3/envs/ju/bin/jupyter-lab）
+        sudo vi /etc/systemd/system/jupyter.service
+[Unit]
+Description=jupyter lab
+After=network.target
+[Service]
+Type=simple
+User=tutu
+Environment="PATH=/home/tutu/miniconda3/envs/ju/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/tutu/miniconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=27862
+ExecReload=/home/tutu/miniconda3/envs/ju/bin/jupyter lab --allow-root --ServerApp.allow_remote_access=True --ServerApp.token=Jackseaver112279 --ip=* --port=27862
+ExecStop=/usr/bin/pkill /home/tutu/miniconda3/envs/ju/bin/jupyter
+KillMode=process
+Restart=on-failure
+RestartSec=15s
+[Install]
+WantedBy=multi-user.target
+
+        sudo systemctl daemon-reload
+        sudo systemctl start jupyter.service
+        sudo systemctl status jupyter.service
+        sudo systemctl enable jupyter.service
+        然后可以通过172.19.80.138:27862访问
+
+    3)notebook更换conda对应的kernel
+        1）对应conda环境下：pip install ipython ipykernel
+        2）对应conda环境下：python -m ipykernel install --user --name ju_kernel (需要显示的kernel名字)
+    4)解决ubuntu下notebook生成的图中中文显示为方块的问题
+        安装字体
+            git clone https://github.com/tracyone/program_font
+            cd program_font
+            ./install.sh
+            fc-list :lang=zh | grep "SimHei"
+
+        找到位置fonts所在位置
+            import matplotlib
+            matplotlib.matplotlib_fname() (返回'/home/tutu/anaconda3/envs/ju_kernel/lib/python3.10/site-packages/matplotlib/mpl-data/matplotlibrc')
+            有其他字体可以复制到/home/tutu/anaconda3/envs/ju_kernel/lib/python3.10/site-packages/matplotlib/mpl-data/fonts下
+        删除matplotlib缓冲
+            cd ~/.cache/matplotlib
+            rm -rf *.*
+        python代码修改字体
+            font_name = "simhei"
+            plt.rcParams['font.family']= font_name      # 指定字体，实际上相当于修改 matplotlibrc 文件　只不过这样做是暂时的　下次失效
+            plt.rcParams['axes.unicode_minus']=False    # 正确显示负号，防止变成方框
+        notebook中生成的图的中文就正常了
+
+9、安装模型
+    1）vllm
+        conda create -n vllm11 python=3.12
+        conda activate vllm11
+        vi qwen3-next-80b-fp8.sh
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+source /home/tutu/miniconda3/etc/profile.d/conda.sh
+conda activate vllm11
+vllm serve \
+--served-model-name=Qwen3-Next-80B-A3B-Instruct-FP8 \
+--model=/home/tutu/models/Qwen3-Next-80B-A3B-Instruct-FP8 \
+--gpu-memory-utilizatio=0.9 --tensor-parallel-size=4 \
+--trust-remote-code --host=0.0.0.0 --port=8001 --max-log-len=1000 \
+--ssl-keyfile=/home/tutu/ssl/powerai.key --ssl-certfile=/home/tutu/ssl/powerai_public.crt --ssl-ca-certs=/home/tutu/ssl/powerai_chain.crt \
+--max-num-seqs=16 --dtype=half --max-model-len=32000 \
+--tool-call-parser hermes --enable-auto-tool-choice
