@@ -94,6 +94,7 @@
         sudo systemctl enable frpc.service
         sudo systemctl status frpc.service
     4）然后就可以通过powerai.cc:26000登录服务器ssh
+        【注】如果出现异常的port被占用情况，只需要在powerai.cc上运行sudo systemctl restart frps即可
 
 5、v2ray
     0) 安装后的测试:
