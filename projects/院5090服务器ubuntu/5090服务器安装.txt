@@ -218,8 +218,9 @@
     source ~/.bashrc
     conda可用
 
-7、pip设置清华源
+7、pip设置源
     pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+    pip config set global.index-url https://pypi.doubanio.com/simple
 
 8、jupyter
     1)安装
