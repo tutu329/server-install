@@ -287,7 +287,7 @@ vllm serve \
 --served-model-name=Qwen3-Next-80B-A3B-Instruct-FP8 \
 --model=/home/tutu/models/Qwen3-Next-80B-A3B-Instruct-FP8 \
 --gpu-memory-utilizatio=0.9 --tensor-parallel-size=4 \
---trust-remote-code --host=0.0.0.0 --port=8001 --max-log-len=1000 \
+--trust-remote-code --host=0.0.0.0 --port=28001 --max-log-len=1000 \
 --ssl-keyfile=/home/tutu/ssl/powerai.key --ssl-certfile=/home/tutu/ssl/powerai_public.crt --ssl-ca-certs=/home/tutu/ssl/powerai_chain.crt \
 --max-num-seqs=16 --dtype=half --max-model-len=32000 \
 --tool-call-parser hermes --enable-auto-tool-choice
