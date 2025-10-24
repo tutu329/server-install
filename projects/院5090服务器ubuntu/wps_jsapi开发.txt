@@ -49,8 +49,8 @@
     3)windows
         快捷键： win + r
         输入 %appdata%\kingsoft\wps\jsaddons ，打开文件夹
-    4)随便用什么打开文件进行编辑，记事本或者代码编辑器。打开是这样的
-    5)修改为以下内容
+        编辑publish.xml
+    4)修改为以下内容
 <?xml version="1.0" encoding="UTF-8"?>
 <jsplugins>
     <!-- <jspluginonline name="250723LawAI" type="wps" url="http://127.0.0.1:3889/" debug="" enable="enable_dev" install="null"/> -->
