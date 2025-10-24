@@ -1,0 +1,62 @@
+参考：https://blog.csdn.net/qq_38463982/article/details/150721541?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522c437b77d90c04303f4bf46a760b07bc0%2522%252C%2522scm%2522%253A%252220140713.130102334.pc%255Fall.%2522%257D&request_id=c437b77d90c04303f4bf46a760b07bc0&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~first_rank_ecpm_v1~rank_v31_ecpm-1-150721541-null-null.142^v102^control&utm_term=使用javascript开发wps加载项的详细指南&spm=1018.2226.3001.4449
+
+1. 准备开发环境
+    安装 WPS Office：确保已安装最新版本的 WPS Office。
+    安装 Node.js：推荐安装 Node.js v16 或更高版本。
+    安装 WPSJS 开发工具包：在命令行中运行以下命令安装 WPSJS：
+        npm install -g wpsjs
+
+2. 创建加载项项目
+    新建加载项：在命令行中运行以下命令创建加载项项目，假设项目名为 wps_tool：
+        wpsjs create wps_tool
+
+        //如果是加入到现有 node js 项目，用以下命令
+        npm init
+        wpsjs join
+
+    创建时会提示选择加载项类型（如文字、表格、演示）和示例代码风格（原生 JS 或集成 Vue 等框架）。如果只是初步学习，建议选择原生 JS。
+    进入项目文件夹：创建完成后，进入生成的项目文件夹，并运行：
+        cd wps_tool
+
+3. 编写加载项代码
+    HTML 文件：负责加载项的用户界面，例如 index.html 是加载项的入口文件。
+    JavaScript 文件：实现加载项的逻辑功能。WPS 提供的 API 集中在 window.wps 对象下，可以直接使用。例如，以下代码会在文档中插入文本：
+    wps.Application.ActiveDocument.Content.InsertAfter("Hello, WPS!");
+    Manifest 文件（****ribbon.xml ） ：定义加载项在 WPS 中的菜单和按钮。
+
+4. 调试加载项
+    启动调试：在项目文件夹中运行以下命令启动调试：
+        wpsjs debug
+    WPSJS 会自动启动 WPS 并加载加载项，同时启动一个 HTTP 服务用于热更新。
+    使用调试工具：在 WPS 中打开加载项后，可以通过快捷键 ALT + F12 打开调试器。
+
+5. 打包与发布
+    打包加载项：开发完成后，运行以下命令打包加载项：
+        wpsjs build
+    发布加载项：WPS 提供了两种部署方式：jsplugins.xml 模式和 publish.xml 模式。根据需求选择合适的部署方式。
+
+6. 其他注意事项
+    更新依赖包：如果在开发过程中遇到某些接口不支持的情况，可以通过以下命令更新 wps-jsapi 依赖包：
+    npm update --save-dev wps-jsapi
+
+7.关于打包部署简单操作
+    1)首先执行命令
+        wpsjs build
+    2)然后将压缩包放到云服务器或者云储存中，拿到文件访问链接，要求直接访问
+        https://cdn002.lawyerch.cn/public/250723LawAI.7z
+    3)windows
+        快捷键： win + r
+        输入 %appdata%\kingsoft\wps\jsaddons ，打开文件夹
+    4)随便用什么打开文件进行编辑，记事本或者代码编辑器。打开是这样的
+    5)修改为以下内容
+<?xml version="1.0" encoding="UTF-8"?>
+<jsplugins>
+    <!-- <jspluginonline name="250723LawAI" type="wps" url="http://127.0.0.1:3889/" debug="" enable="enable_dev" install="null"/> -->
+    <jsplugin name="250723LawAI" customDomain="" url="https://xxxxxx.cn/public/250723LawAI.7z" type="wps" version="1.0.0" enable="enable_dev"/>
+</jsplugins>
+    注意：
+        名称是打包前，package.json 中的 name
+        url 是刚才上传服务器的压缩包下载链接
+        type=“wps” 是指针对wps文字，还可以设置ppt、Excel
+        version=“1.0.0” 必须要跟package.json 中的 version 版本号一致
+    其实也可以直接解压压缩包，然后构建本地路径的方式，但是操作略显麻烦，而且插件做出来是为了分发变现，就不折腾其他麻烦的路子。
