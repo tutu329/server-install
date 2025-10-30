@@ -20,56 +20,35 @@
 
 4、设置frpc(注意，为了防止和其他服务器的frpc冲突，这里如ssh、ftp这种名字都加了后缀2，端口号前面都加了2)
     1) vi ~/frpc.ini
-        # frpc.ini
-        [common]
-        server_addr = powerai.cc
-        server_port = 7880
+# frpc.ini
+[common]
+server_addr = powerai.cc
+server_port = 7880
 
-        [ssh2 26000]
-        type = tcp
-        local_ip = 127.0.0.1
-        local_port = 22
-        remote_port = 26000
+[5090-ssh]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 22
+remote_port = 26000
 
-        [ftp2 28021]
-        type = tcp
-        local_ip = 127.0.0.1
-        local_port = 21
-        remote_port = 28021
+[range:5090-llm]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 28001-28011
+remote_port = 28001-28011
 
-        # if you want to expose multiple ports, add 'range:' prefix to the section name
-        # frpc will generate multiple proxies such as 'tcp_port_6010', 'tcp_port_6011' and so on.
-        [range:ftp_pasv2]
-        type = tcp
-        local_ip = 127.0.0.1
-        local_port = 28012-28020
-        remote_port = 28012-28020
-        use_encryption = false
-        use_compression = false
+[range:5090-ui]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 27860-27879
+remote_port = 27860-27879
 
-        [range:sd2]
-        type = tcp
-        local_ip = 127.0.0.1
-        local_port = 25100-25120
-        remote_port = 25100-25120
+[range:5090-other]
+type = tcp
+local_ip = 127.0.0.1
+local_port = 29000-29200
+remote_port = 29000-29200
 
-        [range:llm2]
-        type = tcp
-        local_ip = 127.0.0.1
-        local_port = 28001-28011
-        remote_port = 28001-28011
-
-        [range:ui2]
-        type = tcp
-        local_ip = 127.0.0.1
-        local_port = 27860-27879
-        remote_port = 27860-27879
-
-        [range:other2]
-        type = tcp
-        local_ip = 127.0.0.1
-        local_port = 29000-279200
-        remote_port = 29000-279200
     2) 打开powerai.cc的阿里云ecs服务器对应的端口！
     3）设置frpc自动启动
         sudo vi /etc/systemd/system/frpc.service
