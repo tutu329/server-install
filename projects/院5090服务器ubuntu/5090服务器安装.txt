@@ -257,18 +257,25 @@ WantedBy=multi-user.target
         notebook中生成的图的中文就正常了
 
 9、安装模型
-    1）vllm
-        conda create -n vllm11 python=3.12
-        conda activate vllm11
-        vi qwen3-next-80b-fp8.sh
-export CUDA_VISIBLE_DEVICES=0,1,2,3
-source /home/tutu/miniconda3/etc/profile.d/conda.sh
-conda activate vllm11
-vllm serve \
---served-model-name=Qwen3-Next-80B-A3B-Instruct-FP8 \
---model=/home/tutu/models/Qwen3-Next-80B-A3B-Instruct-FP8 \
---gpu-memory-utilizatio=0.9 --tensor-parallel-size=4 \
+    1）安装vllm
+        mkdir ~/venvs
+        python3.12 -m venv ~/venvs/gpt-oss-120b
+        source ~/venvs/gpt-oss-120b/bin/activate
+        pip install vllm
+        vi gpt-oss-120b.sh
+    2) vllm启动脚本
+# vllm-0.11有严重的tool call没反应的问题！issue上也有其他人反映。但是vllm-0.10.2调用tool call还有问题！
+# 通过--no-enable-prefix-caching尝试解决gpt-oss-120b的response接口调用tool call的hang问题（1-2分钟才返回结果，没有任何错误提示）。---2025-11-03,似乎可以解决hang问题（代价就是首token延迟略大些而已，另外第一次调用似乎输出不全）。
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+source ~/venvs/gpt-oss-120b/bin/activate
+nohup vllm serve \
+--no-enable-prefix-caching \
+--served-model-name=gpt-oss-120b \
+--model=/home/tutu/models/gpt-oss-120b \
+--gpu-memory-utilizatio=0.5 --tensor-parallel-size=8 \
 --trust-remote-code --host=0.0.0.0 --port=28001 --max-log-len=1000 \
---ssl-keyfile=/home/tutu/ssl/powerai.key --ssl-certfile=/home/tutu/ssl/powerai_public.crt --ssl-ca-certs=/home/tutu/ssl/powerai_chain.crt \
---max-num-seqs=16 --dtype=half --max-model-len=32000 \
---tool-call-parser hermes --enable-auto-tool-choice
+--max-num-seqs=4 --max-model-len=131000 \
+--async-scheduling > ~/log/vllm/gpt-oss-120b.out 2>&1 & echo $! > /tmp/vllm-120b.pid
+# --ssl-keyfile=/home/tutu/ssl/powerai.key --ssl-certfile=/home/tutu/ssl/powerai_public.crt --ssl-ca-certs=/home/tutu/ssl/powerai_chain.crt \
+# --async-scheduling
