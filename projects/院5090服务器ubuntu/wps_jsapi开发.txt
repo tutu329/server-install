@@ -65,6 +65,7 @@
             其实也可以直接解压压缩包，然后构建本地路径的方式，但是操作略显麻烦，而且插件做出来是为了分发变现，就不折腾其他麻烦的路子。
         5、关于加载项缓存清除（【极其重要】）：
             只需要把%appdata%\kingsoft\wps\jsaddons（C:\Users\tutu\AppData\Roaming\kingsoft\wps\jsaddons）下除publish.xml以外所有文件删除即可。
+        6、现有commandExecutor.js中，注入text时，color必须为"#1F6FEB"格式，不能是"black"这种格式！
 
 8.测试期常规流程
     1）%appdata%\kingsoft\wps\jsaddons下，确保publish.xml在
