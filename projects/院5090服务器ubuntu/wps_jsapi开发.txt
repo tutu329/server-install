@@ -46,8 +46,8 @@
 7.关于打包部署简单操作
     1)首先执行命令
         wpsjs build
-    2)然后将压缩包放到云服务器或者云储存中，拿到文件访问链接，要求直接访问，如：
-        https://cdn002.lawyerch.cn/public/250723LawAI.7z
+    2)然后将压缩包放到云服务器或者云储存中，方便publish.xml配置下wps直接访问，如（nginx把/var/www/z-flow-wps/映射到了https://powerai.cc:7863/z-flow-wps/）：
+        rsync -avz --delete -e 'ssh -p 6000' wps-addon-build/wps_js.7z tutu@powerai.cc:/var/www/z-flow-wps/
     3)windows
         快捷键： win + r
         输入 %appdata%\kingsoft\wps\jsaddons ，打开文件夹
