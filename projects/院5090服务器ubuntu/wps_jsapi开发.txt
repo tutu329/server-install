@@ -71,4 +71,4 @@
     2）删除除publish.xml以外其他任何文件（清空加载项缓存）
     3）前端库运行./deploy.sh(运行wpsjs build，并把7z给rsync到powerai.cc上)
     4）打开wps，并同意加载wps_js
-    5）运行python test_wps_websocket.py
+    5）在powerai.cc上运行python test_wps_websocket.py
