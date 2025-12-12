@@ -266,7 +266,7 @@ def get_text_page_num(doc_name, text):
             apt --fix-broken install,
             apt upgrade
 
-【关于阿里云ecs廉价服务器(1cpu、512m内存)运行frp】
+【关于阿里云ecs廉价服务器(1cpu、512m内存)运行frp，512M内存的速度和可靠性有问题，要1G内存才行】
 1、必须ubuntu，win server远程登录黑屏
 2、https://github.com/fatedier/frp页面右侧的release里面下载对应的frp
 3、server
