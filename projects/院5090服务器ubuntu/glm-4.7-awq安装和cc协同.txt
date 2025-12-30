@@ -1,0 +1,68 @@
+一、部署glm-4.7-awq
+1、安装590驱动和cuda12.9
+2、设置虚拟环境，然后pip install -U vllm --pre --index-url https://pypi.org/simple --extra-index-url https://wheels.vllm.ai/nightly
+3、glm-4.7-awq.sh（模型为：https://huggingface.co/QuantTrio/GLM-4.7-AWQ）
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export VLLM_USE_DEEP_GEMM=0
+export VLLM_USE_FLASHINFER_MOE_FP16=1
+export VLLM_USE_FLASHINFER_SAMPLER=0
+export OMP_NUM_THREADS=4
+source /home/tutu/venvs/vllm14/bin/activate
+vllm serve \
+    --model=/home/tutu/models/GLM-4.7-AWQ \
+    --served-model-name GLM-4.7-AWQ \
+    --max-num-seqs 4 \
+    --max-model-len 132000 \
+    --gpu-memory-utilization 0.95 \
+    --tensor-parallel-size 8 \
+    --enable-expert-parallel \
+    --tool-call-parser glm47 \
+    --reasoning-parser glm45 \
+    --enable-auto-tool-choice \
+    --trust-remote-code \
+    --host 0.0.0.0 \
+    --port 28001 \
+    --ssl-keyfile=/home/tutu/ssl/powerai.key --ssl-certfile=/home/tutu/ssl/powerai_public.crt --ssl-ca-certs=/home/tutu/ssl/powerai_chain.crt
+    # --speculative-config.method mtp \
+    # --speculative-config.num_speculative_tokens 1 \
+
+二、关于cc
+注意：Claude Code 走的是 Anthropic 的 /v1/messages 协议（通过 ANTHROPIC_BASE_URL 指向“LLM Gateway”一类服务），而本地部署的powerai.cc:28001/v1 提供的是 OpenAI-compatible 的 /v1/chat/completions（或 responses）风格接口。
+所以要让 Claude Code 用上你部署的 GLM，一般做法是在中间加一个“协议转换网关/代理”。
+0、安装uv
+    brew install uv
+1、安装litellm：
+    uv python install 3.12
+    uv tool install --python 3.12 'litellm[proxy]'
+    uv tool update-shell
+    重启控制台
+2、新建config.yaml
+--------------------------------------------------
+model_list:
+  - model_name: glm47
+    litellm_params:
+      model: openai/GLM-4.7-AWQ
+      api_base: https://powerai.cc:28001/v1
+      api_key: empty
+
+litellm_settings:
+  drop_params: true
+
+general_settings:
+  master_key: sk-claude-local-please-change
+--------------------------------------------------
+3、启动litellm
+    litellm --config config.yaml
+
+4、运行claude code
+export ANTHROPIC_BASE_URL="http://127.0.0.1:4000"
+export ANTHROPIC_AUTH_TOKEN="sk-claude-local-please-change"
+
+# 让 Claude Code 的 sonnet/opus/haiku 都映射到同一个模型（glm47）
+export ANTHROPIC_DEFAULT_SONNET_MODEL="glm47"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="glm47"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm47"
+
+claude
+
+
