@@ -65,4 +65,10 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm47"
 
 claude
 
+export ANTHROPIC_DEFAULT_SONNET_MODEL="minimax-m2.1"
+export ANTHROPIC_DEFAULT_OPUS_MODEL="minimax-m2.1"
+export ANTHROPIC_DEFAULT_HAIKU_MODEL="minimax-m2.1"
+
+claude
+
 
