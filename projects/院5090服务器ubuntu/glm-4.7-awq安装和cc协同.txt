@@ -39,9 +39,9 @@ vllm serve \
 2、新建config.yaml
 --------------------------------------------------
 model_list:
-  - model_name: glm47
+  - model_name: minimax-m2.1
     litellm_params:
-      model: openai/GLM-4.7-AWQ
+      model: openai/MiniMax-M2.1-AWQ
       api_base: https://powerai.cc:28001/v1
       api_key: empty
 
@@ -59,12 +59,6 @@ export ANTHROPIC_BASE_URL="http://127.0.0.1:4000"
 export ANTHROPIC_AUTH_TOKEN="sk-claude-local-please-change"
 
 # 让 Claude Code 的 sonnet/opus/haiku 都映射到同一个模型（glm47）
-export ANTHROPIC_DEFAULT_SONNET_MODEL="glm47"
-export ANTHROPIC_DEFAULT_OPUS_MODEL="glm47"
-export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm47"
-
-claude
-
 export ANTHROPIC_DEFAULT_SONNET_MODEL="minimax-m2.1"
 export ANTHROPIC_DEFAULT_OPUS_MODEL="minimax-m2.1"
 export ANTHROPIC_DEFAULT_HAIKU_MODEL="minimax-m2.1"
