@@ -1,0 +1,9 @@
+2026-02-02
+
+1、curl sh直接安装，
+2、先买一个kimi code或minimax、qwen模型api，
+3、然后运行openclaw onboard，其他都skip，就能进入ui，其他后续设置即可，
+4、闲鱼几元钱买一个brave（虚拟信用卡绑定）即可一月2000次免费搜索，搜索很关键，没有的话agent没用了，然后openclaw configure --section web然后按要求输入brave key即可（注意这里不要在ui里手工配或让agent自己配，总会搞错且导致gateway启动失败，当然真失败了删除openclaw.json重新运行onboard就行，
+5、openclaw gateway restart，【最关键】此时必须开vpn的tun才行，export和全大写node_uae_env_proxy=1以及.env文件都没用，mac要下clashx pro才有tun，此时ui中搜素就能成功（注意intel mac也可以用clashx pro），
+6、关于飞书设置，搜小红书，有详细配置，主要是创建、权限添加和发布，最后获取app id和app secret，然后根据https://github.com/m1heng/clawdbot-feishu（这个感觉很官方，且和最新的openclaw直接匹配）仔细配置openclaw，那几个额外变量也要手工输入到ui的raw模式下，然后重启即能飞书对话调用openclaw完整能力。
+7、定时任务成功发到飞书：config里cron要enabled、新建时必须配置为isolated+agent turn。
