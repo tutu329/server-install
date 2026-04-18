@@ -1,0 +1,41 @@
+【注意】
+1）5090必须用cu128，gsplat的whl只支持到pytorch2.4、cu124，因此需要编译gsplat
+2）2080用不了，因为不支持flash-attention-2
+
+1、准备
+sudo apt update
+sudo apt install -y git build-essential cmake ninja-build ffmpeg curl
+pip install uv
+
+git clone https://github.com/Tencent-Hunyuan/HY-World-2.0.git
+cd HY-World-2.0
+python3.10 -m venv ~/venvs/world2	#必须安装python3.10
+source ~/venvs/world2/bin/activate
+
+2、安装cu128(开vpn_on)
+uv pip install --index-url https://download.pytorch.org/whl/cu128 torch torchvision torchaudio
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+
+3、安装requirements(去掉gsplat)
+grep -v '^gsplat' requirements.txt > requirements.5090.txt
+uv pip install -r requirements.5090.txt
+
+4、编译gsplat
+uv pip install -U wheel ninja "setuptools<82"
+export CUDA_HOME=/usr/local/cuda-12.8
+export PATH=$CUDA_HOME/bin:$PATH
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}
+export MAX_JOBS=8
+uv pip install --no-build-isolation --no-binary=gsplat gsplat --no-cache-dir
+python -c "import gsplat; print('gsplat ok')"
+
+5、安装flash-attention-2
+uv pip install flash-attn --no-build-isolation
+
+6、下载后处理模型(vpn_on)
+wget -O skyseg.onnx https://huggingface.co/JianyuanWang/skyseg/resolve/main/skyseg.onnx
+
+7、运行webui(vpn_off)
+CUDA_VISIBLE_DEVICES=2 python -m hyworld2.worldrecon.gradio_app \
+  --pretrained_model_name_or_path /home/tutu/models/HY-World-2.0 \
+  --port 28003
