@@ -1,0 +1,46 @@
+1、用户添加
+    sudo adduser tutu
+    验证：
+        # 输出类似：uid=1001(tutu) gid=1001(tutu) 组=1001(tutu)
+        id tutu
+
+        # 确认家目录存在且属主正确
+        ls -ld /home/tutu
+    授权sudo
+        sudo usermod -aG sudo tutu
+
+2、frp
+    1）解压到frp文件夹下：
+    mkdir -p frp && tar -xzvf frp_0.51.3_linux_amd64.tar.1.gz -C frp --strip-components=1
+    2）sudo vi /etc/systemd/system/frpc.service
+[Unit]
+Description=frpc Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=tutu
+Restart=always
+RestartSec=5s
+ExecStart=/home/tutu/frp/frpc -c /home/tutu/frp/frpc.ini
+ExecReload=/home/tutu/frp/frpc -c /home/tutu/frp/frpc.ini
+
+[Install]
+WantedBy=multi-user.target
+
+    3）其他操作
+        sudo systemctl daemon-reload
+        sudo systemctl start frpc.service
+        sudo systemctl status frpc.service
+        sudo systemctl enable frpc.service
+
+3、ssh（萧山公司为36000->22）
+    sudo apt install openssh-server
+    sudo service ssh start (sudo service ssh status)
+    sudo systemctl enable ssh (sudo systemctl is-enabled ssh)
+    sudo ufw allow ssh (如果需要专门打开防火墙的话)
+    sudo apt install net-tools (用于ifconfig)
+    其他电脑上可以: ssh -p 6000 tutu@xxx.xxx.xxx.xxx
+
+4、jupyter
