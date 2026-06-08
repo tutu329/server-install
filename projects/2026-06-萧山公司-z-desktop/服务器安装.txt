@@ -144,6 +144,7 @@ WantedBy=multi-user.target
     12)安装docker compose V2:
         sudo apt-get update
         sudo apt-get install docker-compose-plugin
+        docker compose version
     或安装docker-compose V1:
         从github上下载docker-compose二进制文件安装:
             sudo curl -L "https://github.com/docker/compose/releases/download/v2.6.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
