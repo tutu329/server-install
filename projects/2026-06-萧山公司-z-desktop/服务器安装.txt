@@ -49,6 +49,7 @@ WantedBy=multi-user.target
     5）其他操作
         sudo systemctl daemon-reload
         sudo systemctl start frpc.service
+        sudo systemctl restart frpc.service
         sudo systemctl status frpc.service
         sudo systemctl enable frpc.service
     6）然后就可以通过powerai.cc:26000登录服务器ssh
