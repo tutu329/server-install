@@ -233,7 +233,14 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl restart docker
 
-三、安装公共skills
+三、测试平台启动后redis情况
+1、测试端口情况
+    sudo ss -lntp | grep 36379
+2、redis测试连通性
+    sudo apt install redis-tools
+    redis-cli -p 36379 PING
+
+四、安装公共skills
 1、修改权限
     sudo chown -R tutu:tutu ~/z-desktop
 2、上传公共skills到~/z-desktop/skills下
