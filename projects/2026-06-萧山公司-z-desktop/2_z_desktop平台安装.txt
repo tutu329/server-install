@@ -246,6 +246,11 @@ sudo systemctl restart docker
           -H "Sec-WebSocket-Version: 13" \
           https://powerai.cc:35115/ws | head -n 1
     2）如果返回"HTTP/1.1 101 Switching Protocols"表示wss连通。
+        101 Switching Protocols = WebSocket 通
+        404 Not Found           = 端口通，但路径错
+        400 Bad Request         = 握手请求不对或服务拒绝
+        502 Bad Gateway         = 网关到后端不通
+        curl 报 Connection refused / timeout = 端口或网络不通
 3、redis测试连通性
     sudo apt install redis-tools
     redis-cli -p 36379 PING
