@@ -232,3 +232,5 @@ sudo tee /etc/docker/daemon.json >/dev/null <<'EOF'
 EOF
 sudo systemctl daemon-reload
 sudo systemctl restart docker
+
+三、安装公共skills
