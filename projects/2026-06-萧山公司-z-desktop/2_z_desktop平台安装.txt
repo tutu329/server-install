@@ -1,0 +1,220 @@
+一、下载z-desktop平台的库
+1、执行以下内容生成脚本
+cat > setup_github_ssh_clone.sh <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# =========================
+# 可改配置
+# =========================
+GITHUB_EMAIL="${GITHUB_EMAIL:-jackseaver112279@gmail.com}"
+GITHUB_USER="${GITHUB_USER:-tutu329}"
+REPO_NAME="${REPO_NAME:-life-agent}"
+CLONE_DIR="${CLONE_DIR:-$HOME/life-agent}"
+
+# 专门给 GitHub 用的 key，避免覆盖已有 id_ed25519
+KEY_PATH="${KEY_PATH:-$HOME/.ssh/id_ed25519_github}"
+
+# 1 表示强制 GitHub SSH 走 443 端口，适合 22 端口被 reset 的环境
+USE_GITHUB_443="${USE_GITHUB_443:-1}"
+
+REPO_SSH_URL="git@github.com:${GITHUB_USER}/${REPO_NAME}.git"
+
+echo "==== GitHub SSH 初始化脚本 ===="
+echo "GitHub 用户: $GITHUB_USER"
+echo "仓库:        $REPO_SSH_URL"
+echo "克隆目录:    $CLONE_DIR"
+echo "SSH Key:     $KEY_PATH"
+echo
+
+# =========================
+# 基础命令检查
+# =========================
+need_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "❌ 缺少命令: $1"
+    echo "如果是 Ubuntu/Debian，可执行："
+    echo "  sudo apt-get update && sudo apt-get install -y git openssh-client"
+    exit 1
+  fi
+}
+
+need_cmd git
+need_cmd ssh
+need_cmd ssh-keygen
+
+# =========================
+# 准备 ~/.ssh
+# =========================
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+# =========================
+# 生成 SSH key
+# =========================
+if [[ -f "$KEY_PATH" && -f "${KEY_PATH}.pub" ]]; then
+  echo "✅ 已存在 SSH key，跳过生成：$KEY_PATH"
+else
+  echo "==== 生成新的 GitHub SSH key ===="
+  ssh-keygen -t ed25519 -C "$GITHUB_EMAIL" -f "$KEY_PATH" -N ""
+  echo "✅ SSH key 已生成：$KEY_PATH"
+fi
+
+chmod 600 "$KEY_PATH"
+chmod 644 "${KEY_PATH}.pub"
+
+# =========================
+# 写入 SSH config
+# =========================
+CONFIG_FILE="$HOME/.ssh/config"
+touch "$CONFIG_FILE"
+chmod 600 "$CONFIG_FILE"
+
+# 备份
+cp "$CONFIG_FILE" "${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)" || true
+
+# 删除旧的由本脚本管理的区块
+awk '
+  BEGIN {skip=0}
+  /# >>> github-ssh-auto-start/ {skip=1; next}
+  /# <<< github-ssh-auto-end/ {skip=0; next}
+  skip==0 {print}
+' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"
+
+mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
+{
+  echo ""
+  echo "# >>> github-ssh-auto-start"
+  echo "Host github.com"
+  if [[ "$USE_GITHUB_443" == "1" ]]; then
+    echo "  HostName ssh.github.com"
+    echo "  Port 443"
+  else
+    echo "  HostName github.com"
+    echo "  Port 22"
+  fi
+  echo "  User git"
+  echo "  IdentityFile $KEY_PATH"
+  echo "  IdentitiesOnly yes"
+  echo "  ServerAliveInterval 30"
+  echo "  ServerAliveCountMax 3"
+  echo "# <<< github-ssh-auto-end"
+} >> "$CONFIG_FILE"
+
+chmod 600 "$CONFIG_FILE"
+
+echo "✅ 已写入 SSH 配置：$CONFIG_FILE"
+if [[ "$USE_GITHUB_443" == "1" ]]; then
+  echo "✅ 当前配置：github.com -> ssh.github.com:443"
+else
+  echo "✅ 当前配置：github.com -> github.com:22"
+fi
+echo
+
+# =========================
+# 尝试加入 ssh-agent
+# =========================
+echo "==== 尝试加入 ssh-agent ===="
+if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+  eval "$(ssh-agent -s)" >/dev/null
+fi
+
+ssh-add "$KEY_PATH" >/dev/null 2>&1 || true
+
+echo "当前 ssh-agent 中的 key："
+ssh-add -l || true
+echo
+
+# =========================
+# 打印公钥
+# =========================
+echo "================================================================"
+echo "下面是你的 GitHub 公钥，请复制整行，添加到 GitHub："
+echo
+cat "${KEY_PATH}.pub"
+echo
+echo "添加位置：GitHub -> Settings -> SSH and GPG keys -> New SSH key"
+echo "Title 建议填写：$(hostname)-github"
+echo "================================================================"
+echo
+
+read -r -p "你已经把上面的公钥添加到 GitHub 了吗？输入 yes 继续测试: " CONFIRM
+
+if [[ "$CONFIRM" != "yes" ]]; then
+  echo "已退出。先把公钥添加到 GitHub 后，再重新运行本脚本。"
+  exit 0
+fi
+
+# =========================
+# 测试 SSH
+# =========================
+echo
+echo "==== 测试 GitHub SSH 连接 ===="
+set +e
+SSH_OUTPUT="$(ssh -T git@github.com 2>&1)"
+SSH_CODE=$?
+set -e
+
+echo "$SSH_OUTPUT"
+echo
+
+# GitHub 成功时通常返回 1，但输出包含 successfully authenticated
+if echo "$SSH_OUTPUT" | grep -qi "successfully authenticated"; then
+  echo "✅ GitHub SSH 认证成功"
+else
+  echo "❌ GitHub SSH 认证似乎还没成功"
+  echo
+  echo "建议执行下面命令看详细原因："
+  echo "  ssh -vT git@github.com"
+  echo
+  echo "常见原因："
+  echo "  1. 公钥没有添加到正确的 GitHub 账号"
+  echo "  2. GitHub 账号不是 $GITHUB_USER"
+  echo "  3. 仓库 ${GITHUB_USER}/${REPO_NAME} 不存在或不是你的账号有权限"
+  echo "  4. 公司/服务器网络拦截了 SSH"
+  exit 1
+fi
+
+# =========================
+# clone 仓库
+# =========================
+echo
+echo "==== 开始 clone 仓库 ===="
+
+if [[ -d "$CLONE_DIR/.git" ]]; then
+  echo "✅ 目录已存在且是 Git 仓库：$CLONE_DIR"
+  echo "尝试更新："
+  git -C "$CLONE_DIR" pull --ff-only
+elif [[ -e "$CLONE_DIR" ]]; then
+  echo "❌ 目标路径已存在但不是 Git 仓库：$CLONE_DIR"
+  echo "请先改 CLONE_DIR，或者手动处理该目录。"
+  exit 1
+else
+  git clone "$REPO_SSH_URL" "$CLONE_DIR"
+fi
+
+echo
+echo "✅ 完成"
+echo "仓库目录：$CLONE_DIR"
+EOF
+
+chmod +x setup_github_ssh_clone.sh
+
+2、运行脚本：./setup_github_ssh_clone.sh (目的是：git clone git@github.com:tutu329/life-agent.git)
+
+二、安装z-desktop平台
+1、准备工作
+    cd life-agent
+    cp .env.example .env
+    然后将API_KEY值复制到其中，如:
+        MIMO_API_KEY="sk-xxx..."
+        QWEN_API_KEY="sk-xxx..."
+    并确认以下 OceanBase 变量正确：
+        OCEANBASE_HOST=oceanbase
+        OCEANBASE_PORT=2881
+        OCEANBASE_USER=tutu@test
+        OCEANBASE_PASSWORD=你的密码
+        OCEANBASE_SYS_PASSWORD=你的密码
+        OCEANBASE_DB_NAME=tutu_db
+        OCEANBASE_DSN=mysql+pymysql://tutu%40test:你的密码@oceanbase:2881/tutu_db
