@@ -259,3 +259,213 @@ sudo systemctl restart docker
 1、修改权限
     sudo chown -R tutu:tutu ~/z-desktop
 2、上传公共skills到~/z-desktop/skills下
+
+五、测试平台后台agent的api
+1、容器中最简测试（输出简单字符串）:
+# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
+sudo docker compose --env-file "/home/tutu/life-agent/.env" \
+  -f "/home/tutu/life-agent/deploy/ocean_base/docker-compose-traefik.yml" \
+  exec -T -w /home/tutu/app life-agent bash -lc 'cat > test.py && python -m test' <<'PY'
+print("【容器python输出】hello from container")
+
+if __name__ == "__main__":
+    print("【容器python输出】test.py is running")
+PY
+# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
+
+2、agent的api测试脚本（调用agent stream输出一首短诗，需要确认PORT_BASE值，如取30000。退出需要用ctrl+c）:
+# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
+sudo docker compose --env-file "/home/tutu/life-agent/.env" \
+  -f "/home/tutu/life-agent/deploy/ocean_base/docker-compose-traefik.yml" \
+  exec -T -w /home/tutu/app life-agent bash -lc 'cat > test.py && python -m test' <<'PY'
+import os, requests, time, threading
+from console import dpink, dyellow, dblue, dred, dwhite, dblack, dgreen, dgray
+
+from agent.core.agent_manager import Agent_Manager
+
+from server_config import  SERVER, PORT
+
+SSL_VERIFY = True
+PORT_BASE = 30000
+
+WS_PORT = 5115 + PORT_BASE
+API_SERVER_URL = f'https://powerai.cc:{8005 + PORT_BASE}'
+
+LLM_SERVER_BASE_URL = SERVER.Z_DESKTOP_API_BASE_URL   # 院GPU服务器
+
+from agent.api.protocol import Web_Socket_Client_Register_DTO, Client_Type
+from agent.core.resource.redis_resource_manager import Redis_Resource_Manager
+
+# 向web_socket_server注册agent_id(仅agent_id能对应到本client)
+def register_web_socket_and_run_forever(agent_id_list, port, url=SERVER.Z_DESKTOP_WS_URL):
+    import json
+    import ssl
+
+    # pip install websocket-client
+    import websocket  # 注意：库名叫 websocket-client，导入名是 websocket
+
+    URL = url + f':{port}'  # 公共回声服务，便于本地测试
+
+    def on_open(ws):
+        print("✅ on_open: 连接已建立")
+        # data = Web_Socket_Client_Register_DTO(
+        #     type='register',
+        #     client_caption='main agent(agent_client_test.py)',
+        #     client_type='agent',
+        #     client_id_list=agent_id_list,
+        # )
+        data = Web_Socket_Client_Register_DTO(
+            client_type=Client_Type.AGENT,
+            client_id_list=agent_id_list,
+        )
+        ws.send(json.dumps(data.model_dump()))
+        # ws.send(json.dumps({"type": "register", "client_type":"agent", "client_id": agent_id}))
+
+    def on_message(ws, message):
+
+        # message = {
+        #     'agent_id': '...',
+        #     'agent_level': int,
+        #     'type': 'reasoning' | 'content' | 'llm_finished'
+        #     'stream': bool,
+        #     'chunk': '...',
+        # }
+
+        message = json.loads(message)
+
+        # if not(message["event_type"] == "ON_LLM_REASONING" or message["event_type"] == "ON_LLM_CONTENT"):
+        #     dpink(f"📩 on_message: {message!r}")
+
+        # if message.get("stream"):
+            # dlightmagenta(message["msg_chunk"], end='', flush=True)
+
+        # print(f"📩 on_message: {message!r}")
+
+
+        if message.get("client_type") and message.get("client_type") == "LLM_GEN_AS_TOOL":
+            if message["event_type"] == "ON_LLM_REASONING":
+                dpink(message["msg_chunk"], end='', flush=True)
+            elif message["event_type"] == "ON_LLM_CONTENT":
+                dpink(message["msg_chunk"], end='', flush=True)
+        else:
+            if message["event_type"] == "ON_LLM_REASONING":
+                print(message["msg_chunk"], end='', flush=True)
+            elif message["event_type"] == "ON_LLM_CONTENT":
+                print(message["msg_chunk"], end='', flush=True)
+
+        level_str = ''
+        if message.get("agent_level"):
+            level_str = '    ' * message["agent_level"]
+
+        top_agent_id = ''
+        if message.get("top_agent_id"):
+            top_agent_id = message["top_agent_id"]
+        agent_id = ''
+        if message.get("agent_id"):
+            agent_id = message["agent_id"]
+
+        if message["event_type"] == "ON_AGENT_TOOL_CALL":
+        # if message["msg_type"] == "tool_call" and not message.get('msg_output'):
+            caption = message.get('msg_tool_caption')
+            print(f'{level_str}【ON_AGENT_TOOL_CALL([{caption}]top_agent_id:{top_agent_id[-4:]}, agent_id:{agent_id[-4:]})】{message["msg_toolcall_params"]}')
+        elif message["event_type"] == "ON_AGENT_TOOL_CALL_RESULT":
+            print(f'{level_str}【 ON_AGENT_TOOL_CALL_RESULT(top_agent_id:{top_agent_id[-4:]}, agent_id:{agent_id[-4:]})】')
+            # print(f'{level_str}result summary: {message.get("msg_toolcall_result_summary")}')
+            # print(f'{level_str}resource id: ({message.get("msg_toolcall_result_resource_id")})')
+            # print(f'{level_str}resource data dto(LLM不可见): ({message.get("msg_toolcall_result_data_dto")})')
+            # print(f'{level_str}【/ON_AGENT_TOOL_CALL_RESULT】')
+        elif message["event_type"] == "ON_LLM_FINISHED":
+            print(flush=True)
+        elif message["event_type"] == "ON_CLIENT_REGISTER_FINISHED":
+            pass
+            # dgreen(f'message: {message!r}')
+            # dgreen(f'conn_info: {message["conns_info_list"]}')
+        elif message["event_type"] == "ON_AGENT_TOOL_PROCESSING":
+            if  message["progress"]==100:
+                print(f'\r【tool({message["tool_name"]}) 】progress: {message["progress"]}%')
+            else:
+                print(f'\r【tool({message["tool_name"]}) 】progress: {message["progress"]}%', end='', flush=True)
+        elif message["event_type"] == "ON_AGENT_FINAL_OUTPUT":
+            dgreen(f'\n【 ON_AGENT_FINAL_OUTPUT】{message["final_output"]}')
+        elif message["event_type"] == "ON_WPS_CLIENT_CONNECTED":
+            print('\n【WPS文档客户端已连接】')
+        elif message["event_type"] == "ON_WPP_CLIENT_CONNECTED":
+            print('\n【WPS幻灯片客户端已连接】')
+        elif message["event_type"] == "ON_ET_CLIENT_CONNECTED":
+            print('\n【WPS表格客户端已连接】')
+        elif message["event_type"] == "ON_WPS_CLIENT_DISCONNECTED":
+            print('\n【WPS文档客户端已断开】')
+        elif message["event_type"] == "ON_WPP_CLIENT_DISCONNECTED":
+            print('\n【WPS幻灯片客户端已断开】')
+        elif message["event_type"] == "ON_ET_CLIENT_DISCONNECTED":
+            print('\n【WPS表格客户端已断开】')
+        elif message["event_type"] == "ON_WPS_FAMILY_CLIENTS_SNAPSHOT":
+            pass
+            # print(f'【 前端启动前，已有WPS类客户端上线】')
+            # print(message.get('clients'))
+            # print(f'【/前端启动前，已有WPS类客户端上线】')
+
+    app = websocket.WebSocketApp(
+        URL,
+        on_open=on_open,
+        on_message=on_message,
+    )
+    # ping_interval 可做保活；遇到断线可自行做重连循环
+    # sslopt 禁用证书验证（如果证书链不完整）
+    app.run_forever(
+        ping_interval=20,
+        ping_timeout=10,
+        # sslopt={"cert_reqs": ssl.CERT_NONE}
+    )
+
+def main_test_docker_agent():
+    def _agent_create(skill_name='report', public_skill=True, user_id=''):
+        from agent.api.protocol import Agent_Client_API_Create_From_Skill_DTO
+        from agent.api.protocol import LLM_Client_API_Create_DTO
+
+        port = requests.post(f"{API_SERVER_URL}/agents/get_web_socket_server_port", timeout=60, verify=SSL_VERIFY).json()
+
+        llm_create_dto = LLM_Client_API_Create_DTO(
+            base_url='https://api.deepseek.com/v1',
+            default_model='deepseek-v4-flash',
+            # default_model='deepseek-v4-pro',
+            api_key='sk-80559a31bad84399bccc8129641f12c3',
+            default_temperature=1.0,
+            default_top_p=1.0,
+            default_max_new_tokens=32768,
+            default_reasoning_effort='high', # 'high' | 'max'
+        )
+
+        agent_create_dto = Agent_Client_API_Create_From_Skill_DTO(
+            skill_folder_name=skill_name,
+            llm_create_dto=llm_create_dto,
+            public_skill=public_skill,
+            user_id=user_id,
+        )
+
+        res = requests.post(f"{API_SERVER_URL}/agents/create_agent_from_skill", json=agent_create_dto.model_dump(), timeout=60, verify=SSL_VERIFY).json()
+        agent_id = res["agent_id"]
+        return port, agent_id
+
+    query = "写一首短诗"
+    dgreen(f'query is {query!r}')
+    port, agent_id = _agent_create(skill_name='常用', public_skill=True, user_id='tutu')
+
+    res = requests.post(
+        f"{API_SERVER_URL}/agents/run_agent",
+        json={
+            'agent_id': agent_id,
+            'query': query,
+        },
+        timeout=60,
+        verify=SSL_VERIFY
+    )
+    dblue(f'agent_id: {agent_id}')
+    dblue(f'ws port: {WS_PORT}')
+
+    register_web_socket_and_run_forever([agent_id], WS_PORT)
+
+if __name__ == "__main__":
+    main_test_docker_agent()
+PY
+# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
