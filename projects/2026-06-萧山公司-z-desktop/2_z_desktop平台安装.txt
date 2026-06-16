@@ -273,7 +273,7 @@ if __name__ == "__main__":
 PY
 # ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
 
-2、agent的api测试脚本（调用agent stream输出一首短诗，需要确认PORT_BASE值，如取30000。退出需要用ctrl+c）:
+2、容器中针对agent的api的测试脚本（调用agent stream输出一首短诗，需要确认PORT_BASE值，如取30000。退出需要用ctrl+c）:
 # ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
 sudo docker compose --env-file "/home/tutu/life-agent/.env" \
   -f "/home/tutu/life-agent/deploy/ocean_base/docker-compose-traefik.yml" \
