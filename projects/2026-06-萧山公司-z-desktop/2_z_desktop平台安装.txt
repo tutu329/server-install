@@ -234,3 +234,6 @@ sudo systemctl daemon-reload
 sudo systemctl restart docker
 
 三、安装公共skills
+1、修改权限
+    sudo chown -R tutu:tutu ~/z-desktop
+2、上传公共skills到~/z-desktop/skills下
