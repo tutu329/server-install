@@ -206,7 +206,7 @@ chmod +x setup_github_ssh_clone.sh
 二、安装z-desktop平台
 1、准备工作
     cd life-agent
-    cp .env.example .env
+    cp .env.example .env（注意：运行id返回的uid和gid与.env中的APP_UID、APP_GID不吻合时(通常第一个user是1000，第二个是1001)，要修改.env中的APP_UID、APP_GID，否则平台运行会有文件权限问题！）
     然后将API_KEY值复制到其中，如:
         MIMO_API_KEY="sk-xxx..."
         QWEN_API_KEY="sk-xxx..."
