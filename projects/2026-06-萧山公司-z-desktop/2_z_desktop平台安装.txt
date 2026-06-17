@@ -215,7 +215,7 @@ chmod +x setup_github_ssh_clone.sh
         ZDESKTOP_OB_SQL_HOST_PORT=12881
         ZDESKTOP_OB_RPC_HOST_PORT=12882
         ZDESKTOP_REDIS_HOST_PORT=16379
-        ZDESKTOP_WS_HOST_PORT=1511
+        ZDESKTOP_WS_HOST_PORT=15115
 
 2、运行平台(如果运动镜像拉取不成功，可以这样独立拉取如：sudo docker pull python:3.12-slim、sudo docker pull oceanbase/oceanbase-ce，如果是拉取了一半断掉，就需要多次尝试即可)
     1)首次运行: chmod +x deploy/*.sh && deploy/1_init_build_start.sh
