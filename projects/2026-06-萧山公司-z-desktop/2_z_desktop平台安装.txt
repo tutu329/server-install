@@ -204,18 +204,17 @@ chmod +x setup_github_ssh_clone.sh
 2、运行脚本：./setup_github_ssh_clone.sh (目的是：git clone git@github.com:tutu329/life-agent.git)
 
 二、安装z-desktop平台
-1、准备工作
-    cd life-agent
-    cp .env.example .env（注意：运行id返回的uid和gid与.env中的APP_UID、APP_GID不吻合时(通常第一个user是1000，第二个是1001)，要修改.env中的APP_UID、APP_GID，否则平台运行会有文件权限问题！）
-    然后将API_KEY值复制到其中，如:
-        MIMO_API_KEY="sk-xxx..."
-        QWEN_API_KEY="sk-xxx..."
-    并确认以下 需要暴露的port是否正确（每个暴露在公网的project应取不同值，如1xxxx全部改为2xxxx，并确保frp云服务器的安全策略打开traefik和ws的对应port）：
-        ZDESKTOP_TRAEFIK_HOST_PORT=18005
-        ZDESKTOP_OB_SQL_HOST_PORT=12881
-        ZDESKTOP_OB_RPC_HOST_PORT=12882
-        ZDESKTOP_REDIS_HOST_PORT=16379
-        ZDESKTOP_WS_HOST_PORT=15115
+1、准备工作(根据项目要求，修改.env：影响compose配置和life-agent的环境变量)
+    1) 创建.env
+        cd life-agent
+        cp .env.example .env
+    2) 设置外暴露端口（每个暴露在公网的project应取不同值，如1xxxx全部改为2xxxx，并确保frp云服务器的安全策略打开traefik和ws的对应port）
+    3) 设置APP_UID和APP_GID
+        运行: id
+        修改: 返回的uid和gid与.env中的APP_UID、APP_GID不吻合时(通常第一个user是1000，第二个是1001)，要修改.env中的APP_UID、APP_GID，否则平台运行会有文件权限问题！
+    4) 设置api_key
+        将API_KEY值复制到.env中，如: Z_DESKTOP_DEFAULT_API_KEY="sk-xxx..." (注意：要在DEFAULT_API_KEY即"平台默认模型"之前)
+    5) 设置平台默认模型及参数
 
 2、运行平台(如果运动镜像拉取不成功，可以这样独立拉取如：sudo docker pull python:3.12-slim、sudo docker pull oceanbase/oceanbase-ce，如果是拉取了一半断掉，就需要多次尝试即可)
     1)首次运行: chmod +x deploy/*.sh && deploy/1_init_build_start.sh
