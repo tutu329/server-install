@@ -30,6 +30,7 @@ which art-vllm-runtime-server
 
 二、ART的推理最简测试
 1、创建代码
+# -------------------------------------最简推理脚本---------------------------------------------
 cat > art_infer_smoke.py <<'PY'
 import os
 import asyncio
@@ -131,6 +132,7 @@ if __name__ == "__main__":
     mp.freeze_support()
     asyncio.run(main())
 PY
+# ------------------------------------/最简推理脚本---------------------------------------------
 
 2、测试(qwen3.5-0.8B这种vl模型，会在await model.register(backend)阶段卡死，因此换qwen3-0.6B）：
 source ~/venvs/art518/bin/activate
@@ -214,3 +216,179 @@ py_compile.compile(str(p), doraise=True)
 print("patched ok:", p)
 PY
 # ------------------------------/解决art调用vllm的health报错的补丁脚本---------------------------------------------
+
+
+三、ART的最简rl训练测试
+1、构建训练脚本：
+# -------------------------------------rl训练脚本---------------------------------------------
+cat > art_rl_smoke.py <<'PY'
+import os
+import asyncio
+import multiprocessing as mp
+
+import art
+from art.local import LocalBackend
+from art.dev import InternalModelConfig
+
+MODEL = os.environ.get("MODEL", "/home/tutu/models/Qwen3-0.6B")
+
+TARGET_MODULES = [
+    "q_proj",
+    "k_proj",
+    "v_proj",
+    "o_proj",
+    "gate_proj",
+    "up_proj",
+    "down_proj",
+]
+
+
+async def rollout(model: art.Model, prompt: str, rollout_idx: int) -> art.Trajectory:
+    client = model.openai_client()
+
+    trajectory = art.Trajectory(
+        messages_and_choices=[
+            {"role": "system", "content": "你是一个简洁助手。"},
+            {"role": "user", "content": prompt},
+        ]
+    )
+
+    completion = await client.chat.completions.create(
+        model=model.get_inference_name(),
+        messages=trajectory.messages(),
+        max_tokens=32,
+        temperature=1.0,
+        logprobs=True,
+        timeout=300,
+    )
+
+    choice = completion.choices[0]
+    trajectory.messages_and_choices.append(choice)
+
+    # 冒烟测试用的人为奖励：每个 prompt 下两个 completion 分别给 +1 / -1，
+    # 保证同一个 GRPO group 内有奖励差异。
+    trajectory.reward = 1.0 if rollout_idx % 2 == 0 else -1.0
+    trajectory.metrics["smoke_reward"] = trajectory.reward
+
+    return trajectory
+
+
+async def main():
+    backend = LocalBackend(
+        path="./.art-qwen3-06b-rl",
+        in_process=False,
+    )
+
+    try:
+        model = art.TrainableModel(
+            name="qwen3-06b-rl-smoke",
+            project="art-smoke",
+            base_model=MODEL,
+            lora_config={
+                "rank": 8,
+                "alpha": 16,
+                "dropout": 0.0,
+                "target_modules": TARGET_MODULES,
+            },
+            _internal_config=InternalModelConfig(
+                allow_unvalidated_arch=True,
+                init_args={
+                    "dtype": "float16",
+                    "load_in_4bit": False,
+                    "max_seq_length": 2048,
+                    "trust_remote_code": True,
+                },
+                engine_args={
+                    "dtype": "float16",
+                    "max_model_len": 2048,
+                    "gpu_memory_utilization": 0.70,
+                    "trust_remote_code": True,
+                    "enforce_eager": True,
+                },
+                trainer_args={
+                    "bf16": False,
+                    "fp16": True,
+
+                    # 关键修复：
+                    # 你的日志显示训练第一步死在 bitsandbytes 8-bit optimizer，
+                    # 缺 libnvJitLink.so.13，所以 smoke 阶段先强制用 PyTorch AdamW。
+                    "optim": "adamw_torch",
+
+                    "per_device_train_batch_size": 1,
+                    "gradient_accumulation_steps": 1,
+
+                    # generation_batch_size 必须能被 num_generations 整除。
+                    "num_generations": 2,
+                    "generation_batch_size": 2,
+
+                    "max_completion_length": 64,
+                },
+            ),
+        )
+
+        await model.register(backend)
+
+        print("BASE_MODEL =", MODEL)
+        print("INFERENCE_NAME =", model.get_inference_name())
+        print("STEP before =", await model.get_step())
+
+        scenarios = [
+            "请回答：2+2=?",
+            "请回答：北京是哪个国家的首都？",
+        ]
+
+        train_groups = await art.gather_trajectory_groups(
+            [
+                art.TrajectoryGroup(
+                    rollout(model, scenario, rollout_idx)
+                    for rollout_idx in range(2)
+                )
+                for scenario in scenarios
+            ],
+            pbar_desc="gather",
+        )
+
+        train_groups = [g for g in train_groups if len(g) >= 2]
+
+        print("num train groups =", len(train_groups))
+        print("group sizes =", [len(g) for g in train_groups])
+
+        result = await backend.train(
+            model,
+            train_groups,
+            learning_rate=1e-6,
+            verbose=True,
+        )
+
+        await model.log(
+            train_groups,
+            metrics=result.metrics,
+            step=result.step,
+            split="train",
+        )
+
+        print("STEP after =", await model.get_step())
+        print("checkpoint =", result.checkpoint_path)
+        print("metrics =", result.metrics)
+
+    finally:
+        await backend.close()
+
+
+if __name__ == "__main__":
+    mp.freeze_support()
+    asyncio.run(main())
+PY
+# ------------------------------------/rl训练脚本---------------------------------------------
+
+2、运行脚本：
+    python art_rl_smoke.py
+
+3、成功标志应为：
+STEP before = 0
+num train groups = 2
+group sizes = [2, 2]
+...
+STEP after = 1
+checkpoint = ./.art-qwen3-06b-rl/art-smoke/models/qwen3-06b-rl-smoke/checkpoints/0001
+metrics = ...
