@@ -1,4 +1,216 @@
-一、安装（https://github.com/OpenPipe/ART）
-1、
-2、
-3、
+一、安装（2080ti，https://github.com/OpenPipe/ART）
+1、环境
+    python3.12 -m venv ~/venvs/art518
+    source ~/venvs/art518/bin/activate
+2、pip源
+    python -m pip config set global.index-url https://mirrors.aliyun.com/pypi/simple
+    python -m pip config set global.trusted-host mirrors.aliyun.com
+3、安装ART
+    python -m pip install -U pip setuptools wheel uv
+    export VLLM_USE_V1=0
+    export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+    python -m pip install --no-cache-dir "openpipe-art[backend] @ git+https://github.com/OpenPipe/ART.git"
+4、安装ART的vllm runtime（装在另一个venv下）
+    python3.12 -m venv ~/venvs/art-vllm-runtime
+    source ~/venvs/art-vllm-runtime/bin/activate
+    python -m pip install --no-cache-dir ~/src/ART/vllm_runtime
+
+4、安装后简单测试
+python - <<'PY'
+import art
+from art.local.backend import LocalBackend
+from art.dev import InternalModelConfig
+
+print("ART import ok")
+print("LocalBackend import ok")
+print("InternalModelConfig import ok")
+PY
+
+which art-vllm-runtime-server
+
+二、ART的推理最简测试
+1、创建代码
+cat > art_infer_smoke.py <<'PY'
+import os
+import asyncio
+import multiprocessing as mp
+
+import art
+from art.local.backend import LocalBackend
+from art.dev import InternalModelConfig
+
+MODEL = os.environ.get("MODEL", "/home/tutu/models/Qwen3-0.6B")
+
+
+async def main():
+    print("开始配置 backend")
+
+    backend = LocalBackend(
+        path="./.art-qwen3-06b-smoke",
+        # 先用 in_process=True，减少多进程问题。
+        # 等这个通了，再改回 False 测正式子进程模式。
+        in_process=False,
+    )
+
+    model = art.TrainableModel(
+        name="qwen3-06b-infer-smoke",
+        project="art-smoke",
+        base_model=MODEL,
+        lora_config={
+            "rank": 8,
+            "alpha": 16,
+            "dropout": 0.0,
+            "target_modules": [
+                "q_proj",
+                "k_proj",
+                "v_proj",
+                "o_proj",
+                "gate_proj",
+                "up_proj",
+                "down_proj",
+            ],
+        },
+        _internal_config=InternalModelConfig(
+            allow_unvalidated_arch=True,
+            init_args={
+                "dtype": "float16",
+                # 0.8B 在 22G 2080Ti 上不需要 4bit，先关闭 bitsandbytes。
+                "load_in_4bit": False,
+                "max_seq_length": 2048,
+                "trust_remote_code": True,
+            },
+            engine_args={
+                "dtype": "float16",
+                "max_model_len": 2048,
+                "gpu_memory_utilization": 0.70,
+                "trust_remote_code": True,
+                "enforce_eager": True,
+            },
+            trainer_args={
+                "bf16": False,
+                "fp16": True,
+
+                "per_device_train_batch_size": 1,
+                "gradient_accumulation_steps": 1,
+
+                # 关键修复：generation_batch_size 必须能被 num_generations 整除
+                "num_generations": 2,
+                "generation_batch_size": 2,
+
+                "max_completion_length": 64,
+            },
+        ),
+    )
+
+    print("开始 register")
+    await model.register(backend)
+    print("register 完成")
+
+    client = model.openai_client()
+
+    print("开始推理")
+    resp = await client.chat.completions.create(
+        model=model.get_inference_name(),
+        messages=[
+            {"role": "system", "content": "你是一个简洁的中文助手。"},
+            {"role": "user", "content": "只回答一句话：ART推理是否正常？"},
+        ],
+        max_tokens=64,
+        temperature=0.0,
+        timeout=300,
+    )
+
+    print("BASE_MODEL =", MODEL)
+    print("INFERENCE_NAME =", model.get_inference_name())
+    print("ANSWER =", resp.choices[0].message.content)
+
+    await backend.close()
+
+
+if __name__ == "__main__":
+    mp.freeze_support()
+    asyncio.run(main())
+PY
+
+2、测试(qwen3.5-0.8B这种vl模型，会在await model.register(backend)阶段卡死，因此换qwen3-0.6B）：
+source ~/venvs/art518/bin/activate
+
+export ART_VLLM_RUNTIME_BIN=/home/tutu/venvs/art-vllm-runtime/bin/art-vllm-runtime-server
+export MODEL=/home/tutu/models/Qwen3-0.6B
+export CUDA_VISIBLE_DEVICES=7
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export TOKENIZERS_PARALLELISM=false
+export WANDB_MODE=disabled
+
+rm -rf ./.art-qwen3-06b-smoke
+python art_infer_smoke.py
+
+3、关于python art_infer_smoke.py卡死的问题(为art调用vllm的health一直错的错误，需要检测vllm日志(tail -f ./.art-qwen3-06b-smoke/art-smoke/models/qwen3-06b-infer-smoke/logs/vllm-runtime.log))
+解决手段：打好下列补丁（所在文件夹，保持上述测试时文件夹不变），然后继续执行测试，即可看到vllm log中的health成功结果("GET /health HTTP/1.1" 200 OK)，python art_infer_smoke.py也能正常运行出结果：
+# -------------------------------解决art调用vllm的health报错的补丁脚本---------------------------------------------
+source ~/venvs/art-vllm-runtime/bin/activate
+
+python - <<'PY'
+from pathlib import Path
+import re
+import py_compile
+import prometheus_fastapi_instrumentator.routing as r
+
+p = Path(r.__file__)
+src = p.read_text()
+
+backup = p.with_suffix(".py.bak_func")
+if not backup.exists():
+    backup.write_text(src)
+    print("backup:", backup)
+
+new_func = '''def _get_route_name(
+    scope: Scope, routes: List[Route], route_name: Optional[str] = None
+) -> Optional[str]:
+    """Gets route name for given scope taking mounts into account."""
+
+    for route in routes:
+        # vLLM/FastAPI newer router internals may include _IncludedRouter objects.
+        # prometheus-fastapi-instrumentator expects Starlette Route-like objects.
+        # Skip anything that does not expose both matches() and path.
+        if not hasattr(route, "matches"):
+            continue
+
+        path = getattr(route, "path", None)
+        if path is None:
+            continue
+
+        match, child_scope = route.matches(scope)
+        if match == Match.FULL:
+            route_name = path
+            child_scope = {**scope, **child_scope}
+            if isinstance(route, Mount) and getattr(route, "routes", None):
+                child_route_name = _get_route_name(child_scope, route.routes, route_name)
+                if child_route_name is None:
+                    route_name = None
+                else:
+                    route_name += child_route_name
+            return route_name
+        elif match == Match.PARTIAL and route_name is None:
+            route_name = path
+
+    return None
+
+
+'''
+
+pattern = r'def _get_route_name\([\s\S]*?\n\n\ndef get_route_name'
+replacement = new_func + "def get_route_name"
+
+src2, n = re.subn(pattern, replacement, src, count=1)
+
+if n != 1:
+    raise SystemExit(f"替换失败，匹配次数={n}")
+
+p.write_text(src2)
+py_compile.compile(str(p), doraise=True)
+
+print("patched ok:", p)
+PY
+# ------------------------------/解决art调用vllm的health报错的补丁脚本---------------------------------------------
