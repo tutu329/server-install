@@ -382,7 +382,18 @@ PY
 # ------------------------------------/rl训练脚本---------------------------------------------
 
 2、运行脚本：
-    python art_rl_smoke.py
+source ~/venvs/art518/bin/activate
+
+export ART_VLLM_RUNTIME_BIN=/home/tutu/venvs/art-vllm-runtime/bin/art-vllm-runtime-server
+export MODEL=/home/tutu/models/Qwen3-0.6B
+export CUDA_VISIBLE_DEVICES=7
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+export TOKENIZERS_PARALLELISM=false
+export WANDB_MODE=disabled
+
+rm -rf ./.art-qwen3-06b-rl
+python art_rl_smoke.py
 
 3、成功标志应为：
 STEP before = 0
