@@ -1,4 +1,4 @@
-一、安装（2080ti，https://github.com/OpenPipe/ART）
+一、安装（2080ti，https://github.com/OpenPipe/ART，安装到/home/tutu/server/ART）
 1、环境
     python3.12 -m venv ~/venvs/art518
     source ~/venvs/art518/bin/activate
@@ -13,7 +13,7 @@
 4、安装ART的vllm runtime（装在另一个venv下）
     python3.12 -m venv ~/venvs/art-vllm-runtime
     source ~/venvs/art-vllm-runtime/bin/activate
-    python -m pip install --no-cache-dir ~/src/ART/vllm_runtime
+    python -m pip install --no-cache-dir /home/tutu/server/ART/vllm_runtime
 
 4、安装后简单测试
 python - <<'PY'
