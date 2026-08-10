@@ -16,6 +16,7 @@
     python -m pip install --no-cache-dir /home/tutu/server/ART/vllm_runtime
 
 4、安装后简单测试
+source ~/venvs/art518/bin/activate
 python - <<'PY'
 import art
 from art.local.backend import LocalBackend
@@ -26,6 +27,7 @@ print("LocalBackend import ok")
 print("InternalModelConfig import ok")
 PY
 
+source ~/venvs/art-vllm-runtime/bin/activate
 which art-vllm-runtime-server
 
 二、ART的推理最简测试
