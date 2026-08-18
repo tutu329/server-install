@@ -509,7 +509,7 @@ python -m pip check
           trainer.default_local_dir=/home/zs/opcd_m0_outputs/qwen25_05b_safety_1step \
           2>&1 | tee /home/zs/opcd_m0_outputs/qwen25_05b_safety_1step.log
 
-4、完整训练及推理测试(0.5B）
+4、完整训练及推理测试(仅训练0.5B，可跳过该步骤）
     1）数据复制到正式文件夹
         mkdir -p /home/zs/opcd_data
         cp -n /tmp/sys_safety_train.parquet /home/zs/opcd_data/
@@ -742,3 +742,271 @@ python -m pip check
               trainer.total_training_steps=$TOTAL_STEPS \
               trainer.default_local_dir="$RUN_DIR" \
               2>&1 | tee "$RUN_DIR/train.log"
+
+5、正式的7b-teacher、3b-student训练（注意：该版本也是不启用NCCL的）
+    1）1个step测试（结果有：Training Progress: 100%|██████████| 1/1，即表明正确完成）
+        TOTAL_STEPS=1 \
+        SAVE_FREQ=1 \
+        RUN_NAME=qwen25_3b_student_7b_teacher_safety_pilot1 \
+        bash opcd_qwen25_3b_student_7b_teacher_safety_s50.sh
+    2）训练
+        bash opcd_qwen25_3b_student_7b_teacher_safety_s50.sh
+
+#--------------------------------------------------opcd_qwen25_3b_student_7b_teacher_safety_s50.sh--------------------------------------------------------------
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+# OPCD system-prompt distillation on 4 x L40S (about 46 GiB each)
+# Student: Qwen2.5-3B-Instruct
+# Teacher: Qwen2.5-7B-Instruct + safety.txt
+# Default run: 50 training steps, checkpoint every 10 steps
+
+OPCD_DIR="${OPCD_DIR:-/home/zs/notebooks/LMOps/opcd}"
+VENV_DIR="${VENV_DIR:-/home/zs/venvs/opcd_verl}"
+
+STUDENT_MODEL="${STUDENT_MODEL:-/home/zs/models/Qwen2.5-3B-Instruct}"
+TEACHER_MODEL="${TEACHER_MODEL:-/home/zs/models/Qwen2.5-7B-Instruct}"
+EXPERIENCE_PATH="${EXPERIENCE_PATH:-${OPCD_DIR}/system_prompts/safety.txt}"
+
+TRAIN_FILE="${TRAIN_FILE:-/home/zs/opcd_data/sys_safety_train.parquet}"
+VAL_FILE="${VAL_FILE:-/home/zs/opcd_data/sys_safety_test.parquet}"
+
+TOTAL_STEPS="${TOTAL_STEPS:-50}"
+SAVE_FREQ="${SAVE_FREQ:-10}"
+RUN_NAME="${RUN_NAME:-qwen25_3b_student_7b_teacher_safety_s50}"
+RUN_ROOT="${RUN_ROOT:-/home/zs/opcd_m1_outputs}"
+RUN_DIR="${RUN_ROOT}/${RUN_NAME}"
+
+ROLLOUT_IMPL="${OPCD_DIR}/verl/verl/workers/rollout/vllm_rollout/vllm_rollout_spmd.py"
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+[[ -d "${OPCD_DIR}" ]] || die "OPCD 目录不存在：${OPCD_DIR}"
+[[ -f "${VENV_DIR}/bin/activate" ]] || die "虚拟环境不存在：${VENV_DIR}"
+[[ -d "${STUDENT_MODEL}" ]] || die "Student 模型目录不存在：${STUDENT_MODEL}"
+[[ -d "${TEACHER_MODEL}" ]] || die "Teacher 模型目录不存在：${TEACHER_MODEL}"
+[[ -s "${EXPERIENCE_PATH}" ]] || die "safety.txt 不存在或为空：${EXPERIENCE_PATH}"
+[[ -s "${TRAIN_FILE}" ]] || die "训练集不存在或为空：${TRAIN_FILE}"
+[[ -s "${VAL_FILE}" ]] || die "验证集不存在或为空：${VAL_FILE}"
+[[ -f "${ROLLOUT_IMPL}" ]] || die "找不到 vLLM rollout 实现：${ROLLOUT_IMPL}"
+
+[[ "${TOTAL_STEPS}" =~ ^[1-9][0-9]*$ ]] || die "TOTAL_STEPS 必须是正整数"
+[[ "${SAVE_FREQ}" =~ ^[1-9][0-9]*$ ]] || die "SAVE_FREQ 必须是正整数"
+
+# 当前机器已验证 prefix caching 会在 native sleep 路径中触发 illegal memory access。
+# 因此脚本拒绝在补丁缺失时启动，避免训练到 rollout 阶段才崩溃。
+if rg -n 'enable_prefix_caching[[:space:]]*=[[:space:]]*True' "${ROLLOUT_IMPL}" >/dev/null; then
+  die "仍检测到 enable_prefix_caching=True；请先应用原来的 noprefix 修复"
+fi
+rg -n 'enable_prefix_caching[[:space:]]*=[[:space:]]*False' "${ROLLOUT_IMPL}" >/dev/null \
+  || die "未检测到 enable_prefix_caching=False，拒绝继续"
+
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+export OMP_NUM_THREADS=1
+export VLLM_USE_V1=0
+export TOKENIZERS_PARALLELISM=false
+export HYDRA_FULL_ERROR=1
+export WANDB_MODE=disabled
+export RAY_DEDUP_LOGS=0
+export RAY_task_events_report_interval_ms=0
+export PYTHONUNBUFFERED=1
+
+# 该服务器的 IOMMU/VT-d + PCIe ACS 会拦截 GPU P2P DMA；沿用已跑通配置。
+export NCCL_CUMEM_HOST_ENABLE=0
+export NCCL_P2P_DISABLE=1
+export NCCL_IB_DISABLE=1
+export NCCL_SHM_DISABLE=0
+export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+export NCCL_DEBUG=WARN
+unset NCCL_DEBUG_SUBSYS
+unset NCCL_TIMEOUT
+unset NCCL_SOCKET_IFNAME
+unset NCCL_P2P_LEVEL
+
+cd "${OPCD_DIR}"
+# shellcheck disable=SC1090
+source "${VENV_DIR}/bin/activate"
+
+# 在真正占用 GPU 前检查模型兼容性、经验长度和 4 卡可见性。
+STUDENT_MODEL="${STUDENT_MODEL}" \
+TEACHER_MODEL="${TEACHER_MODEL}" \
+EXPERIENCE_PATH="${EXPERIENCE_PATH}" \
+python - <<'PY'
+import os
+from pathlib import Path
+
+import torch
+from transformers import AutoConfig, AutoTokenizer
+
+student_path = os.environ["STUDENT_MODEL"]
+teacher_path = os.environ["TEACHER_MODEL"]
+experience_path = Path(os.environ["EXPERIENCE_PATH"])
+
+student_config = AutoConfig.from_pretrained(student_path, trust_remote_code=False)
+teacher_config = AutoConfig.from_pretrained(teacher_path, trust_remote_code=False)
+student_tokenizer = AutoTokenizer.from_pretrained(student_path, trust_remote_code=False)
+teacher_tokenizer = AutoTokenizer.from_pretrained(teacher_path, trust_remote_code=False)
+
+assert student_config.model_type == "qwen2", student_config.model_type
+assert teacher_config.model_type == "qwen2", teacher_config.model_type
+student_vocab = student_tokenizer.get_vocab()
+teacher_vocab = teacher_tokenizer.get_vocab()
+assert student_vocab == teacher_vocab, (
+    "Student 与 Teacher tokenizer 不一致，不能直接计算同词表 full KL"
+)
+max_real_token_id = max(student_vocab.values())
+assert max_real_token_id < student_config.vocab_size, (
+    max_real_token_id,
+    student_config.vocab_size,
+)
+assert max_real_token_id < teacher_config.vocab_size, (
+    max_real_token_id,
+    teacher_config.vocab_size,
+)
+
+experience = experience_path.read_text(encoding="utf-8")
+experience_tokens = len(
+    teacher_tokenizer(experience, add_special_tokens=False)["input_ids"]
+)
+assert experience_tokens <= 512, (
+    f"safety.txt 为 {experience_tokens} tokens，超过 trainer.experience_max_length=512"
+)
+
+assert torch.cuda.device_count() == 4, (
+    f"期望 4 张可见 GPU，实际为 {torch.cuda.device_count()}"
+)
+for index in range(torch.cuda.device_count()):
+    properties = torch.cuda.get_device_properties(index)
+    total_gib = properties.total_memory / 1024**3
+    assert total_gib >= 44.0, (
+        f"GPU {index} 仅有 {total_gib:.2f} GiB，不符合本脚本容量假设"
+    )
+    print(f"GPU {index}: {properties.name}, {total_gib:.2f} GiB")
+
+print(f"Student parameters: {student_config.num_hidden_layers} layers")
+print(f"Teacher parameters: {teacher_config.num_hidden_layers} layers")
+print(
+    "Shared tokenizer: "
+    f"{len(student_vocab)} entries, max token id={max_real_token_id}"
+)
+print(
+    "Output vocab padding: "
+    f"Student={student_config.vocab_size}, Teacher={teacher_config.vocab_size} "
+    "(different padding sizes are expected)"
+)
+print(f"safety.txt tokens: {experience_tokens}/512")
+print("Preflight checks passed")
+PY
+
+if [[ -s "${RUN_DIR}/train.log" ]]; then
+  die "运行目录中已有非空 train.log；请更换 RUN_NAME：${RUN_DIR}"
+fi
+mkdir -p "${RUN_DIR}"
+
+git rev-parse HEAD > "${RUN_DIR}/git_commit.txt"
+git status --short > "${RUN_DIR}/git_status.txt"
+python -m pip freeze > "${RUN_DIR}/pip-freeze.txt"
+sha256sum \
+  "${TRAIN_FILE}" \
+  "${VAL_FILE}" \
+  "${EXPERIENCE_PATH}" \
+  > "${RUN_DIR}/inputs.sha256"
+nvidia-smi \
+  --query-gpu=index,name,memory.total,memory.free,driver_version \
+  --format=csv \
+  > "${RUN_DIR}/gpu_before_train.csv"
+
+{
+  printf 'STUDENT_MODEL=%s\n' "${STUDENT_MODEL}"
+  printf 'TEACHER_MODEL=%s\n' "${TEACHER_MODEL}"
+  printf 'EXPERIENCE_PATH=%s\n' "${EXPERIENCE_PATH}"
+  printf 'TRAIN_FILE=%s\n' "${TRAIN_FILE}"
+  printf 'VAL_FILE=%s\n' "${VAL_FILE}"
+  printf 'TOTAL_STEPS=%s\n' "${TOTAL_STEPS}"
+  printf 'SAVE_FREQ=%s\n' "${SAVE_FREQ}"
+  printf 'RUN_NAME=%s\n' "${RUN_NAME}"
+} > "${RUN_DIR}/experiment.env"
+
+cmd=(
+  python -m verl.trainer.main_ppo
+  "data.prompt_key=content"
+  "data.train_files=${TRAIN_FILE}"
+  "data.val_files=${VAL_FILE}"
+  "data.train_batch_size=128"
+  "data.val_batch_size=1"
+  "data.max_prompt_length=1536"
+  "data.max_response_length=512"
+  "data.truncation=right"
+
+  "actor_rollout_ref.model.path=${STUDENT_MODEL}"
+  "actor_rollout_ref.model.ref_model_path=${TEACHER_MODEL}"
+  "actor_rollout_ref.model.use_remove_padding=True"
+  "actor_rollout_ref.model.enable_gradient_checkpointing=True"
+
+  "actor_rollout_ref.actor.optim.lr=5e-6"
+  "actor_rollout_ref.actor.ppo_mini_batch_size=128"
+  "actor_rollout_ref.actor.use_dynamic_bsz=True"
+  "actor_rollout_ref.actor.ppo_max_token_len_per_gpu=4096"
+  "actor_rollout_ref.actor.use_kl_loss=True"
+  "actor_rollout_ref.actor.kl_loss_type=full"
+  "actor_rollout_ref.actor.kl_topk=256"
+  "actor_rollout_ref.actor.kl_renorm_topk=False"
+  "actor_rollout_ref.actor.profile_kl=False"
+  "actor_rollout_ref.actor.use_torch_compile=False"
+  "actor_rollout_ref.actor.ulysses_sequence_parallel_size=1"
+  "actor_rollout_ref.actor.fsdp_config.param_offload=True"
+  "actor_rollout_ref.actor.fsdp_config.optimizer_offload=True"
+  'actor_rollout_ref.actor.checkpoint.save_contents=["model","extra"]'
+
+  "actor_rollout_ref.ref.fsdp_config.param_offload=True"
+  "actor_rollout_ref.ref.log_prob_use_dynamic_bsz=True"
+  "actor_rollout_ref.ref.log_prob_max_token_len_per_gpu=4096"
+
+  "actor_rollout_ref.rollout.name=vllm"
+  "actor_rollout_ref.rollout.tensor_model_parallel_size=1"
+  "actor_rollout_ref.rollout.temperature=1.0"
+  "actor_rollout_ref.rollout.gpu_memory_utilization=0.20"
+  "actor_rollout_ref.rollout.n=1"
+  "actor_rollout_ref.rollout.max_model_len=2048"
+  "actor_rollout_ref.rollout.max_num_batched_tokens=4096"
+  "actor_rollout_ref.rollout.max_num_seqs=8"
+  "actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=True"
+  "actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu=4096"
+  "actor_rollout_ref.rollout.enforce_eager=True"
+  "actor_rollout_ref.rollout.free_cache_engine=True"
+  "actor_rollout_ref.rollout.enable_chunked_prefill=False"
+  "actor_rollout_ref.rollout.enable_sleep_hack=False"
+
+  "trainer.stage=consolidate"
+  "trainer.train_system_prompt=True"
+  "trainer.system_prompt_type=safety"
+  "trainer.system_prompt_version=v1"
+  "trainer.experience_path=${EXPERIENCE_PATH}"
+  "trainer.experience_max_length=512"
+  "trainer.val_before_train=False"
+  "trainer.critic_warmup=0"
+  'trainer.logger=["console"]'
+  "trainer.project_name=opcd_m1"
+  "trainer.experiment_name=${RUN_NAME}"
+  "trainer.n_gpus_per_node=4"
+  "trainer.nnodes=1"
+  "trainer.save_freq=${SAVE_FREQ}"
+  "trainer.test_freq=1000000000"
+  "trainer.resume_mode=disable"
+  "trainer.max_actor_ckpt_to_keep=5"
+  "trainer.default_hdfs_dir=null"
+  "trainer.total_epochs=1"
+  "trainer.total_training_steps=${TOTAL_STEPS}"
+  "trainer.default_local_dir=${RUN_DIR}"
+)
+
+printf '%q ' "${cmd[@]}" > "${RUN_DIR}/resolved_command.sh"
+printf '\n' >> "${RUN_DIR}/resolved_command.sh"
+
+set -o pipefail
+"${cmd[@]}" 2>&1 | tee "${RUN_DIR}/train.log"
+#--------------------------------------------------opcd_qwen25_3b_student_7b_teacher_safety_s50.sh--------------------------------------------------------------
