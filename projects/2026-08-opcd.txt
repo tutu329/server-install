@@ -36,3 +36,18 @@
             "wandb==0.19.7" \
             "peft==0.15.2" \
             "rouge-score"
+    4）编译 FlashAttention-2(2.8.3.post1为目前最新版本，并不一定必须这个版本，只是固定一下比较好；另外，FlashAttention-3/4  不适合 L40S)
+        export CUDA_HOME=/usr/local/cuda-12.8
+        export PATH="${CUDA_HOME}/bin:${VIRTUAL_ENV}/bin:${PATH}"
+        export LD_LIBRARY_PATH="${CUDA_HOME}/lib64"
+        export TORCH_CUDA_ARCH_LIST=8.9
+        export MAX_JOBS=8
+
+        python -m pip install \
+            "flash-attn==2.8.3.post1" \
+            --no-build-isolation \
+            --no-cache-dir
+    5）安装opcd中的verl
+        cd /home/zs/notebooks/LMOps/opcd
+        source /home/zs/venvs/opcd_verl/bin/activate
+        python -m pip install -e /home/zs/notebooks/LMOps/opcd/verl --no-deps
