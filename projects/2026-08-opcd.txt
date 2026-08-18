@@ -749,7 +749,7 @@
         SAVE_FREQ=1 \
         RUN_NAME=qwen25_3b_student_7b_teacher_safety_pilot1 \
         bash opcd_qwen25_3b_student_7b_teacher_safety_s50.sh
-    2）训练
+    2）训练（一定要注意磁盘空间）
         bash opcd_qwen25_3b_student_7b_teacher_safety_s50.sh
 
 #--------------------------------------------------opcd_qwen25_3b_student_7b_teacher_safety_s50.sh--------------------------------------------------------------
