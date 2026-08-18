@@ -5,7 +5,7 @@
 1、下载OPCD(/home/zs/notebooks/LMOps)
     git clone https://github.com/microsoft/LMOps
 
-2、安装环境
+2、安装环境（flash-attention、opcd-verl)和测试
     1）python3.12的venv
         python3.12 -m venv ~/venvs/opcd_verl
         source ~/venvs/opcd_verl/bin/activate
@@ -51,3 +51,460 @@
         cd /home/zs/notebooks/LMOps/opcd
         source /home/zs/venvs/opcd_verl/bin/activate
         python -m pip install -e /home/zs/notebooks/LMOps/opcd/verl --no-deps
+        python -m pip install codetiming pybind11 pylatexenc
+    6）确认FlashAttention前反向传播和Ray四卡调度
+export CUDA_VISIBLE_DEVICES=0,1,2,3
+
+python - <<'PY'
+import torch
+from flash_attn import flash_attn_func
+
+for i in range(torch.cuda.device_count()):
+    device = f"cuda:{i}"
+
+    q = torch.randn(
+        1, 256, 8, 64,
+        device=device,
+        dtype=torch.bfloat16,
+        requires_grad=True,
+    )
+    k = torch.randn_like(q, requires_grad=True)
+    v = torch.randn_like(q, requires_grad=True)
+
+    out = flash_attn_func(
+        q, k, v,
+        dropout_p=0.0,
+        causal=True,
+    )
+    loss = out.float().square().mean()
+    loss.backward()
+    torch.cuda.synchronize(i)
+
+    print(
+        f"GPU {i}: {torch.cuda.get_device_name(i)}, "
+        f"output={tuple(out.shape)}, "
+        f"loss={loss.item():.6f}, "
+        f"forward/backward=OK"
+    )
+
+print("4-GPU FlashAttention smoke test passed")
+PY
+    7）测试Ray是否能够分别调度四张GPU
+python - <<'PY'
+import os
+import ray
+
+ray.init(include_dashboard=False)
+
+print("Ray cluster resources:", ray.cluster_resources())
+
+@ray.remote(num_gpus=1)
+def gpu_probe():
+    import os
+    import torch
+
+    x = torch.randn(512, 512, device="cuda", dtype=torch.bfloat16)
+    y = x @ x
+
+    return {
+        "pid": os.getpid(),
+        "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "gpu_name": torch.cuda.get_device_name(0),
+        "matmul_mean": y.float().mean().item(),
+    }
+
+results = ray.get([gpu_probe.remote() for _ in range(4)])
+
+for result in results:
+    print(result)
+
+ray.shutdown()
+print("Ray 4-GPU scheduling smoke test passed")
+PY
+
+    8）测试 OPCD 的 FSDP Worker 和 vLLM Rollout 集成
+        python -m pip install "textarena==0.7.4"
+python - <<'PY'
+from importlib.metadata import version
+
+import vllm
+import textarena
+
+from verl.workers.rollout.vllm_rollout.vllm_rollout_spmd import vLLMRollout
+from verl.workers.fsdp_workers import ActorRolloutRefWorker
+
+print("vllm                  =", vllm.__version__)
+print("textarena             =", version("textarena"))
+print("vLLMRollout import    = OK")
+print("FSDP worker import    = OK")
+print("OPCD worker stack     = OK")
+PY
+
+python -m pip check
+
+    9）准备safety数据
+        cd /home/zs/notebooks/LMOps/opcd
+python - <<'PY'
+from pathlib import Path
+from datasets import load_dataset
+
+targets = {
+    "ytz20/sys_safety_train": Path("/tmp/sys_safety_train.parquet"),
+    "ytz20/sys_safety_test":  Path("/tmp/sys_safety_test.parquet"),
+}
+
+for repo_id, output_path in targets.items():
+    print(f"\nDownloading {repo_id} ...")
+
+    dataset_dict = load_dataset(repo_id)
+    dataset = dataset_dict["train"]
+
+    assert len(dataset) > 0, f"{repo_id} 数据集为空"
+    assert "content" in dataset.column_names, (
+        f"{repo_id} 缺少 content 字段：{dataset.column_names}"
+    )
+
+    dataset.to_parquet(str(output_path))
+
+    print("saved   =", output_path)
+    print("rows    =", len(dataset))
+    print("columns =", dataset.column_names)
+    print("size    =", output_path.stat().st_size, "bytes")
+
+print("\nM0 safety datasets prepared")
+PY
+
+ls -lh /tmp/sys_safety_train.parquet /tmp/sys_safety_test.parquet
+
+    10）单卡本地模型推理测试（模型为/home/zs/models/Qwen2.5-0.5B-Instruct，这里明确设置 VLLM_USE_V1=0，因为 OPCD 这个 VeRL 分支使用了 vLLM V0 风格的内部接口）
+        cd /home/zs/notebooks/LMOps/opcd
+CUDA_VISIBLE_DEVICES=0 \
+VLLM_USE_V1=0 \
+TOKENIZERS_PARALLELISM=false \
+python - <<'PY'
+from transformers import AutoTokenizer
+from vllm import LLM, SamplingParams
+
+model_path = "/home/zs/models/Qwen2.5-0.5B-Instruct"
+
+tokenizer = AutoTokenizer.from_pretrained(
+    model_path,
+    trust_remote_code=False,
+)
+
+messages = [
+    {
+        "role": "user",
+        "content": "请只回答：OPCD M0 vLLM 测试成功",
+    }
+]
+
+prompt = tokenizer.apply_chat_template(
+    messages,
+    tokenize=False,
+    add_generation_prompt=True,
+)
+
+llm = LLM(
+    model=model_path,
+    tensor_parallel_size=1,
+    dtype="bfloat16",
+    max_model_len=1024,
+    gpu_memory_utilization=0.20,
+    enforce_eager=True,
+    trust_remote_code=False,
+)
+
+sampling_params = SamplingParams(
+    temperature=0.0,
+    max_tokens=32,
+)
+
+outputs = llm.generate([prompt], sampling_params)
+text = outputs[0].outputs[0].text
+
+print("\n===== GENERATED TEXT =====")
+print(text)
+print("==========================")
+print("Single-GPU local vLLM inference = OK")
+PY
+
+3、4个GPU的训练测试
+1）NCCL测试
+    # 生成py
+        tee /tmp/opcd_nccl_smoke.py >/dev/null <<'PY'
+        import os
+        from datetime import timedelta
+
+        import torch
+        import torch.distributed as dist
+
+        rank = int(os.environ["RANK"])
+        local_rank = int(os.environ["LOCAL_RANK"])
+        world_size = int(os.environ["WORLD_SIZE"])
+
+        torch.cuda.set_device(local_rank)
+        device = torch.device("cuda", local_rank)
+
+        print(
+            f"rank={rank}/{world_size}, "
+            f"local_rank={local_rank}, "
+            f"device={torch.cuda.get_device_name(local_rank)}, "
+            f"CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES')}",
+            flush=True,
+        )
+
+        dist.init_process_group(
+            backend="nccl",
+            timeout=timedelta(seconds=90),
+        )
+
+        small = torch.tensor([float(rank + 1)], device=device)
+        dist.all_reduce(small)
+        torch.cuda.synchronize()
+
+        large = torch.full(
+            (14_912_384,),
+            -1.0,
+            dtype=torch.float32,
+            device=device,
+        )
+
+        if rank == 0:
+            large.fill_(7.0)
+
+        dist.broadcast(large, src=0)
+        torch.cuda.synchronize()
+
+        assert small.item() == 10.0, small.item()
+        assert large[0].item() == 7.0, large[0].item()
+        assert large[-1].item() == 7.0, large[-1].item()
+
+        print(
+            f"rank={rank}: all_reduce={small.item()}, "
+            f"broadcast={large[0].item()}, NCCL OK",
+            flush=True,
+        )
+
+        dist.barrier()
+        dist.destroy_process_group()
+        PY
+
+    # 脚本
+        export CUDA_VISIBLE_DEVICES=0,1,2,3
+        export OMP_NUM_THREADS=1
+
+        unset NCCL_P2P_DISABLE
+        unset NCCL_P2P_LEVEL
+        unset NCCL_IB_DISABLE
+        unset NCCL_SOCKET_IFNAME
+        unset NCCL_CUMEM_HOST_ENABLE
+        unset NCCL_SHM_DISABLE
+
+        export NCCL_DEBUG=INFO
+        export NCCL_DEBUG_SUBSYS=INIT,GRAPH,NET
+        export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+
+        set -o pipefail
+
+        timeout --signal=TERM --kill-after=10s 150s \
+          python -m torch.distributed.run \
+            --standalone \
+            --nproc_per_node=4 \
+            /tmp/opcd_nccl_smoke.py \
+          2>&1 | tee /tmp/opcd_nccl_default.log
+
+2）NCCL测试失败：
+    日志结果表明：
+        NCCL communicator 初始化成功；
+        GPU 0↔1、GPU 2↔3 使用 P2P/CUMEM；
+        两组 GPU 之间使用 SHM；
+        rank 0 完成了 collective，但 rank 1/2/3 卡在最小的 ALLREDUCE NumelIn=1；
+        90 秒后超时。
+        这高度指向当前机器的 PCIe P2P/CUMEM/共享内存通信路径异常。
+    保守测试：
+        export NCCL_CUMEM_HOST_ENABLE=0
+        export NCCL_P2P_DISABLE=1
+        export NCCL_IB_DISABLE=1
+        export NCCL_SHM_DISABLE=0
+
+        export NCCL_DEBUG=INFO
+        export NCCL_DEBUG_SUBSYS=INIT,GRAPH,NET
+        export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+
+        set -o pipefail
+
+        timeout --signal=TERM --kill-after=10s 150s \
+          python -m torch.distributed.run \
+            --standalone \
+            --nproc_per_node=4 \
+            /tmp/opcd_nccl_smoke.py \
+          2>&1 | tee /tmp/opcd_nccl_safe.log
+
+3）训练测试
+    NCCL正常时的代码：
+        cd /home/zs/notebooks/LMOps/opcd
+        source /home/zs/venvs/opcd_verl/bin/activate
+
+        export CUDA_VISIBLE_DEVICES=0,1,2,3
+        export VLLM_USE_V1=0
+        export TOKENIZERS_PARALLELISM=false
+        export HYDRA_FULL_ERROR=1
+        export NCCL_TIMEOUT=36000
+        export WANDB_MODE=disabled
+        export RAY_DEDUP_LOGS=0
+        # 绕过 Ray 2.43.0 退出阶段的 TaskEventBuffer 已知崩溃
+        export RAY_task_events_report_interval_ms=0
+
+        mkdir -p /home/zs/opcd_m0_outputs
+        set -o pipefail
+
+        python -m verl.trainer.main_ppo \
+          data.prompt_key=content \
+          data.train_files=/tmp/sys_safety_train.parquet \
+          data.val_files=/tmp/sys_safety_test.parquet \
+          data.train_batch_size=8 \
+          data.val_batch_size=1 \
+          data.max_prompt_length=1536 \
+          data.max_response_length=64 \
+          data.truncation=right \
+          actor_rollout_ref.model.path=/home/zs/models/Qwen2.5-0.5B-Instruct \
+          actor_rollout_ref.model.ref_model_path=/home/zs/models/Qwen2.5-0.5B-Instruct \
+          actor_rollout_ref.model.use_remove_padding=True \
+          actor_rollout_ref.model.enable_gradient_checkpointing=False \
+          actor_rollout_ref.actor.optim.lr=1e-6 \
+          actor_rollout_ref.actor.ppo_mini_batch_size=8 \
+          actor_rollout_ref.actor.use_dynamic_bsz=True \
+          actor_rollout_ref.actor.ppo_max_token_len_per_gpu=4096 \
+          actor_rollout_ref.actor.use_kl_loss=True \
+          actor_rollout_ref.actor.kl_loss_type=full \
+          actor_rollout_ref.actor.kl_topk=256 \
+          actor_rollout_ref.actor.kl_renorm_topk=False \
+          actor_rollout_ref.actor.profile_kl=False \
+          actor_rollout_ref.actor.use_torch_compile=False \
+          actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
+          actor_rollout_ref.actor.fsdp_config.param_offload=False \
+          actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+          actor_rollout_ref.actor.checkpoint.save_contents="['model','extra']" \
+          actor_rollout_ref.ref.fsdp_config.param_offload=False \
+          actor_rollout_ref.rollout.name=vllm \
+          actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+          actor_rollout_ref.rollout.temperature=1.0 \
+          actor_rollout_ref.rollout.gpu_memory_utilization=0.30 \
+          actor_rollout_ref.rollout.n=1 \
+          actor_rollout_ref.rollout.max_num_batched_tokens=4096 \
+          actor_rollout_ref.rollout.max_num_seqs=8 \
+          actor_rollout_ref.rollout.enforce_eager=True \
+          actor_rollout_ref.rollout.free_cache_engine=True \
+          actor_rollout_ref.rollout.enable_chunked_prefill=True \
+          actor_rollout_ref.rollout.enable_sleep_hack=True \
+          trainer.stage=consolidate \
+          trainer.train_system_prompt=True \
+          trainer.system_prompt_type=safety \
+          trainer.system_prompt_version=v1 \
+          trainer.experience_path=/home/zs/notebooks/LMOps/opcd/system_prompts/safety.txt \
+          trainer.experience_max_length=512 \
+          trainer.val_before_train=False \
+          trainer.critic_warmup=0 \
+          trainer.logger="['console']" \
+          trainer.project_name=opcd_m0 \
+          trainer.experiment_name=qwen25_05b_safety_1step \
+          trainer.n_gpus_per_node=4 \
+          trainer.nnodes=1 \
+          trainer.save_freq=1 \
+          trainer.test_freq=1000000000 \
+          trainer.resume_mode=disable \
+          trainer.default_hdfs_dir=null \
+          trainer.total_epochs=1 \
+          trainer.total_training_steps=1 \
+          trainer.default_local_dir=/home/zs/opcd_m0_outputs/qwen25_05b_safety_1step \
+          2>&1 | tee /home/zs/opcd_m0_outputs/qwen25_05b_safety_1step.log
+    NCCL不正常时的代码：
+        cd /home/zs/notebooks/LMOps/opcd
+        source /home/zs/venvs/opcd_verl/bin/activate
+
+        export CUDA_VISIBLE_DEVICES=0,1,2,3
+        export VLLM_USE_V1=0
+        export TOKENIZERS_PARALLELISM=false
+        export HYDRA_FULL_ERROR=1
+        export WANDB_MODE=disabled
+        export RAY_DEDUP_LOGS=0
+
+        # 绕过 Ray 2.43.0 退出阶段的 TaskEventBuffer 已知崩溃
+        export RAY_task_events_report_interval_ms=0
+
+        export PYTHONUNBUFFERED=1
+
+        export NCCL_CUMEM_HOST_ENABLE=0
+        export NCCL_P2P_DISABLE=1
+        export NCCL_IB_DISABLE=1
+        export NCCL_SHM_DISABLE=0
+        export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+
+        export NCCL_DEBUG=WARN
+        unset NCCL_DEBUG_SUBSYS
+        unset NCCL_TIMEOUT
+
+        mkdir -p /home/zs/opcd_m0_outputs
+        set -o pipefail
+
+        python -m verl.trainer.main_ppo \
+          data.prompt_key=content \
+          data.train_files=/tmp/sys_safety_train.parquet \
+          data.val_files=/tmp/sys_safety_test.parquet \
+          data.train_batch_size=8 \
+          data.val_batch_size=1 \
+          data.max_prompt_length=1536 \
+          data.max_response_length=64 \
+          data.truncation=right \
+          actor_rollout_ref.model.path=/home/zs/models/Qwen2.5-0.5B-Instruct \
+          actor_rollout_ref.model.ref_model_path=/home/zs/models/Qwen2.5-0.5B-Instruct \
+          actor_rollout_ref.model.use_remove_padding=True \
+          actor_rollout_ref.model.enable_gradient_checkpointing=False \
+          actor_rollout_ref.actor.optim.lr=1e-6 \
+          actor_rollout_ref.actor.ppo_mini_batch_size=8 \
+          actor_rollout_ref.actor.use_dynamic_bsz=True \
+          actor_rollout_ref.actor.ppo_max_token_len_per_gpu=4096 \
+          actor_rollout_ref.actor.use_kl_loss=True \
+          actor_rollout_ref.actor.kl_loss_type=full \
+          actor_rollout_ref.actor.kl_topk=256 \
+          actor_rollout_ref.actor.kl_renorm_topk=False \
+          actor_rollout_ref.actor.profile_kl=False \
+          actor_rollout_ref.actor.use_torch_compile=False \
+          actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
+          actor_rollout_ref.actor.fsdp_config.param_offload=False \
+          actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+          actor_rollout_ref.actor.checkpoint.save_contents="['model','extra']" \
+          actor_rollout_ref.ref.fsdp_config.param_offload=False \
+          actor_rollout_ref.rollout.name=vllm \
+          actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+          actor_rollout_ref.rollout.temperature=1.0 \
+          actor_rollout_ref.rollout.gpu_memory_utilization=0.30 \
+          actor_rollout_ref.rollout.n=1 \
+          actor_rollout_ref.rollout.max_num_batched_tokens=4096 \
+          actor_rollout_ref.rollout.max_num_seqs=8 \
+          actor_rollout_ref.rollout.enforce_eager=True \
+          actor_rollout_ref.rollout.free_cache_engine=True \
+          actor_rollout_ref.rollout.enable_chunked_prefill=True \
+          actor_rollout_ref.rollout.enable_sleep_hack=True \
+          trainer.stage=consolidate \
+          trainer.train_system_prompt=True \
+          trainer.system_prompt_type=safety \
+          trainer.system_prompt_version=v1 \
+          trainer.experience_path=/home/zs/notebooks/LMOps/opcd/system_prompts/safety.txt \
+          trainer.experience_max_length=512 \
+          trainer.val_before_train=False \
+          trainer.critic_warmup=0 \
+          trainer.logger="['console']" \
+          trainer.project_name=opcd_m0 \
+          trainer.experiment_name=qwen25_05b_safety_1step \
+          trainer.n_gpus_per_node=4 \
+          trainer.nnodes=1 \
+          trainer.save_freq=1 \
+          trainer.test_freq=1000000000 \
+          trainer.resume_mode=disable \
+          trainer.default_hdfs_dir=null \
+          trainer.total_epochs=1 \
+          trainer.total_training_steps=1 \
+          trainer.default_local_dir=/home/zs/opcd_m0_outputs/qwen25_05b_safety_1step \
+          2>&1 | tee /home/zs/opcd_m0_outputs/qwen25_05b_safety_1step.log
