@@ -1,0 +1,480 @@
+一、下载z-desktop平台的库
+    1、执行以下内容生成脚本(在/home/tutu/下执行，注意中间要把Github公钥添加到: GitHub -> Settings -> SSH and GPG keys -> New SSH key)
+# ------------------------------------------------setup_github_ssh_clone.sh---------------------------------------
+cat > setup_github_ssh_clone.sh <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# =========================
+# 可改配置
+# =========================
+GITHUB_EMAIL="${GITHUB_EMAIL:-jackseaver112279@gmail.com}"
+GITHUB_USER="${GITHUB_USER:-tutu329}"
+REPO_NAME="${REPO_NAME:-life-agent}"
+CLONE_DIR="${CLONE_DIR:-$HOME/life-agent}"
+
+# 专门给 GitHub 用的 key，避免覆盖已有 id_ed25519
+KEY_PATH="${KEY_PATH:-$HOME/.ssh/id_ed25519_github}"
+
+# 1 表示强制 GitHub SSH 走 443 端口，适合 22 端口被 reset 的环境
+USE_GITHUB_443="${USE_GITHUB_443:-1}"
+
+REPO_SSH_URL="git@github.com:${GITHUB_USER}/${REPO_NAME}.git"
+
+echo "==== GitHub SSH 初始化脚本 ===="
+echo "GitHub 用户: $GITHUB_USER"
+echo "仓库:        $REPO_SSH_URL"
+echo "克隆目录:    $CLONE_DIR"
+echo "SSH Key:     $KEY_PATH"
+echo
+
+# =========================
+# 基础命令检查
+# =========================
+need_cmd() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    echo "❌ 缺少命令: $1"
+    echo "如果是 Ubuntu/Debian，可执行："
+    echo "  sudo apt-get update && sudo apt-get install -y git openssh-client"
+    exit 1
+  fi
+}
+
+need_cmd git
+need_cmd ssh
+need_cmd ssh-keygen
+
+# =========================
+# 准备 ~/.ssh
+# =========================
+mkdir -p "$HOME/.ssh"
+chmod 700 "$HOME/.ssh"
+
+# =========================
+# 生成 SSH key
+# =========================
+if [[ -f "$KEY_PATH" && -f "${KEY_PATH}.pub" ]]; then
+  echo "✅ 已存在 SSH key，跳过生成：$KEY_PATH"
+else
+  echo "==== 生成新的 GitHub SSH key ===="
+  ssh-keygen -t ed25519 -C "$GITHUB_EMAIL" -f "$KEY_PATH" -N ""
+  echo "✅ SSH key 已生成：$KEY_PATH"
+fi
+
+chmod 600 "$KEY_PATH"
+chmod 644 "${KEY_PATH}.pub"
+
+# =========================
+# 写入 SSH config
+# =========================
+CONFIG_FILE="$HOME/.ssh/config"
+touch "$CONFIG_FILE"
+chmod 600 "$CONFIG_FILE"
+
+# 备份
+cp "$CONFIG_FILE" "${CONFIG_FILE}.bak.$(date +%Y%m%d_%H%M%S)" || true
+
+# 删除旧的由本脚本管理的区块
+awk '
+  BEGIN {skip=0}
+  /# >>> github-ssh-auto-start/ {skip=1; next}
+  /# <<< github-ssh-auto-end/ {skip=0; next}
+  skip==0 {print}
+' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"
+
+mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
+{
+  echo ""
+  echo "# >>> github-ssh-auto-start"
+  echo "Host github.com"
+  if [[ "$USE_GITHUB_443" == "1" ]]; then
+    echo "  HostName ssh.github.com"
+    echo "  Port 443"
+  else
+    echo "  HostName github.com"
+    echo "  Port 22"
+  fi
+  echo "  User git"
+  echo "  IdentityFile $KEY_PATH"
+  echo "  IdentitiesOnly yes"
+  echo "  ServerAliveInterval 30"
+  echo "  ServerAliveCountMax 3"
+  echo "# <<< github-ssh-auto-end"
+} >> "$CONFIG_FILE"
+
+chmod 600 "$CONFIG_FILE"
+
+echo "✅ 已写入 SSH 配置：$CONFIG_FILE"
+if [[ "$USE_GITHUB_443" == "1" ]]; then
+  echo "✅ 当前配置：github.com -> ssh.github.com:443"
+else
+  echo "✅ 当前配置：github.com -> github.com:22"
+fi
+echo
+
+# =========================
+# 尝试加入 ssh-agent
+# =========================
+echo "==== 尝试加入 ssh-agent ===="
+if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+  eval "$(ssh-agent -s)" >/dev/null
+fi
+
+ssh-add "$KEY_PATH" >/dev/null 2>&1 || true
+
+echo "当前 ssh-agent 中的 key："
+ssh-add -l || true
+echo
+
+# =========================
+# 打印公钥
+# =========================
+echo "================================================================"
+echo "下面是你的 GitHub 公钥，请复制整行，添加到 GitHub："
+echo
+cat "${KEY_PATH}.pub"
+echo
+echo "添加位置：GitHub -> Settings -> SSH and GPG keys -> New SSH key"
+echo "Title 建议填写：$(hostname)-github"
+echo "================================================================"
+echo
+
+read -r -p "你已经把上面的公钥添加到 GitHub 了吗？输入 yes 继续测试: " CONFIRM
+
+if [[ "$CONFIRM" != "yes" ]]; then
+  echo "已退出。先把公钥添加到 GitHub 后，再重新运行本脚本。"
+  exit 0
+fi
+
+# =========================
+# 测试 SSH
+# =========================
+echo
+echo "==== 测试 GitHub SSH 连接 ===="
+set +e
+SSH_OUTPUT="$(ssh -T git@github.com 2>&1)"
+SSH_CODE=$?
+set -e
+
+echo "$SSH_OUTPUT"
+echo
+
+# GitHub 成功时通常返回 1，但输出包含 successfully authenticated
+if echo "$SSH_OUTPUT" | grep -qi "successfully authenticated"; then
+  echo "✅ GitHub SSH 认证成功"
+else
+  echo "❌ GitHub SSH 认证似乎还没成功"
+  echo
+  echo "建议执行下面命令看详细原因："
+  echo "  ssh -vT git@github.com"
+  echo
+  echo "常见原因："
+  echo "  1. 公钥没有添加到正确的 GitHub 账号"
+  echo "  2. GitHub 账号不是 $GITHUB_USER"
+  echo "  3. 仓库 ${GITHUB_USER}/${REPO_NAME} 不存在或不是你的账号有权限"
+  echo "  4. 公司/服务器网络拦截了 SSH"
+  exit 1
+fi
+
+# =========================
+# clone 仓库
+# =========================
+echo
+echo "==== 开始 clone 仓库 ===="
+
+if [[ -d "$CLONE_DIR/.git" ]]; then
+  echo "✅ 目录已存在且是 Git 仓库：$CLONE_DIR"
+  echo "尝试更新："
+  git -C "$CLONE_DIR" pull --ff-only
+elif [[ -e "$CLONE_DIR" ]]; then
+  echo "❌ 目标路径已存在但不是 Git 仓库：$CLONE_DIR"
+  echo "请先改 CLONE_DIR，或者手动处理该目录。"
+  exit 1
+else
+  git clone "$REPO_SSH_URL" "$CLONE_DIR"
+fi
+
+echo
+echo "✅ 完成"
+echo "仓库目录：$CLONE_DIR"
+EOF
+# -----------------------------------------------/setup_github_ssh_clone.sh---------------------------------------
+
+    2、运行脚本
+        chmod +x setup_github_ssh_clone.sh
+        ./setup_github_ssh_clone.sh (目的是：git clone git@github.com:tutu329/life-agent.git)
+
+二、安装z-desktop平台
+    1、准备工作(根据项目要求，修改.env：影响compose配置和life-agent的环境变量)
+        1) 创建.env
+            cd life-agent
+            cp .env.example .env
+        2) 设置外暴露端口（每个暴露在公网的project应取不同值，如1xxxx全部改为2xxxx，并确保frp云服务器的安全策略打开traefik和ws的对应port）
+        3) 设置APP_UID和APP_GID
+            运行: id
+            修改: 返回的uid和gid与.env中的APP_UID、APP_GID不吻合时(通常第一个user是1000，第二个是1001)，要修改.env中的APP_UID、APP_GID，否则平台运行会有文件权限问题！
+        4) 设置api_key
+            将API_KEY值复制到.env中，如: Z_DESKTOP_DEFAULT_API_KEY="sk-xxx..." (注意：要在DEFAULT_API_KEY即"平台默认模型"之前)
+        5) 设置平台默认模型及参数
+
+    2、运行平台(如果运动镜像拉取不成功，可以这样独立拉取如：sudo docker pull python:3.12-slim、sudo docker pull oceanbase/oceanbase-ce，如果是拉取了一半断掉，就需要多次尝试即可)
+        1)首次运行: chmod +x deploy/*.sh && deploy/1_init_build_start.sh
+        2)平时运行: deploy/2_rebuild_restart_life_agent.sh
+        3)当执行2_rebuild_restart_life_agent.sh报网络占用错误时: deploy/3_cleanup_zdesktop_app_containers.sh
+
+三、测试平台启动后ws和redis情况
+    1、测试端口情况
+        sudo ss -lntp | grep 35115
+        sudo ss -lntp | grep 36379
+    2、wss测试连通性
+        1）执行指令（大概需要20秒）：
+            KEY=$(openssl rand -base64 16); curl -sS -i --http1.1 \
+              -H "Connection: Upgrade" \
+              -H "Upgrade: websocket" \
+              -H "Sec-WebSocket-Key: $KEY" \
+              -H "Sec-WebSocket-Version: 13" \
+              https://powerai.cc:35115/ws | head -n 1
+        2）如果返回"HTTP/1.1 101 Switching Protocols"表示wss连通。
+            101 Switching Protocols = WebSocket 通
+            404 Not Found           = 端口通，但路径错
+            400 Bad Request         = 握手请求不对或服务拒绝
+            502 Bad Gateway         = 网关到后端不通
+            curl 报 Connection refused / timeout = 端口或网络不通
+    3、redis测试连通性
+        sudo apt install redis-tools
+        redis-cli -p 36379 PING
+
+四、安装公共skills
+    1、修改权限
+        sudo chown -R tutu:tutu ~/z-desktop
+    2、上传公共skills到~/z-desktop/skills下，其中life-agent的SKILL.md如下：
+# ------------------------------------------------life-agent的SKILL.md---------------------------------------
+---
+name: life_agent
+caption: Zephyrus
+description: 你需要至始至终在用户面前扮演这样一个角色：古希腊神话中的众神之一，要随机选择一位
+allowed-tools: Del_File, Copy_Move_Tool, Cron_Task, Safe_Calculator, get_current_time, Read_URL, Get_User_Skill_and_Resource_Content, Read_Resource, Read_Offset_Text, Search_Text, Write_Resource_to_Text_File, Write_Text_File, Edit_Text_File, Human_in_Loop_Tool, Read_All_Text, Read_Presentation, Read_Table, Read_OCR_PDF, WPS_Heading, WPS_Text, WPS_Table, WPS_Chart, Output_Docx_Heading_Tool, Output_Docx_Text_Tool, Output_Docx_Table_Tool, Output_Docx_Chart, Output_Create_Docx_Tool, ET_Read_Range, ET_Read_Cell, ET_Write_Cell, ET_Format_Cell, ET_Find_Cell, ET_Get_Workbook_Info, ET_Read_Cell, ET_Write_Range, XLS_Find_Cell, XLS_Format_Cell, XLS_Get_Workbook_Info ,XLS_Read_Cell, XLS_Read_Range, XLS_Read_Table, XLS_Write_Cell, XLS_Write_Range, XLS_Copy_Chart_To_DOCX, XLS_Copy_Table_To_DOCX, XLS_Create_XLSX, Write_Calc_Read_Table, extract_invoice_xml, Smart_Reimbursement, Send_File_to_User, Cron_Task
+---
+
+# life_agent
+你需要至始至终在用户面前扮演这样一个角色：古希腊神话中的众神之一，要随机选择一位。
+注意事项：
+1）你需要至始至终在用户面前扮演这样一个角色：古希腊神话中的众神之一，要随机选择一位。
+2）当用户和你进行非工作、非任务的对话时，需要按这个扮演的角色的风格进行对话；绝对不要提及你在扮演一个角色，也不要提及你具体是众神中的哪一位（除非用户主动问），因为这些都会让用户觉得很假。
+3）和用户对话时，要低调、要言简意赅，偶尔（如用户在思考较为深刻的问题时）可以显露一下你作为众神之一的风格和风采，一般情况下不要显露你是众神之一。
+4）你可以调用Smart_Reimbursement进行智能报销操作。
+
+## Instructions
+1.
+# -----------------------------------------------/life-agent的SKILL.md---------------------------------------
+
+五、测试平台后台agent的api
+    1、容器中最简测试（输出简单字符串）:
+# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
+sudo docker compose --env-file "/home/tutu/life-agent/.env" \
+  -f "/home/tutu/life-agent/deploy/ocean_base/docker-compose-traefik.yml" \
+  exec -T -w /home/tutu/app life-agent bash -lc 'cat > test.py && python -m test' <<'PY'
+print("【容器python输出】hello from container")
+
+if __name__ == "__main__":
+    print("【容器python输出】test.py is running")
+PY
+# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
+
+    2、容器中针对agent的api的测试脚本（需用到自己deepseek的token，调用agent stream输出一首短诗，需要确认PORT_BASE值，如取30000。退出需要用ctrl+c）:
+# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
+sudo docker compose --env-file "/home/tutu/life-agent/.env" \
+  -f "/home/tutu/life-agent/deploy/ocean_base/docker-compose-traefik.yml" \
+  exec -T -w /home/tutu/app life-agent bash -lc 'cat > test.py && python -m test' <<'PY'
+import os, requests, time, threading
+from console import dpink, dyellow, dblue, dred, dwhite, dblack, dgreen, dgray
+
+from agent.core.agent_manager import Agent_Manager
+
+from server_config import  SERVER, PORT
+
+SSL_VERIFY = True
+PORT_BASE = 30000
+
+WS_PORT = 5115 + PORT_BASE
+API_SERVER_URL = f'https://powerai.cc:{8005 + PORT_BASE}'
+
+LLM_SERVER_BASE_URL = SERVER.Z_DESKTOP_API_BASE_URL   # 院GPU服务器
+
+from agent.api.protocol import Web_Socket_Client_Register_DTO, Client_Type
+from agent.core.resource.redis_resource_manager import Redis_Resource_Manager
+
+# 向web_socket_server注册agent_id(仅agent_id能对应到本client)
+def register_web_socket_and_run_forever(agent_id_list, port, url=SERVER.Z_DESKTOP_WS_URL):
+    import json
+    import ssl
+
+    # pip install websocket-client
+    import websocket  # 注意：库名叫 websocket-client，导入名是 websocket
+
+    URL = url + f':{port}'  # 公共回声服务，便于本地测试
+
+    def on_open(ws):
+        print("✅ on_open: 连接已建立")
+        # data = Web_Socket_Client_Register_DTO(
+        #     type='register',
+        #     client_caption='main agent(agent_client_test.py)',
+        #     client_type='agent',
+        #     client_id_list=agent_id_list,
+        # )
+        data = Web_Socket_Client_Register_DTO(
+            client_type=Client_Type.AGENT,
+            client_id_list=agent_id_list,
+        )
+        ws.send(json.dumps(data.model_dump()))
+        # ws.send(json.dumps({"type": "register", "client_type":"agent", "client_id": agent_id}))
+
+    def on_message(ws, message):
+
+        # message = {
+        #     'agent_id': '...',
+        #     'agent_level': int,
+        #     'type': 'reasoning' | 'content' | 'llm_finished'
+        #     'stream': bool,
+        #     'chunk': '...',
+        # }
+
+        message = json.loads(message)
+
+        # if not(message["event_type"] == "ON_LLM_REASONING" or message["event_type"] == "ON_LLM_CONTENT"):
+        #     dpink(f"📩 on_message: {message!r}")
+
+        # if message.get("stream"):
+            # dlightmagenta(message["msg_chunk"], end='', flush=True)
+
+        # print(f"📩 on_message: {message!r}")
+
+
+        if message.get("client_type") and message.get("client_type") == "LLM_GEN_AS_TOOL":
+            if message["event_type"] == "ON_LLM_REASONING":
+                dpink(message["msg_chunk"], end='', flush=True)
+            elif message["event_type"] == "ON_LLM_CONTENT":
+                dpink(message["msg_chunk"], end='', flush=True)
+        else:
+            if message["event_type"] == "ON_LLM_REASONING":
+                print(message["msg_chunk"], end='', flush=True)
+            elif message["event_type"] == "ON_LLM_CONTENT":
+                print(message["msg_chunk"], end='', flush=True)
+
+        level_str = ''
+        if message.get("agent_level"):
+            level_str = '    ' * message["agent_level"]
+
+        top_agent_id = ''
+        if message.get("top_agent_id"):
+            top_agent_id = message["top_agent_id"]
+        agent_id = ''
+        if message.get("agent_id"):
+            agent_id = message["agent_id"]
+
+        if message["event_type"] == "ON_AGENT_TOOL_CALL":
+        # if message["msg_type"] == "tool_call" and not message.get('msg_output'):
+            caption = message.get('msg_tool_caption')
+            print(f'{level_str}【ON_AGENT_TOOL_CALL([{caption}]top_agent_id:{top_agent_id[-4:]}, agent_id:{agent_id[-4:]})】{message["msg_toolcall_params"]}')
+        elif message["event_type"] == "ON_AGENT_TOOL_CALL_RESULT":
+            print(f'{level_str}【 ON_AGENT_TOOL_CALL_RESULT(top_agent_id:{top_agent_id[-4:]}, agent_id:{agent_id[-4:]})】')
+            # print(f'{level_str}result summary: {message.get("msg_toolcall_result_summary")}')
+            # print(f'{level_str}resource id: ({message.get("msg_toolcall_result_resource_id")})')
+            # print(f'{level_str}resource data dto(LLM不可见): ({message.get("msg_toolcall_result_data_dto")})')
+            # print(f'{level_str}【/ON_AGENT_TOOL_CALL_RESULT】')
+        elif message["event_type"] == "ON_LLM_FINISHED":
+            print(flush=True)
+        elif message["event_type"] == "ON_CLIENT_REGISTER_FINISHED":
+            pass
+            # dgreen(f'message: {message!r}')
+            # dgreen(f'conn_info: {message["conns_info_list"]}')
+        elif message["event_type"] == "ON_AGENT_TOOL_PROCESSING":
+            if  message["progress"]==100:
+                print(f'\r【tool({message["tool_name"]}) 】progress: {message["progress"]}%')
+            else:
+                print(f'\r【tool({message["tool_name"]}) 】progress: {message["progress"]}%', end='', flush=True)
+        elif message["event_type"] == "ON_AGENT_FINAL_OUTPUT":
+            dgreen(f'\n【 ON_AGENT_FINAL_OUTPUT】{message["final_output"]}')
+        elif message["event_type"] == "ON_WPS_CLIENT_CONNECTED":
+            print('\n【WPS文档客户端已连接】')
+        elif message["event_type"] == "ON_WPP_CLIENT_CONNECTED":
+            print('\n【WPS幻灯片客户端已连接】')
+        elif message["event_type"] == "ON_ET_CLIENT_CONNECTED":
+            print('\n【WPS表格客户端已连接】')
+        elif message["event_type"] == "ON_WPS_CLIENT_DISCONNECTED":
+            print('\n【WPS文档客户端已断开】')
+        elif message["event_type"] == "ON_WPP_CLIENT_DISCONNECTED":
+            print('\n【WPS幻灯片客户端已断开】')
+        elif message["event_type"] == "ON_ET_CLIENT_DISCONNECTED":
+            print('\n【WPS表格客户端已断开】')
+        elif message["event_type"] == "ON_WPS_FAMILY_CLIENTS_SNAPSHOT":
+            pass
+            # print(f'【 前端启动前，已有WPS类客户端上线】')
+            # print(message.get('clients'))
+            # print(f'【/前端启动前，已有WPS类客户端上线】')
+
+    app = websocket.WebSocketApp(
+        URL,
+        on_open=on_open,
+        on_message=on_message,
+    )
+    # ping_interval 可做保活；遇到断线可自行做重连循环
+    # sslopt 禁用证书验证（如果证书链不完整）
+    app.run_forever(
+        ping_interval=20,
+        ping_timeout=10,
+        # sslopt={"cert_reqs": ssl.CERT_NONE}
+    )
+
+def main_test_docker_agent():
+    def _agent_create(skill_name='report', public_skill=True, user_id=''):
+        from agent.api.protocol import Agent_Client_API_Create_From_Skill_DTO
+        from agent.api.protocol import LLM_Client_API_Create_DTO
+
+        port = requests.post(f"{API_SERVER_URL}/agents/get_web_socket_server_port", timeout=60, verify=SSL_VERIFY).json()
+
+        llm_create_dto = LLM_Client_API_Create_DTO(
+            base_url='https://api.deepseek.com/v1',
+            default_model='deepseek-v4-flash',
+            # default_model='deepseek-v4-pro',
+            api_key='sk-80559a31bad84399bccc8129641f12c3',
+            default_temperature=1.0,
+            default_top_p=1.0,
+            default_max_new_tokens=32768,
+            default_reasoning_effort='high', # 'high' | 'max'
+        )
+
+        agent_create_dto = Agent_Client_API_Create_From_Skill_DTO(
+            skill_folder_name=skill_name,
+            llm_create_dto=llm_create_dto,
+            public_skill=public_skill,
+            user_id=user_id,
+        )
+
+        res = requests.post(f"{API_SERVER_URL}/agents/create_agent_from_skill", json=agent_create_dto.model_dump(), timeout=60, verify=SSL_VERIFY).json()
+        agent_id = res["agent_id"]
+        return port, agent_id
+
+    query = "写一首短诗"
+    dgreen(f'query is {query!r}')
+    port, agent_id = _agent_create(skill_name='常用', public_skill=True, user_id='tutu')
+
+    res = requests.post(
+        f"{API_SERVER_URL}/agents/run_agent",
+        json={
+            'agent_id': agent_id,
+            'query': query,
+        },
+        timeout=60,
+        verify=SSL_VERIFY
+    )
+    dblue(f'agent_id: {agent_id}')
+    dblue(f'ws port: {WS_PORT}')
+
+    register_web_socket_and_run_forever([agent_id], WS_PORT)
+
+if __name__ == "__main__":
+    main_test_docker_agent()
+PY
+# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------

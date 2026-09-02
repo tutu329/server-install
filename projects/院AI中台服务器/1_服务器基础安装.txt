@@ -169,6 +169,7 @@ sudo tee /etc/docker/daemon.json <<EOF
 }
 EOF
                 重启Docker:
+                    sudo systemctl daemon-reload
                     sudo systemctl restart docker
                     sudo docker run hello-world
 
