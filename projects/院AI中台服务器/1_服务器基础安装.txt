@@ -16,6 +16,41 @@
         sudo usermod -aG sudo tutu
         用tutu登录
 
+1.5、硬盘空间和其他(把/扩展到2T)
+    1）alias(~/.bashrc中增加)
+        alias p='ps aux | grep -v "grep" | grep $1'
+        alias s='systemctl list-unit-files | grep $1'
+        alias d='du -sh .; df -h .'
+    2）lsblk查看磁盘分区情况
+        NAME                      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+        sr0                        11:0    1 1024M  1 rom
+        vda                       253:0    0    2T  0 disk
+        ├─vda1                    253:1    0    1M  0 part
+        ├─vda2                    253:2    0    2G  0 part /boot
+        └─vda3                    253:3    0    2T  0 part
+          └─ubuntu--vg-ubuntu--lv 252:0    0  100G  0 lvm  /
+    3）确认空闲空间
+        sudo pvs
+        sudo vgs
+        sudo lvs
+        df -hT /
+    4）如果 ubuntu-vg 的 VFree 显示约 1.9T，则执行(正常情况下不需要重启):
+        sudo lvextend -r -l +100%FREE /dev/ubuntu-vg/ubuntu-lv
+            sudo：以管理员权限执行。
+            lvextend：扩展 LVM 逻辑卷。
+            -l +100%FREE：把 ubuntu-vg 中尚未分配的空间全部加入该逻辑卷。
+            -r：扩展逻辑卷后，自动同步扩展里面的文件系统。
+            /dev/ubuntu-vg/ubuntu-lv：当前挂载在 / 的根逻辑卷。
+    5）核实/是否已经扩容到了2T
+        lsblk
+            NAME                      MAJ:MIN RM  SIZE RO TYPE MOUNTPOINTS
+            sr0                        11:0    1 1024M  1 rom
+            vda                       253:0    0    2T  0 disk
+            ├─vda1                    253:1    0    1M  0 part
+            ├─vda2                    253:2    0    2G  0 part /boot
+            └─vda3                    253:3    0    2T  0 part
+              └─ubuntu--vg-ubuntu--lv 252:0    0    2T  0 lvm  /
+
 2、安装gcc
     sudo apt update
     (
