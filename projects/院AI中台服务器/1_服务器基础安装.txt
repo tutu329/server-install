@@ -187,3 +187,4 @@ EOF
             此时docker-compose已经可用，可以在如Flowise/docker/下运行: sudo docker-compose up -d 或 sudo docker-compose stop
 
 8、复制ssl文件到/home/tutu/ssl下
+    注意: 这步很关键，决定life-agent的容器是否能正常开https

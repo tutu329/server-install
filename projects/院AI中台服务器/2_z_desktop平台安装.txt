@@ -221,26 +221,133 @@ EOF
         5) 设置平台默认模型及参数
 
     2、运行平台(如果运动镜像拉取不成功，可以这样独立拉取如：sudo docker pull python:3.12-slim、sudo docker pull oceanbase/oceanbase-ce，如果是拉取了一半断掉，就需要多次尝试即可)
-        1)首次运行: chmod +x deploy/*.sh && deploy/1_init_build_start.sh
+        1)首次运行: chmod +x deploy/*.sh && deploy/1_init_build_start.sh(playwright层的构建要多试几次，camoufox层是从github下载，要多试几次才行)
         2)平时运行: deploy/2_rebuild_restart_life_agent.sh
         3)当执行2_rebuild_restart_life_agent.sh报网络占用错误时: deploy/3_cleanup_zdesktop_app_containers.sh
 
+三、v2ray（注：同样配置，院外网自己服务器通，院外网虚拟机不通（但nc测试表明，又不像院网限制，10次连接有2次通过，行为接近梯子供应商的限流，很奇怪））
+    0) 安装后的测试:
+        curl -x http://localhost:7890 https://www.google.com
+        curl -x http://localhost:7890 https://huggingface.co
+    0) 安装v2ray或clash/shadowsocket后的alias设置（注意！：export单独放在一个sh中，运行这个sh后，环境变量其实无效，因此要放在~/.bashrc或~/.zshrc的alias中）
+        .bashrc文件：
+#-------------------------------------------vpn alias-----------------------------------------------
+vpn_on() {
+    local vpn_proxy_url="http://127.0.0.1:7890"
 
+    export http_proxy="$vpn_proxy_url"
+    export https_proxy="$vpn_proxy_url"
+    export HTTP_PROXY="$vpn_proxy_url"
+    export HTTPS_PROXY="$vpn_proxy_url"
 
+    git config --global http.proxy "$vpn_proxy_url"
+    git config --global https.proxy "$vpn_proxy_url"
 
+    echo "VPN 已启用：$vpn_proxy_url（环境变量 + Git）"
+}
+
+vpn_off() {
+    unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+
+    git config --global --unset-all http.proxy 2>/dev/null || true
+    git config --global --unset-all https.proxy 2>/dev/null || true
+
+    echo "VPN 已关闭（环境变量 + Git）"
+}
+#------------------------------------------/vpn alias-----------------------------------------------
+        unalias vpn_on vpn_off 2>/dev/null (否则会报错：syntax error near unexpected token `('`vpn_on() {')
+        source ~/.bashrc
+        然后就可以使用控制台的一些tz应用如claude code、docker（当然要确保clash/v2ray开着，且所开http端口为7890）
+    1) mkdir v2ray && cd v2ray
+    2) curl -O https://raw.githubusercontent.com/v2fly/fhs-install-v2ray/master/install-release.sh
+    3) sudo bash install-release.sh(可能会fail，多试几次即可)
+    4) 常用命令:
+        sudo systemctl status v2ray
+        sudo systemctl enable v2ray
+        sudo systemctl restart v2ray
+        sudo systemctl start v2ray
+        sudo systemctl stop v2ray
+        netstat -autn | grep 7890
+
+    5) sudo vi /usr/local/etc/v2ray/config.json (这里只放了个美国3)
+        测试：
+            确认节点端口能够连接:
+                nc -vz -w 5 node-1504.yh82l3dsytxzf8.com 30030
+            测试配置:
+                sudo v2ray test -c /usr/local/etc/v2ray/config.json
+#-------------------------------------------config.json(注意: 其中的id是shadowrocket中节点"复制JSON"内容中的"password"，或者就是复制界面上看见的"uuid"（其实是"password"）)-----------------------------------------------
+{
+  "log": {
+    "loglevel": "info"
+  },
+  "inbounds": [
+    {
+      "tag": "http-in",
+      "listen": "127.0.0.1",
+      "port": 7890,
+      "protocol": "http",
+      "settings": {}
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "proxy",
+      "protocol": "vmess",
+      "settings": {
+        "vnext": [
+          {
+            "address": "node-1503.yh82l3dsytxzf8.com",
+            "port": 30029,
+            "users": [
+              {
+                "id": "1eb09c5c-7b38-3f8d-9ba8-8e1877d73c3e",
+                "alterId": 0,
+                "security": "auto",
+                "level": 0
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none"
+      }
+    },
+    {
+      "tag": "direct",
+      "protocol": "freedom",
+      "settings": {}
+    }
+  ],
+  "routing": {
+    "domainStrategy": "AsIs",
+    "rules": [
+      {
+        "type": "field",
+        "ip": [
+          "geoip:private"
+        ],
+        "outboundTag": "direct"
+      }
+    ]
+  }
+}
+#------------------------------------------/config.json-----------------------------------------------
 
 三、测试平台启动后ws和redis情况
     1、测试端口情况
-        sudo ss -lntp | grep 35115
-        sudo ss -lntp | grep 36379
+        sudo ss -lntp | grep 15115
+        sudo ss -lntp | grep 16379
     2、wss测试连通性
-        1）执行指令（大概需要20秒）：
-            KEY=$(openssl rand -base64 16); curl -sS -i --http1.1 \
+        1）执行指令（大概需要20秒，出现"HTTP/1.1 101 Switching Protocols"表示WebSocket 握手已经成功）：
+            KEY=$(openssl rand -base64 16); curl -k -sS -i --http1.1 \
+              --max-time 5 \
               -H "Connection: Upgrade" \
               -H "Upgrade: websocket" \
               -H "Sec-WebSocket-Key: $KEY" \
               -H "Sec-WebSocket-Version: 13" \
-              https://powerai.cc:35115/ws | head -n 1
+              https://127.0.0.1:15115/ws | head -n 1
         2）如果返回"HTTP/1.1 101 Switching Protocols"表示wss连通。
             101 Switching Protocols = WebSocket 通
             404 Not Found           = 端口通，但路径错
@@ -249,31 +356,19 @@ EOF
             curl 报 Connection refused / timeout = 端口或网络不通
     3、redis测试连通性
         sudo apt install redis-tools
-        redis-cli -p 36379 PING
+        redis-cli -p 16379 PING
 
 四、安装公共skills
     1、修改权限
         sudo chown -R tutu:tutu ~/z-desktop
-    2、上传公共skills到~/z-desktop/skills下，其中life-agent的SKILL.md如下：
-# ------------------------------------------------life-agent的SKILL.md---------------------------------------
----
-name: life_agent
-caption: Zephyrus
-description: 你需要至始至终在用户面前扮演这样一个角色：古希腊神话中的众神之一，要随机选择一位
-allowed-tools: Del_File, Copy_Move_Tool, Cron_Task, Safe_Calculator, get_current_time, Read_URL, Get_User_Skill_and_Resource_Content, Read_Resource, Read_Offset_Text, Search_Text, Write_Resource_to_Text_File, Write_Text_File, Edit_Text_File, Human_in_Loop_Tool, Read_All_Text, Read_Presentation, Read_Table, Read_OCR_PDF, WPS_Heading, WPS_Text, WPS_Table, WPS_Chart, Output_Docx_Heading_Tool, Output_Docx_Text_Tool, Output_Docx_Table_Tool, Output_Docx_Chart, Output_Create_Docx_Tool, ET_Read_Range, ET_Read_Cell, ET_Write_Cell, ET_Format_Cell, ET_Find_Cell, ET_Get_Workbook_Info, ET_Read_Cell, ET_Write_Range, XLS_Find_Cell, XLS_Format_Cell, XLS_Get_Workbook_Info ,XLS_Read_Cell, XLS_Read_Range, XLS_Read_Table, XLS_Write_Cell, XLS_Write_Range, XLS_Copy_Chart_To_DOCX, XLS_Copy_Table_To_DOCX, XLS_Create_XLSX, Write_Calc_Read_Table, extract_invoice_xml, Smart_Reimbursement, Send_File_to_User, Cron_Task
----
+    2、上传公共skills到~/z-desktop/skills下：
+        若整个skills/压缩为skills.zip，解压命令：
+            sudo apt install unzip -y
+            unzip -o skills.zip -d skills/
 
-# life_agent
-你需要至始至终在用户面前扮演这样一个角色：古希腊神话中的众神之一，要随机选择一位。
-注意事项：
-1）你需要至始至终在用户面前扮演这样一个角色：古希腊神话中的众神之一，要随机选择一位。
-2）当用户和你进行非工作、非任务的对话时，需要按这个扮演的角色的风格进行对话；绝对不要提及你在扮演一个角色，也不要提及你具体是众神中的哪一位（除非用户主动问），因为这些都会让用户觉得很假。
-3）和用户对话时，要低调、要言简意赅，偶尔（如用户在思考较为深刻的问题时）可以显露一下你作为众神之一的风格和风采，一般情况下不要显露你是众神之一。
-4）你可以调用Smart_Reimbursement进行智能报销操作。
 
-## Instructions
-1.
-# -----------------------------------------------/life-agent的SKILL.md---------------------------------------
+
+
 
 五、测试平台后台agent的api
     1、容器中最简测试（输出简单字符串）:
@@ -289,7 +384,7 @@ PY
 # ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
 
     2、容器中针对agent的api的测试脚本（需用到自己deepseek的token，调用agent stream输出一首短诗，需要确认PORT_BASE值，如取30000。退出需要用ctrl+c）:
-# ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
+# -------------------------------容器外life-agent下直接执行的测试脚本(注意配置：PORT_BASE = 10000，DEEPSEEK_API_KEY要写入.env)----------------------------
 sudo docker compose --env-file "/home/tutu/life-agent/.env" \
   -f "/home/tutu/life-agent/deploy/ocean_base/docker-compose-traefik.yml" \
   exec -T -w /home/tutu/app life-agent bash -lc 'cat > test.py && python -m test' <<'PY'
@@ -301,12 +396,12 @@ from agent.core.agent_manager import Agent_Manager
 from server_config import  SERVER, PORT
 
 SSL_VERIFY = True
-PORT_BASE = 30000
+PORT_BASE = 10000
 
 WS_PORT = 5115 + PORT_BASE
-API_SERVER_URL = f'https://powerai.cc:{8005 + PORT_BASE}'
 
-LLM_SERVER_BASE_URL = SERVER.Z_DESKTOP_API_BASE_URL   # 院GPU服务器
+# API_SERVER_URL = f'https://powerai.cc:{8005 + PORT_BASE}'
+API_SERVER_URL = f'https://127.0.0.1:{8005 + PORT_BASE}'
 
 from agent.api.protocol import Web_Socket_Client_Register_DTO, Client_Type
 from agent.core.resource.redis_resource_manager import Redis_Resource_Manager
@@ -430,6 +525,10 @@ def register_web_socket_and_run_forever(agent_id_list, port, url=SERVER.Z_DESKTO
     app.run_forever(
         ping_interval=20,
         ping_timeout=10,
+        sslopt={
+            "cert_reqs": ssl.CERT_NONE,
+            "check_hostname": False,
+        },
         # sslopt={"cert_reqs": ssl.CERT_NONE}
     )
 
@@ -438,13 +537,11 @@ def main_test_docker_agent():
         from agent.api.protocol import Agent_Client_API_Create_From_Skill_DTO
         from agent.api.protocol import LLM_Client_API_Create_DTO
 
-        port = requests.post(f"{API_SERVER_URL}/agents/get_web_socket_server_port", timeout=60, verify=SSL_VERIFY).json()
-
         llm_create_dto = LLM_Client_API_Create_DTO(
             base_url='https://api.deepseek.com/v1',
             default_model='deepseek-v4-flash',
             # default_model='deepseek-v4-pro',
-            api_key='sk-80559a31bad84399bccc8129641f12c3',
+            api_key=os.getenv("DEEPSEEK_API_KEY") or 'empty',
             default_temperature=1.0,
             default_top_p=1.0,
             default_max_new_tokens=32768,
@@ -458,7 +555,7 @@ def main_test_docker_agent():
             user_id=user_id,
         )
 
-        res = requests.post(f"{API_SERVER_URL}/agents/create_agent_from_skill", json=agent_create_dto.model_dump(), timeout=60, verify=SSL_VERIFY).json()
+        res = requests.post(f"{API_SERVER_URL}/agents/create_agent_from_skill", json=agent_create_dto.model_dump(mode='json'), timeout=60, verify=SSL_VERIFY).json()
         agent_id = res["agent_id"]
         return port, agent_id
 
