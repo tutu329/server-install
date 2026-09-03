@@ -383,8 +383,8 @@ if __name__ == "__main__":
 PY
 # ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
 
-    2、容器中针对agent的api的测试脚本（需用到自己deepseek的token，调用agent stream输出一首短诗，需要确认PORT_BASE值，如取30000。退出需要用ctrl+c）:
-# -------------------------------容器外life-agent下直接执行的测试脚本(注意配置：PORT_BASE = 10000，DEEPSEEK_API_KEY要写入.env)----------------------------
+    2、容器中针对agent的api的测试脚本（测试http的容器内8005端口（发起agent调用），测试wss的容器内5115端口（显示agent的stream回调信息））:
+# -------------------------------容器外life-agent下直接执行的测试脚本(注意配置：PORT_BASE = 0，DEEPSEEK_API_KEY要写入.env)----------------------------
 sudo docker compose --env-file "/home/tutu/life-agent/.env" \
   -f "/home/tutu/life-agent/deploy/ocean_base/docker-compose-traefik.yml" \
   exec -T -w /home/tutu/app life-agent bash -lc 'cat > test.py && python -m test' <<'PY'
@@ -396,18 +396,18 @@ from agent.core.agent_manager import Agent_Manager
 from server_config import  SERVER, PORT
 
 SSL_VERIFY = True
-PORT_BASE = 10000
+PORT_BASE = 0
 
 WS_PORT = 5115 + PORT_BASE
 
 # API_SERVER_URL = f'https://powerai.cc:{8005 + PORT_BASE}'
-API_SERVER_URL = f'https://127.0.0.1:{8005 + PORT_BASE}'
+API_SERVER_URL = f'http://127.0.0.1:{8005 + PORT_BASE}'
 
 from agent.api.protocol import Web_Socket_Client_Register_DTO, Client_Type
 from agent.core.resource.redis_resource_manager import Redis_Resource_Manager
 
 # 向web_socket_server注册agent_id(仅agent_id能对应到本client)
-def register_web_socket_and_run_forever(agent_id_list, port, url=SERVER.Z_DESKTOP_WS_URL):
+def register_web_socket_and_run_forever(agent_id_list, port, url='wss://127.0.0.1'):
     import json
     import ssl
 
@@ -533,7 +533,7 @@ def register_web_socket_and_run_forever(agent_id_list, port, url=SERVER.Z_DESKTO
     )
 
 def main_test_docker_agent():
-    def _agent_create(skill_name='report', public_skill=True, user_id=''):
+    def _agent_create(skill_name='常用', public_skill=True, user_id=''):
         from agent.api.protocol import Agent_Client_API_Create_From_Skill_DTO
         from agent.api.protocol import LLM_Client_API_Create_DTO
 
@@ -557,11 +557,11 @@ def main_test_docker_agent():
 
         res = requests.post(f"{API_SERVER_URL}/agents/create_agent_from_skill", json=agent_create_dto.model_dump(mode='json'), timeout=60, verify=SSL_VERIFY).json()
         agent_id = res["agent_id"]
-        return port, agent_id
+        return agent_id
 
     query = "写一首短诗"
     dgreen(f'query is {query!r}')
-    port, agent_id = _agent_create(skill_name='常用', public_skill=True, user_id='tutu')
+    agent_id = _agent_create(skill_name='常用', public_skill=True, user_id='tutu')
 
     res = requests.post(
         f"{API_SERVER_URL}/agents/run_agent",
