@@ -186,5 +186,12 @@ EOF
             docker-compose -v
             此时docker-compose已经可用，可以在如Flowise/docker/下运行: sudo docker-compose up -d 或 sudo docker-compose stop
 
-8、复制ssl文件到/home/tutu/ssl下
-    注意: 这步很关键，决定life-agent的容器是否能正常开https
+8、复制ssl文件到/home/tutu/ssl下（注: 这步很关键，决定life-agent的容器是否能正常开https）
+    1）拿到新服务器的ssl文件，如:
+        zepdi.com.crt <--> powerai_fullchain.pem
+        zepdi.com.key <--> powerai.key
+    2）用ai把zepdi.com.crt和zepdi.com.key变成以下4个文件：
+        powerai_fullchain.pem   叶子证书 + 中间CA证书
+        powerai_public.crt      叶子证书
+        powerai_chain.crt       中间CA证书
+        powerai.key             私钥
