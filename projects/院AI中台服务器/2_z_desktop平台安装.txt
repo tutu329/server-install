@@ -224,6 +224,7 @@ EOF
         1)首次运行: chmod +x deploy/*.sh && deploy/1_init_build_start.sh(playwright层的构建要多试几次，camoufox层是从github下载，要多试几次才行)
         2)平时运行: deploy/2_rebuild_restart_life_agent.sh
         3)当执行2_rebuild_restart_life_agent.sh报网络占用错误时: deploy/3_cleanup_zdesktop_app_containers.sh
+        4)签发BFF的admin的api_key: 执行deploy/4_create_bff_admin_api_key.sh
 
 三、v2ray（注：同样配置，院外网自己服务器通，院外网虚拟机不通（但nc测试表明，又不像院网限制，10次连接有2次通过，行为接近梯子供应商的限流，很奇怪））
     0) 安装后的测试:
