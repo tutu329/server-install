@@ -1,0 +1,119 @@
+一、内网服务器基础配置
+    0、ip为xxx.xxx.xxx.xxx，账号为xxxxx，初始密码xxxxx
+        1）修改root密码
+            sudo passwd(改为Jackseaver112279)
+        2）修改zepdi密码
+            passwd(改为Jackseaver112279)
+
+    1、用户添加
+        sudo adduser tutu
+        验证：
+            # 输出类似：uid=1001(tutu) gid=1001(tutu) 组=1001(tutu)
+            id tutu
+
+            # 确认家目录存在且属主正确
+            ls -ld /home/tutu
+        授权sudo
+            sudo usermod -aG sudo tutu
+            用tutu登录
+
+二、内网服务器安装docker（【注意】内网服务器要和外网服务器的【Ubuntu 24.04、amd64】一致，如果版本或架构不同，需要在与内网匹配的联网 Ubuntu 环境中准备安装包，不能直接套用外网服务器的软件源。）
+    1、先确认两边系统，并获取内网的软件安装清单。内外网服务器均执行：
+        cat /etc/os-release
+        dpkg --print-architecture
+        例如，两边均为 Ubuntu 24.04、amd64。
+        【注意】如果版本或架构不同，需要在与内网匹配的联网 Ubuntu 环境中准备安装包，不能直接套用外网服务器的软件源。
+    2、内网服务器执行（这个文件记录内网已经安装的软件，用来判断还缺哪些依赖。）：
+        cp /var/lib/dpkg/status ~/target-dpkg-status
+    3、在外网服务器下载安装包
+        1）创建目录
+            mkdir -p ~/docker-offline/debs/partial
+            cd ~/docker-offline
+        2）把内网的 target-dpkg-status 文件复制到这个目录，使其路径为：
+            ~/docker-offline/target-dpkg-status
+        3）外网服务器已经配置过 Docker 软件源，直接更新索引：
+            sudo apt-get update
+        4）然后下载。以下命令沿用外网已经安装的 Docker、CLI、containerd 和 Compose 版本，并下载 Buildx：
+            sudo apt-get \
+              --download-only \
+              --no-install-recommends \
+              --no-remove \
+              -o Dir::State::status="$PWD/target-dpkg-status" \
+              -o Dir::Cache::archives="$PWD/debs" \
+              install \
+              "docker-ce=$(dpkg-query -W -f='${Version}' docker-ce)" \
+              "docker-ce-cli=$(dpkg-query -W -f='${Version}' docker-ce-cli)" \
+              "containerd.io=$(dpkg-query -W -f='${Version}' containerd.io)" \
+              "docker-compose-plugin=$(dpkg-query -W -f='${Version}' docker-compose-plugin)" \
+              docker-buildx-plugin
+
+            （这条命令中：
+            - --download-only：只下载，不安装，因此不会升级或重启外网 Docker。
+            - Dir::State::status=...：按内网的软件安装清单计算依赖，避免因为外网已经安装过而漏下载。
+            - Dir::Cache::archives=...：将下载的 .deb 放到 debs 目录。
+            这些参数由 APT 支持。）
+        5）下载成功后执行：
+            ls -lh debs/*.deb
+            tar -czf docker-offline-install.tar.gz debs
+            sha256sum docker-offline-install.tar.gz > docker-offline-install.tar.gz.sha256
+        6）把下面两个文件复制到内网：
+            docker-offline-install.tar.gz
+            docker-offline-install.tar.gz.sha256
+    4、在内网服务器安装docker
+        1）进入上述这两个文件所在的目录，校验：
+            sha256sum -c docker-offline-install.tar.gz.sha256
+        2）显示ok后：
+            tar -xzf docker-offline-install.tar.gz
+            sudo apt-get \
+              --no-download \
+              --no-install-recommends \
+              --no-remove \
+              install ./debs/*.deb
+            （【注意】这里使用 APT 安装本地包，让它处理安装顺序和依赖；--no-download 禁止联网下载。若仍缺包，会报错，需要回外网补齐。）
+        3）安装成功后，启动服务并设置开机启动：
+            sudo systemctl enable --now docker
+            sudo systemctl status docker --no-pager
+            sudo docker version
+            sudo docker compose version
+            sudo docker ps
+
+三、docker镜像迁移（将最新的外网部署镜像导出导入到内网）
+    1、外网服务器save
+        set -o pipefail
+        sudo docker save \
+          life-agent-oceanbase:1.0.0 \
+          traefik:v3.6.6 \
+          oceanbase/oceanbase-ce \
+          redis:7 \
+          zdesktop-python-runtime:3.12 \
+          nginx:alpine \
+          | gzip -1 > zdesktop-images.tar.gz
+        sha256sum zdesktop-images.tar.gz > zdesktop-images.tar.gz.sha256
+    2、内网服务器load
+        1）将下列文件复制到内网
+            zdesktop-images.tar.gz
+            zdesktop-images.tar.gz.sha256
+        2）校验
+            sha256sum -c zdesktop-images.tar.gz.sha256
+            sudo docker load -i zdesktop-images.tar.gz
+
+四、安装z-desktop平台
+    1、准备工作(根据项目要求，修改.env：影响compose配置和life-agent的环境变量)
+        1) 创建.env
+            cd life-agent
+            cp .env.example .env
+        2) 设置外暴露端口（每个暴露在公网的project应取不同值，如1xxxx全部改为2xxxx，并确保frp云服务器的安全策略打开traefik和ws的对应port）
+        3) 设置APP_UID和APP_GID
+            运行: id
+            修改: 返回的uid和gid与.env中的APP_UID、APP_GID不吻合时(通常第一个user是1000，第二个是1001)，要修改.env中的APP_UID、APP_GID，否则平台运行会有文件权限问题！
+        4) 设置api_key
+            将API_KEY值复制到.env中，如:
+                Z_DESKTOP_DEFAULT_API_KEY="..."
+             (注意：要在DEFAULT_API_KEY即"平台默认模型"之前)
+        5) 设置平台默认模型及参数
+
+    2、运行平台(如果运动镜像拉取不成功，可以这样独立拉取如：sudo docker pull python:3.12-slim、sudo docker pull oceanbase/oceanbase-ce，如果是拉取了一半断掉，就需要多次尝试即可)
+        1)首次运行: chmod +x deploy/*.sh && deploy/1_init_build_start.sh(playwright层的构建要多试几次，camoufox层是从github下载，要多试几次才行)
+        2)平时运行: deploy/2_rebuild_restart_life_agent.sh
+        3)当执行2_rebuild_restart_life_agent.sh报网络占用错误时: deploy/3_cleanup_zdesktop_app_containers.sh
+        4)签发BFF的admin的api_key: 执行deploy/4_create_bff_admin_api_key.sh
