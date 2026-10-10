@@ -97,7 +97,20 @@
             sha256sum -c zdesktop-images.tar.gz.sha256
             sudo docker load -i zdesktop-images.tar.gz
 
-四、安装z-desktop平台
+四、复制ssl文件到/home/tutu/ssl下（注: 这步很关键，决定life-agent的容器是否能正常开https）
+    1）拿到新服务器的ssl文件，如:
+        zepdi.com.crt <--> powerai_fullchain.pem
+        zepdi.com.key <--> powerai.key
+    2）用ai把zepdi.com.crt和zepdi.com.key变成以下4个文件：
+        powerai_fullchain.pem   叶子证书 + 中间CA证书
+        powerai_public.crt      叶子证书
+        powerai_chain.crt       中间CA证书
+        powerai.key             私钥
+    3）让单位内网 DNS（或每台客户机的 hosts 文件）把 zai.zepdi.com 解析到内网服务器 IP。.env 一个字都不用改，现有证书继续有效。
+        （内网离线时证书校验仍然能通过，因为 CA 根证书已经内置在系统和浏览器里。）
+        （代价是证书到期后要手动拷贝新证书到 /home/tutu/ssl/。）
+
+五、安装z-desktop平台
     1、准备工作(根据项目要求，修改.env：影响compose配置和life-agent的环境变量)
         1) 创建.env
             cd life-agent
