@@ -582,3 +582,18 @@ if __name__ == "__main__":
     main_test_docker_agent()
 PY
 # ------------------------------------------------容器外life-agent下直接执行的测试脚本---------------------------------------
+
+六、关于oceanbase空间不足问题（动态配置oceanbase的动态扩容参数）
+    1、进入容器
+        life-agent/下执行：sudo docker compose --env-file .env -f deploy/ocean_base/docker-compose-traefik.yml exec -it oceanbase bash
+    2、执行obclient
+        obclient -h127.0.0.1 -P2881 -uroot@sys -p    # 密码是 .env 里的 OCEANBASE_SYS_PASSWORD
+    3、查看当前db的容量配置
+        SELECT ob_version();
+        SELECT SVR_IP, NAME, VALUE
+        FROM oceanbase.GV$OB_PARAMETERS
+        WHERE NAME IN ('datafile_size', 'datafile_next', 'datafile_maxsize',
+                       'data_disk_usage_limit_percentage', 'log_disk_size');
+    4、设置动态扩容（设置后，再执行上述查看指令，可以看到datafile_maxsize和datafile_next已经动态调整了）
+        ALTER SYSTEM SET datafile_maxsize = '300G';
+        ALTER SYSTEM SET datafile_next = '2G';
