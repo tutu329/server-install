@@ -124,6 +124,160 @@
                 Z_DESKTOP_DEFAULT_API_KEY="..."
              (注意：要在DEFAULT_API_KEY即"平台默认模型"之前)
         5) 设置平台默认模型及参数
+        6）下载tiktoken
+            （1）外网电脑上
+                mkdir -p data-gym-cache
+                curl -fL \
+                  https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken \
+                  -o data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+            （2）校验文件（结果应为223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7）
+                # Linux
+                sha256sum data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+                # macOS
+                shasum -a 256 data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+            （3）复制前确保目录和文件分别具有可读权限
+                chmod 755 data-gym-cache
+                chmod 644 data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+            （4）将整个 data-gym-cache 文件夹带到内网服务器，在该文件夹的上级目录执行：
+                1）中止2_rebuild_restart_life_agent.sh
+                2）在life-agent/下创建和执行下述脚本:
+                    vi life-agent-offline-restart.sh
+                    bash ./life-agent-offline-restart.sh \
+                      ../data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+                3）查看日志
+                    sudo docker logs --since=2m -f life-agent-app-oceanbase
+# -------------------------------内网服务器修正2_rebuld_restart_life_agent.sh的脚本-----------------------------------------
+#!/usr/bin/env bash
+# 在 life-agent 项目根目录执行：
+# bash /path/to/life-agent-offline-restart.sh /path/to/cl100k_base.tiktoken
+set -Eeuo pipefail
+
+PROJECT_ROOT="$(cd -- "${PROJECT_ROOT:-$PWD}" && pwd)"
+ORIGINAL="$PROJECT_ROOT/deploy/2_rebuild_restart_life_agent.sh"
+CACHE_KEY=9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+TOKEN_FILE="${1:-$PROJECT_ROOT/data-gym-cache/$CACHE_KEY}"
+export PROJECT_ROOT
+export COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_ROOT/deploy/ocean_base/docker-compose-traefik.yml}"
+
+if [[ -z "${ENV_FILE:-}" ]]; then
+  if [[ -f "$PROJECT_ROOT/.env" ]]; then
+    ENV_FILE="$PROJECT_ROOT/.env"
+  else
+    ENV_FILE="$PROJECT_ROOT/deploy/ocean_base/.env"
+  fi
+fi
+export ENV_FILE
+
+for file in "$ORIGINAL" "$COMPOSE_FILE" "$ENV_FILE" "$TOKEN_FILE"; do
+  [[ -f "$file" ]] || { echo "找不到文件：$file" >&2; exit 1; }
+done
+for cmd in python3 docker sudo; do
+  command -v "$cmd" >/dev/null || { echo "缺少命令：$cmd" >&2; exit 1; }
+done
+
+# 临时文件仅存放脚本和挂载配置；词表保留在项目目录内。
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/life-agent-tiktoken.XXXXXX")"
+trap 'rm -rf -- "$WORK_DIR"' EXIT
+export TIKTOKEN_OVERRIDE="$WORK_DIR/tiktoken.override.json"
+
+python3 - "$PROJECT_ROOT" "$TOKEN_FILE" "$WORK_DIR" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import shlex
+import sys
+
+root, token, work = map(Path, sys.argv[1:])
+key = '9b5ad71b2ce5302211f9c61530b329a4922fc6a4'
+expected = '223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7'
+data = token.read_bytes()
+if hashlib.sha256(data).hexdigest() != expected:
+    raise SystemExit('词表 SHA-256 校验失败，请重新下载官方 cl100k_base.tiktoken。')
+
+original = root / 'deploy/2_rebuild_restart_life_agent.sh'
+script = original.read_text()
+# 严格匹配已检查的版本，避免脚本版本不同时误改。
+changes = {
+    'SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"':
+        'SCRIPT_DIR=' + shlex.quote(str(root / 'deploy')),
+    '  compose build "${build_opts[@]}" life-agent':
+        '  echo "离线模式：跳过 life-agent 构建，使用已有镜像"',
+    '  compose up -d oceanbase redis traefik':
+        '  compose up -d --no-build --pull never oceanbase redis traefik',
+    '    compose run --rm life-agent alembic -c alembic_oceanbase.ini upgrade head':
+        '    compose run --rm --no-deps --pull never life-agent alembic -c alembic_oceanbase.ini upgrade head',
+    '  compose up --no-deps --force-recreate life-agent':
+        '  compose up -d --no-build --pull never --no-deps --force-recreate life-agent',
+}
+for old, new in changes.items():
+    if script.count(old) != 1:
+        raise SystemExit(f'原脚本版本不匹配，未启动服务。找不到唯一语句：{old}')
+    script = script.replace(old, new)
+
+old = '  sudo docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"'
+if script.count(old) != 1:
+    raise SystemExit('compose 函数版本不匹配，未启动服务。')
+script = script.replace(old, old.replace(' "$@"', ' -f "$TIKTOKEN_OVERRIDE" "$@"'))
+
+cache = root / 'deploy/ocean_base/data-gym-cache'
+cache.mkdir(parents=True, exist_ok=True)
+cache.chmod(0o755)
+destination = cache / key
+if token.resolve() != destination.resolve():
+    destination.write_bytes(data)
+destination.chmod(0o644)
+
+config = {'services': {'life-agent': {
+    'environment': {'TIKTOKEN_CACHE_DIR': '/opt/tiktoken-cache'},
+    'volumes': [{
+        'type': 'bind', 'source': str(cache), 'target': '/opt/tiktoken-cache',
+        'read_only': True, 'bind': {'create_host_path': False},
+    }],
+}}}
+(work / 'tiktoken.override.json').write_text(json.dumps(config, ensure_ascii=False))
+(work / '2_offline_temporary.sh').write_text(script)
+print(f'词表校验通过，已准备持久目录：{cache}')
+print('原脚本和原 Compose 文件均未修改。')
+PY
+
+bash -n "$WORK_DIR/2_offline_temporary.sh"
+sudo -v
+
+compose_with_cache() {
+  sudo docker compose --env-file "$ENV_FILE" \
+    -f "$COMPOSE_FILE" -f "$TIKTOKEN_OVERRIDE" "$@"
+}
+
+# 先验证配置及所需镜像；缺少镜像时停在这里，不尝试联网拉取。
+compose_with_cache config --quiet
+for service in oceanbase redis traefik life-agent; do
+  image_name="$(compose_with_cache config --format json | python3 -c \
+    'import json,sys; print(json.load(sys.stdin)["services"][sys.argv[1]]["image"])' "$service")"
+  if [[ "$service" == "life-agent" ]]; then
+    app_image="$image_name"
+  fi
+  sudo docker image inspect "$image_name" >/dev/null 2>&1 || {
+    echo "缺少本地镜像：$image_name，请先从外网导出并在内网 docker load。" >&2
+    exit 1
+  }
+done
+
+# 使用独立容器验证真实镜像和词表，彻底禁网，也不占用应用的固定 IP。
+sudo docker run --rm --pull never --network none --entrypoint python \
+  --mount "type=bind,source=$PROJECT_ROOT/deploy/ocean_base/data-gym-cache,target=/opt/tiktoken-cache,readonly" \
+  -e TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache "$app_image" -c \
+  'from unittest.mock import patch; import tiktoken; p=patch("requests.sessions.Session.request", side_effect=RuntimeError("离线验证禁止 HTTP 请求")); p.start(); e=tiktoken.encoding_for_model("gpt-4"); print("离线词表验证通过：", e.name, e.encode("hello world"))'
+
+# 执行原脚本的临时副本：保留网络检查、存储准备及所有服务启动流程。
+# RUN_MIGRATION 如有设置会继续生效；不执行清理容器或 down 整栈。
+AUTO_GIT_PULL=0 BUILD_RUNTIME=0 CLEAN_APP_RUNNERS=0 RESET_STACK=0 \
+  bash "$WORK_DIR/2_offline_temporary.sh"
+
+compose_with_cache ps
+printf '\n启动命令已执行。查看应用日志：\n  sudo docker logs --since=2m -f life-agent-app-oceanbase\n'
+printf '\n以后重新创建容器时请再次运行本脚本，以保留词表挂载。\n'
+# ------------------------------/内网服务器修正2_rebuld_restart_life_agent.sh的脚本-----------------------------------------
+
 
     2、运行平台(如果运动镜像拉取不成功，可以这样独立拉取如：sudo docker pull python:3.12-slim、sudo docker pull oceanbase/oceanbase-ce，如果是拉取了一半断掉，就需要多次尝试即可)
         1)首次运行: chmod +x deploy/*.sh && deploy/1_init_build_start.sh(playwright层的构建要多试几次，camoufox层是从github下载，要多试几次才行)
