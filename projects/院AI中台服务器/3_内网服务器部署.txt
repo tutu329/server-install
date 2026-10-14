@@ -146,16 +146,21 @@
                       ../data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
                 3）查看日志
                     sudo docker logs --since=2m -f life-agent-app-oceanbase
+                4）代码若有更新
+                    bash ./life-agent-offline-stop.sh
+                    bash ./life-agent-offline-restart.sh \
+                      ../data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
 # -------------------------------内网服务器修正2_rebuld_restart_life_agent.sh的脚本-----------------------------------------
 #!/usr/bin/env bash
 # 在 life-agent 项目根目录执行：
-# bash /path/to/life-agent-offline-restart.sh /path/to/cl100k_base.tiktoken
+# bash ./life-agent-offline-restart.sh ./deploy/ocean_base/data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+# 每次从宿主机项目代码构建新镜像；不安装或更新 Python / 系统依赖。
 set -Eeuo pipefail
 
 PROJECT_ROOT="$(cd -- "${PROJECT_ROOT:-$PWD}" && pwd)"
 ORIGINAL="$PROJECT_ROOT/deploy/2_rebuild_restart_life_agent.sh"
 CACHE_KEY=9b5ad71b2ce5302211f9c61530b329a4922fc6a4
-TOKEN_FILE="${1:-$PROJECT_ROOT/data-gym-cache/$CACHE_KEY}"
+TOKEN_FILE="${1:-$PROJECT_ROOT/deploy/ocean_base/data-gym-cache/$CACHE_KEY}"
 export PROJECT_ROOT
 export COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_ROOT/deploy/ocean_base/docker-compose-traefik.yml}"
 
@@ -168,7 +173,7 @@ if [[ -z "${ENV_FILE:-}" ]]; then
 fi
 export ENV_FILE
 
-for file in "$ORIGINAL" "$COMPOSE_FILE" "$ENV_FILE" "$TOKEN_FILE"; do
+for file in "$ORIGINAL" "$COMPOSE_FILE" "$ENV_FILE" "$TOKEN_FILE" "$PROJECT_ROOT/requirements.txt" "$PROJECT_ROOT/deploy/ocean_base/Dockerfile"; do
   [[ -f "$file" ]] || { echo "找不到文件：$file" >&2; exit 1; }
 done
 for cmd in python3 docker sudo; do
@@ -176,6 +181,7 @@ for cmd in python3 docker sudo; do
 done
 
 # 临时文件仅存放脚本和挂载配置；词表保留在项目目录内。
+umask 077
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/life-agent-tiktoken.XXXXXX")"
 trap 'rm -rf -- "$WORK_DIR"' EXIT
 export TIKTOKEN_OVERRIDE="$WORK_DIR/tiktoken.override.json"
@@ -201,7 +207,7 @@ changes = {
     'SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"':
         'SCRIPT_DIR=' + shlex.quote(str(root / 'deploy')),
     '  compose build "${build_opts[@]}" life-agent':
-        '  echo "离线模式：跳过 life-agent 构建，使用已有镜像"',
+        '  echo "代码镜像已由离线启动脚本更新，跳过完整依赖构建"',
     '  compose up -d oceanbase redis traefik':
         '  compose up -d --no-build --pull never oceanbase redis traefik',
     '    compose run --rm life-agent alembic -c alembic_oceanbase.ini upgrade head':
@@ -262,11 +268,99 @@ for service in oceanbase redis traefik life-agent; do
   }
 done
 
-# 使用独立容器验证真实镜像和词表，彻底禁网，也不占用应用的固定 IP。
+# 固定保留依赖基础镜像，避免每次更新都在上次代码层上叠加。
+BASE_IMAGE="${OFFLINE_BASE_IMAGE:-life-agent-oceanbase:offline-runtime-base}"
+BACKUP_IMAGE="${OFFLINE_BACKUP_IMAGE:-life-agent-oceanbase:offline-previous}"
+[[ "$BASE_IMAGE" != "$app_image" && "$BACKUP_IMAGE" != "$app_image" && "$BASE_IMAGE" != "$BACKUP_IMAGE" ]] || {
+  echo "基础镜像、备份镜像与应用镜像的名称必须不同。" >&2
+  exit 1
+}
+if ! sudo docker image inspect "$BASE_IMAGE" >/dev/null 2>&1; then
+  sudo docker image tag "$app_image" "$BASE_IMAGE"
+fi
+
+# .env 中定义的实际运行 UID:GID，无需应用容器处于运行状态。
+APP_OWNER="$(compose_with_cache config --format json | python3 -c '
+import json, re, sys
+owner = str(json.load(sys.stdin)["services"]["life-agent"].get("user", ""))
+if not re.fullmatch(r"[0-9]+:[0-9]+", owner):
+    raise SystemExit("life-agent.user 必须是数字 UID:GID")
+print(owner)
+')"
+
+# 检查依赖声明是否与固定基础镜像一致，不把依赖变化误当作代码更新。
+sudo docker run --rm --pull never --network none --entrypoint python "$BASE_IMAGE" -c '
+import hashlib, json
+from pathlib import Path
+files = ["requirements.txt", "deploy/ocean_base/Dockerfile"]
+print(json.dumps({p: hashlib.sha256((Path("/home/tutu/app") / p).read_bytes()).hexdigest() for p in files}))
+' > "$WORK_DIR/base-manifest.json"
+python3 - "$PROJECT_ROOT" "$WORK_DIR/base-manifest.json" <<'PY_DEPS'
+import hashlib, json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+base = json.loads(Path(sys.argv[2]).read_text())
+changed = [p for p, digest in base.items() if hashlib.sha256((root / p).read_bytes()).hexdigest() != digest]
+if changed:
+    raise SystemExit("依赖构建文件发生变化，停止代码更新：" + ", ".join(changed) +
+                     "。请在外网构建完整镜像并导入内网，再用 OFFLINE_BASE_IMAGE 指定该完整镜像的独立标签。")
+PY_DEPS
+
+# 这里只清理新镜像内的旧应用文件，不触碰宿主机代码或数据库卷。
+cat > "$WORK_DIR/Dockerfile.offline" <<'DOCKERFILE'
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+USER root
+ARG APP_OWNER
+RUN rm -rf /home/tutu/app && mkdir -p /home/tutu/app
+COPY --chown=${APP_OWNER} . /home/tutu/app
+COPY deploy/ocean_base/entrypoint.sh /entrypoint.sh
+RUN chown -R ${APP_OWNER} /home/tutu/app \
+    && chmod 755 /home/tutu/app \
+    && chmod 755 /entrypoint.sh
+USER ${APP_OWNER}
+WORKDIR /home/tutu/app
+DOCKERFILE
+
+echo "==> 将当前项目代码构建到新镜像（保留已有依赖，不联网安装）"
+sudo docker build --pull=false --network=none \
+  --build-arg "BASE_IMAGE=$BASE_IMAGE" --build-arg "APP_OWNER=$APP_OWNER" \
+  --iidfile "$WORK_DIR/candidate-image.id" \
+  -f "$WORK_DIR/Dockerfile.offline" "$PROJECT_ROOT"
+CANDIDATE_IMAGE="$(sudo cat "$WORK_DIR/candidate-image.id")"
+
+# 按正式服务的 UID:GID 验证应用目录写入及词表。
+# 仅此测试容器禁网；正式服务继续使用原 Compose 的内网 IP 和端口。
 sudo docker run --rm --pull never --network none --entrypoint python \
   --mount "type=bind,source=$PROJECT_ROOT/deploy/ocean_base/data-gym-cache,target=/opt/tiktoken-cache,readonly" \
-  -e TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache "$app_image" -c \
-  'from unittest.mock import patch; import tiktoken; p=patch("requests.sessions.Session.request", side_effect=RuntimeError("离线验证禁止 HTTP 请求")); p.start(); e=tiktoken.encoding_for_model("gpt-4"); print("离线词表验证通过：", e.name, e.encode("hello world"))'
+  --user "$APP_OWNER" \
+  -e TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache "$CANDIDATE_IMAGE" -c \
+  '
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+import os
+import tiktoken
+
+# 实际创建目录和文件，以捕获 root 目录归属不正确等权限问题。
+# 测试写入仅发生在这个临时容器里，结束后删除。
+with TemporaryDirectory(prefix=".offline-write-check-", dir="/home/tutu/app") as directory:
+    accounts = Path(directory) / "weixin_state" / "accounts"
+    accounts.mkdir(parents=True)
+    probe = accounts / "permission-check.txt"
+    probe.write_text("ok")
+    assert probe.read_text() == "ok"
+print("应用目录写入验证通过，UID:GID =", str(os.getuid()) + ":" + str(os.getgid()))
+
+with patch("requests.sessions.Session.request", side_effect=RuntimeError("离线验证禁止 HTTP 请求")):
+    encoding = tiktoken.encoding_for_model("gpt-4")
+    print("离线词表验证通过：", encoding.name, encoding.encode("hello world"))
+'
+
+# 只有构建、目录写入和词表验证通过后才替换正式镜像标签，并保留上一个版本。
+sudo docker image tag "$app_image" "$BACKUP_IMAGE"
+sudo docker image tag "$CANDIDATE_IMAGE" "$app_image"
+echo "新代码镜像已准备好；上一个版本保留为：$BACKUP_IMAGE"
 
 # 执行原脚本的临时副本：保留网络检查、存储准备及所有服务启动流程。
 # RUN_MIGRATION 如有设置会继续生效；不执行清理容器或 down 整栈。
@@ -275,8 +369,41 @@ AUTO_GIT_PULL=0 BUILD_RUNTIME=0 CLEAN_APP_RUNNERS=0 RESET_STACK=0 \
 
 compose_with_cache ps
 printf '\n启动命令已执行。查看应用日志：\n  sudo docker logs --since=2m -f life-agent-app-oceanbase\n'
-printf '\n以后重新创建容器时请再次运行本脚本，以保留词表挂载。\n'
+printf '\n以后代码更新后再次运行本脚本即可；不必先运行 stop。\n'
 # ------------------------------/内网服务器修正2_rebuld_restart_life_agent.sh的脚本-----------------------------------------
+
+# -------------------------------内网服务器life-agent-offline-stop.sh脚本-----------------------------------------
+#!/usr/bin/env bash
+# 在 life-agent 项目根目录执行：bash ./life-agent-offline-stop.sh
+# 仅停止 life-agent、traefik、redis、oceanbase，保留容器、镜像、网络和数据卷。
+set -Eeuo pipefail
+PROJECT_ROOT="$(cd -- "${PROJECT_ROOT:-$PWD}" && pwd)"
+COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_ROOT/deploy/ocean_base/docker-compose-traefik.yml}"
+if [[ -z "${ENV_FILE:-}" ]]; then
+  if [[ -f "$PROJECT_ROOT/.env" ]]; then
+    ENV_FILE="$PROJECT_ROOT/.env"
+  else
+    ENV_FILE="$PROJECT_ROOT/deploy/ocean_base/.env"
+  fi
+fi
+for file in "$COMPOSE_FILE" "$ENV_FILE"; do
+  [[ -f "$file" ]] || { echo "找不到文件：$file" >&2; exit 1; }
+done
+command -v docker >/dev/null || { echo "缺少 docker" >&2; exit 1; }
+command -v sudo >/dev/null || { echo "缺少 sudo" >&2; exit 1; }
+STOP_TIMEOUT="${STOP_TIMEOUT:-60}"
+[[ "$STOP_TIMEOUT" =~ ^[0-9]+$ ]] || { echo "STOP_TIMEOUT 必须是非负整数（秒）" >&2; exit 1; }
+sudo -v
+compose() {
+  sudo docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+}
+# 先停止应用，再停止入口和存储；不执行 down 或删除数据。
+compose stop --timeout "$STOP_TIMEOUT" life-agent
+compose stop --timeout "$STOP_TIMEOUT" traefik redis oceanbase
+compose ps -a
+echo "已停止 life-agent、Traefik、Redis、OceanBase，保留容器和数据。"
+echo "需要重新启动时，运行 life-agent-offline-restart.sh。"
+# ------------------------------/内网服务器life-agent-offline-stop.sh脚本-----------------------------------------
 
 
     2、运行平台(如果运动镜像拉取不成功，可以这样独立拉取如：sudo docker pull python:3.12-slim、sudo docker pull oceanbase/oceanbase-ce，如果是拉取了一半断掉，就需要多次尝试即可)
