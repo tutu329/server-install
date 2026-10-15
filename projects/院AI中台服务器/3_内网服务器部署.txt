@@ -308,7 +308,7 @@ PY_DEPS
 
 # 这里只清理新镜像内的旧应用文件，不触碰宿主机代码或数据库卷。
 cat > "$WORK_DIR/Dockerfile.offline" <<'DOCKERFILE'
-ARG BASE_IMAGE
+ARG BASE_IMAGE=life-agent-oceanbase:offline-runtime-base
 FROM ${BASE_IMAGE}
 USER root
 ARG APP_OWNER
