@@ -1,0 +1,10 @@
+一、4*L40s服务器
+1、安装llama-factory
+    1）https://github.com/hiyouga/LlamaFactory
+    2）sudo docker run -it --rm --gpus=all --ipc=host hiyouga/llamafactory:latest
+    3）在端口7864运行webui：
+        sudo docker run -d --name llamafactory-webui --restart unless-stopped --gpus=all --ipc=host -p 7864:7860 -e GRADIO_SERVER_NAME=0.0.0.0 -e GRADIO_SERVER_PORT=7860 hiyouga/llamafactory:latest llamafactory-cli webui
+    4）查看日志：
+        sudo docker logs -f --tail 100 llamafactory-webui
+    5）浏览器打开：
+        http://powerai.cc:7864
