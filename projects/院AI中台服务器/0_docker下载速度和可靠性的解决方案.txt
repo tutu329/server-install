@@ -1,0 +1,23 @@
+1、镜像设置确认
+    1）sudo docker info --format '{{json .RegistryConfig.Mirrors}}'
+    2）sudo cat /etc/docker/daemon.json
+如：
+{
+  "registry-mirrors": [
+    "https://docker.1ms.run",
+    "https://dockerproxy.net",
+    "https://proxy.vvvv.ee",
+    "https://dockerproxy.link"
+  ]
+}
+
+2、安装skopeo
+    sudo apt-get update
+    sudo apt-get install -y skopeo
+
+3、用某个具体镜像，pull某个镜像，如llamafactory:latest
+    sudo skopeo --override-os linux --override-arch amd64 copy \
+      --retry-times 5 \
+      docker://proxy.vvvv.ee/hiyouga/llamafactory:latest \
+      docker-daemon:hiyouga/llamafactory:latest
+    【释义】用 skopeo 从 镜像proxy.vvvv.ee ，下载 LlamaFactory 镜像，然后导入你这台服务器的 Docker，命名为 hiyouga/llamafactory:latest
