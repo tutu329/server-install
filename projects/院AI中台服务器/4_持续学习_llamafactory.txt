@@ -1,19 +1,150 @@
 一、4*L40s服务器
 1、安装llama-factory
     1）https://github.com/hiyouga/LlamaFactory
-    2）sudo docker run -it --rm --gpus=all --ipc=host hiyouga/llamafactory:latest
-    3）在端口7864运行webui：
-        sudo docker run -d \
-          --name llamafactory-webui \
-          --restart unless-stopped \
-          --gpus=all \
-          --ipc=host \
-          -p 7865:7860 \
-          -e GRADIO_SERVER_NAME=0.0.0.0 \
-          -e GRADIO_SERVER_PORT=7860 \
-          hiyouga/llamafactory:latest \
-          llamafactory-cli webui
+    2）pull镜像，【若pull有问题，参见"0_docker下载速度....txt"】：sudo docker run -it --rm --gpus=all --ipc=host hiyouga/llamafactory:latest
+    3）增加modelscope下载支持（否则界面中选择modelscope后，训练有错且界面和后台日志没有任何报错信息！）
+        a）增加llama-factory的modelscope下载支持（否则训练测试报addict错），宿主机执行：
+            sudo docker exec -it llamafactory-webui \
+              python -m pip install \
+              -i https://mirrors.aliyun.com/pypi/simple/ \
+              addict
+        b）验证addict
+            sudo docker exec -it llamafactory-webui \
+              python -c 'from modelscope import MsDataset; print("ModelScope 数据集模块导入成功")'
+
+    4）在端口7865运行webui：
+        a）启动
+            sudo docker run -d \
+              --name llamafactory-webui \
+              --restart unless-stopped \
+              --gpus=all \
+              --ipc=host \
+              -p 7865:7860 \
+              -e GRADIO_SERVER_NAME=0.0.0.0 \
+              -e GRADIO_SERVER_PORT=7860 \
+              hiyouga/llamafactory:latest \
+              llamafactory-cli webui
+        b）重启
+            sudo docker restart llamafactory-webui
     4）查看日志：
         sudo docker logs -f --tail 100 llamafactory-webui
     5）浏览器打开：
-        http://powerai.cc:7864
+        http://powerai.cc:7865
+    6）测试容器内gpu、cuda情况
+# --------------------------测试容器内cuda情况---------------------------
+sudo docker exec -i llamafactory-webui python -u - <<'PY'
+import os
+import sys
+import subprocess
+import traceback
+import torch
+
+print("========== NVIDIA 驱动与 GPU ==========")
+try:
+    subprocess.run(["nvidia-smi"], check=False)
+except FileNotFoundError:
+    print("容器内未找到 nvidia-smi")
+
+print("\n========== PyTorch / CUDA 信息 ==========")
+print("Python 版本:", sys.version.split()[0])
+print("PyTorch 版本:", torch.__version__)
+print("PyTorch CUDA 版本:", torch.version.cuda)
+print("CUDA 可用:", torch.cuda.is_available())
+print("GPU 数量:", torch.cuda.device_count())
+print("cuDNN 版本:", torch.backends.cudnn.version())
+print("PyTorch 编译支持的 GPU 架构:", torch.cuda.get_arch_list())
+print("CUDA_VISIBLE_DEVICES:", os.getenv("CUDA_VISIBLE_DEVICES", "未设置"))
+print("NVIDIA_VISIBLE_DEVICES:", os.getenv("NVIDIA_VISIBLE_DEVICES", "未设置"))
+print("NVIDIA_DRIVER_CAPABILITIES:", os.getenv("NVIDIA_DRIVER_CAPABILITIES", "未设置"))
+
+if not torch.cuda.is_available():
+    print("\n========== 尝试初始化 CUDA，获取具体错误 ==========")
+    try:
+        torch.cuda.init()
+    except Exception:
+        traceback.print_exc(file=sys.stdout)
+    sys.exit(1)
+
+failed = False
+
+for i in range(torch.cuda.device_count()):
+    print(f"\n========== GPU {i} 检测 ==========")
+    try:
+        with torch.cuda.device(i):
+            props = torch.cuda.get_device_properties(i)
+            print("GPU 名称:", props.name)
+            print("计算能力:", f"{props.major}.{props.minor}")
+            print("显存总量: %.2f GiB" % (props.total_memory / 1024**3))
+
+            free, total = torch.cuda.mem_get_info()
+            print("当前可用显存: %.2f GiB" % (free / 1024**3))
+
+            bf16_supported = torch.cuda.is_bf16_supported()
+            print("BF16 支持:", bf16_supported)
+
+            dtypes = [torch.float32, torch.float16]
+            if bf16_supported:
+                dtypes.append(torch.bfloat16)
+
+            for dtype in dtypes:
+                x = torch.ones((128, 128), device=f"cuda:{i}", dtype=dtype)
+                y = x @ x
+                torch.cuda.synchronize(i)
+                value = y[0, 0].item()
+                if value != 128.0:
+                    raise RuntimeError(f"{dtype} 计算结果异常: {value}")
+                print(f"{dtype} 矩阵计算: 通过，结果={value}")
+                del x, y
+
+            torch.cuda.empty_cache()
+
+    except Exception:
+        failed = True
+        traceback.print_exc(file=sys.stdout)
+
+print("\n========== 检测结束 ==========")
+print("结果:", "存在失败项，请查看上方错误" if failed else "所有可见 GPU 计算测试通过")
+sys.exit(1 if failed else 0)
+PY
+# -------------------------/测试容器内cuda情况---------------------------
+
+    7）【用宿主机的脚本】测试容器的训练情况
+        a）增加llama-factory的modelscope下载支持（否则训练测试报addict错），宿主机执行：
+            sudo docker exec -it llamafactory-webui \
+              python -m pip install \
+              -i https://mirrors.aliyun.com/pypi/simple/ \
+              addict
+        b）验证addict
+            sudo docker exec -it llamafactory-webui \
+              python -c 'from modelscope import MsDataset; print("ModelScope 数据集模块导入成功")'
+        c）训练测试
+# --------------------------测试容器最小训练情况---------------------------
+sudo docker exec -it \
+  -e CUDA_VISIBLE_DEVICES=0 \
+  -e USE_MODELSCOPE_HUB=1 \
+  -e PYTHONUNBUFFERED=1 \
+  llamafactory-webui \
+  llamafactory-cli train \
+  --stage sft \
+  --do_train true \
+  --model_name_or_path Qwen/Qwen3-0.6B \
+  --finetuning_type lora \
+  --lora_target all \
+  --dataset_dir data \
+  --dataset alpaca_zh \
+  --template qwen3 \
+  --preprocessing_num_workers 1 \
+  --cutoff_len 512 \
+  --max_samples 20 \
+  --max_steps 3 \
+  --per_device_train_batch_size 1 \
+  --gradient_accumulation_steps 1 \
+  --learning_rate 5e-5 \
+  --bf16 true \
+  --logging_steps 1 \
+  --report_to none \
+  --output_dir saves/qwen3-0.6b/lora/cli-smoke-test
+# -------------------------/测试容器最小训练情况---------------------------
+        d）查看训练结果
+            sudo docker exec llamafactory-webui \
+              ls -lh /app/saves/qwen3-0.6b/lora/cli-smoke-test/
