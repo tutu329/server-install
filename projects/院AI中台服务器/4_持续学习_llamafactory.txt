@@ -30,7 +30,7 @@
         sudo docker logs -f --tail 100 llamafactory-webui
     5）浏览器打开：
         http://powerai.cc:7865
-    6）测试容器内gpu、cuda情况
+    6）测试容器内gpu、cuda情况（进入容器方式：sudo docker exec -it llamafactory-webui bash）
 # --------------------------测试容器内cuda情况---------------------------
 sudo docker exec -i llamafactory-webui python -u - <<'PY'
 import os
@@ -117,7 +117,7 @@ PY
         b）验证addict
             sudo docker exec -it llamafactory-webui \
               python -c 'from modelscope import MsDataset; print("ModelScope 数据集模块导入成功")'
-        c）训练测试
+        c）训练测试(注意模型和template的匹配，可以通过webui核实）
 # --------------------------测试容器最小训练情况---------------------------
 sudo docker exec -it \
   -e CUDA_VISIBLE_DEVICES=0 \
@@ -127,12 +127,12 @@ sudo docker exec -it \
   llamafactory-cli train \
   --stage sft \
   --do_train true \
-  --model_name_or_path Qwen/Qwen3-0.6B \
+  --model_name_or_path Qwen/Qwen3.5-0.8B \
   --finetuning_type lora \
   --lora_target all \
   --dataset_dir data \
   --dataset alpaca_zh \
-  --template qwen3 \
+  --template qwen3_5 \
   --preprocessing_num_workers 1 \
   --cutoff_len 512 \
   --max_samples 20 \
@@ -143,8 +143,8 @@ sudo docker exec -it \
   --bf16 true \
   --logging_steps 1 \
   --report_to none \
-  --output_dir saves/qwen3-0.6b/lora/cli-smoke-test
+  --output_dir saves/qwen3.5-0.8b/lora/cli-smoke-test
 # -------------------------/测试容器最小训练情况---------------------------
         d）查看训练结果
             sudo docker exec llamafactory-webui \
-              ls -lh /app/saves/qwen3-0.6b/lora/cli-smoke-test/
+              ls -lh /app/saves/qwen3.5-0.8b/lora/cli-smoke-test/
