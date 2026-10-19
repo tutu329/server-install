@@ -16,8 +16,13 @@
     sudo apt-get install -y skopeo
 
 3、用某个具体镜像，pull某个镜像，如llamafactory:latest
-    sudo skopeo --override-os linux --override-arch amd64 copy \
-      --retry-times 5 \
-      docker://proxy.vvvv.ee/hiyouga/llamafactory:latest \
-      docker-daemon:hiyouga/llamafactory:latest
-    【释义】用 skopeo 从 镜像proxy.vvvv.ee ，下载 LlamaFactory 镜像，然后导入你这台服务器的 Docker，命名为 hiyouga/llamafactory:latest
+    1)拉取
+        sudo skopeo --override-os linux --override-arch amd64 copy \
+          --retry-times 5 \
+          docker://proxy.vvvv.ee/hiyouga/llamafactory:latest \
+          docker-daemon:hiyouga/llamafactory:latest
+
+        【释义】用 skopeo 从 镜像proxy.vvvv.ee ，下载 LlamaFactory 镜像，然后导入你这台服务器的 Docker，命名为 hiyouga/llamafactory:latest
+
+    2）确认
+        sudo docker images hiyouga/llamafactory
