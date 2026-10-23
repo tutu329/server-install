@@ -1,0 +1,211 @@
+1、在宿主机采集当前配置，结果给LLM分析
+# ===============================采集脚本===================================
+{
+  echo "===== 系统与虚拟化 ====="
+  date -Is
+  uname -a
+  systemd-detect-virt
+  lscpu
+
+  echo "===== 主板和 BIOS ====="
+  sudo dmidecode -t baseboard -t bios
+
+  echo "===== GPU 状态 ====="
+  nvidia-smi
+  nvidia-smi --query-gpu=index,name,pci.bus_id,driver_version,pcie.link.gen.current,pcie.link.gen.max,pcie.link.width.current,pcie.link.width.max --format=csv
+
+  echo "===== GPU 拓扑 ====="
+  nvidia-smi topo -m
+
+  echo "===== P2P 能力 ====="
+  nvidia-smi topo -p2p r
+  nvidia-smi topo -p2p w
+  nvidia-smi topo -p2p p
+
+  echo "===== 内核启动参数 ====="
+  cat /proc/cmdline
+
+  echo "===== IOMMU、DMA、GPU、PCIe 错误 ====="
+  sudo dmesg -T | grep -Ei 'DMAR|IOMMU|AMD-Vi|NVRM|Xid|AER|PCIe Bus Error|DMA.*fault' | tail -n 200
+
+  echo "===== PCIe 拓扑 ====="
+  lspci -Dtv
+
+  echo "===== PCIe 链路、ACS 和 Relaxed Ordering ====="
+  sudo lspci -Dvv | grep -E '^[0-9a-fA-F]{4}:|LnkCap:|LnkSta:|DevCtl:|ACSCtl:|UESta:|CESta:'
+
+  echo "===== 容器内相关环境变量 ====="
+  sudo docker exec llamafactory-webui python -c \
+    'import os; print("\n".join(f"{k}={v}" for k,v in sorted(os.environ.items()) if k.startswith(("CUDA_", "NVIDIA_", "NCCL_"))))'
+} 2>&1 | tee l40s_system_diagnosis.txt
+# ==============================/采集脚本===================================
+
+2、直接测试各卡之间传输的数据是否正确，结果给LLM分析
+# ===============================测试脚本===================================
+sudo docker exec -i \
+  -e CUDA_VISIBLE_DEVICES=0,1,2,3 \
+  -e CUDA_LAUNCH_BLOCKING=0 \
+  llamafactory-webui python -u - <<'PY' 2>&1 | tee l40s_transfer_check.txt
+import os
+import torch
+
+torch.set_num_threads(1)
+
+print("PyTorch:", torch.__version__)
+print("PyTorch CUDA:", torch.version.cuda)
+print("Visible devices:", os.environ.get("CUDA_VISIBLE_DEVICES"))
+count = torch.cuda.device_count()
+print("GPU count:", count)
+
+if count != 4:
+    raise SystemExit("Expected 4 visible GPUs; stop and check device mapping.")
+
+for i in range(count):
+    p = torch.cuda.get_device_properties(i)
+    print(
+        f"GPU {i}: {p.name}, UUID={getattr(p, 'uuid', 'unavailable')}",
+        flush=True,
+    )
+
+print("\n=== CUDA reports peer-access capability ===", flush=True)
+for i in range(count):
+    row = [
+        "-" if i == j else str(int(torch.cuda.can_device_access_peer(i, j)))
+        for j in range(count)
+    ]
+    print(f"GPU {i}: {' '.join(row)}", flush=True)
+
+failures = []
+
+def check(label, actual, expected):
+    bad = actual.ne(expected)
+    nbad = int(bad.sum().item())
+    if nbad:
+        indexes = bad.nonzero(as_tuple=True)[0][:5]
+        examples = [
+            (int(k), int(expected[k]), int(actual[k]))
+            for k in indexes
+        ]
+        print(
+            f"FAIL {label}: mismatches={nbad}, "
+            f"(index, expected, actual)={examples}",
+            flush=True,
+        )
+        failures.append(label)
+        return False
+    return True
+
+print("\n=== Single-GPU checks ===", flush=True)
+reference = (torch.arange(1048576, dtype=torch.int64) * 17 + 13) % 248320
+
+for i in range(count):
+    print(f"Testing GPU {i}...", flush=True)
+    x = reference.to(f"cuda:{i}")
+    torch.cuda.synchronize(i)
+    copy_ok = check(f"GPU{i} roundtrip", x.cpu(), reference)
+    y = x + 7
+    torch.cuda.synchronize(i)
+    compute_ok = check(f"GPU{i} integer compute", y.cpu(), reference + 7)
+    print(
+        f"GPU {i}: roundtrip={'PASS' if copy_ok else 'FAIL'}, "
+        f"compute={'PASS' if compute_ok else 'FAIL'}",
+        flush=True,
+    )
+    del x, y
+
+print("\n=== Directed GPU-to-GPU copy checks ===", flush=True)
+
+for src in range(count):
+    for dst in range(count):
+        if src == dst:
+            continue
+
+        pair_ok = True
+        print(f"Testing GPU {src} -> GPU {dst}...", flush=True)
+
+        for n in (32, 4096, 1048576):
+            for repeat in range(3):
+                expected = (
+                    torch.arange(n, dtype=torch.int64) * 17
+                    + 13 + repeat * 101
+                ) % 248320
+
+                x = expected.to(f"cuda:{src}")
+                torch.cuda.synchronize(src)
+
+                # Normal CUDA device-to-device copy.
+                y = x.to(f"cuda:{dst}")
+                torch.cuda.synchronize(dst)
+                direct_ok = check(
+                    f"{src}->{dst} direct size={n} repeat={repeat}",
+                    y.cpu(),
+                    expected,
+                )
+
+                # Explicit CPU staging as a control.
+                host = x.cpu()
+                z = host.to(f"cuda:{dst}")
+                torch.cuda.synchronize(dst)
+                staged_ok = check(
+                    f"{src}->{dst} CPU-staged size={n} repeat={repeat}",
+                    z.cpu(),
+                    expected,
+                )
+
+                pair_ok = pair_ok and direct_ok and staged_ok
+                del x, y, z, host
+
+        print(
+            f"GPU {src} -> GPU {dst}: {'PASS' if pair_ok else 'FAIL'}",
+            flush=True,
+        )
+
+print("\n=== Summary ===", flush=True)
+if failures:
+    print(f"FAILED checks: {len(failures)}", flush=True)
+    for item in failures:
+        print(item, flush=True)
+else:
+    print("All tested copies and integer checks PASSED.", flush=True)
+    print("This is a basic correctness test, not a bandwidth benchmark.")
+PY
+# ==============================/测试脚本===================================
+
+3、关闭 Intel IOMMU 后重启验证
+（影响范围：关闭宿主机的 IOMMU DMA 隔离，会影响依赖它的 VFIO/设备直通；普通 Docker GPU 使用不依赖 VFIO。若这台机器还承担虚拟机设备直通，先不要执行全局关闭。重启前结束训练任务，并确保有 BMC/IPMI 或现场控制台作为恢复入口。）
+1）在宿主机执行以下完整命令（这会新增一个独立 GRUB 配置文件，不覆盖原有配置；若同名文件已存在，会停止）：
+只有 update-grub 成功，且输出的 Linux 启动项包含 intel_iommu=off，才继续。若失败，先不要重启。
+# ===============================执行脚本===================================
+sudo bash <<'SH'
+set -eu
+
+cfg=/etc/default/grub.d/99-l40s-p2p.cfg
+
+if [ -e "$cfg" ]; then
+    echo "配置文件已存在，停止操作，请先查看：$cfg"
+    exit 1
+fi
+
+mkdir -p /etc/default/grub.d
+
+cat > "$cfg" <<'EOF'
+# Disable Intel IOMMU for bare-metal CUDA PCIe P2P.
+GRUB_CMDLINE_LINUX="${GRUB_CMDLINE_LINUX} intel_iommu=off"
+EOF
+
+update-grub
+
+echo "配置已生成，请确认下面的启动项包含 intel_iommu=off："
+grep -E '^[[:space:]]*linux.*intel_iommu=off' /boot/grub/grub.cfg
+SH
+# ==============================/执行脚本===================================
+2）sudo reboot
+3）重新连接后确认参数生效(/proc/cmdline 应包含：intel_iommu=off。日志中仍可能出现 ACPI 的 DMAR 表信息，不能以“还有 DMAR 字样”判断关闭失败；要看初始化状态，以及复测时是否还新增 DMA Write fault。)：
+    cat /proc/cmdline
+    sudo journalctl -k -b --no-pager \
+      | grep -Ei 'DMAR|IOMMU|DMA.*fault'
+4）如果需要恢复原来的配置：
+    sudo rm /etc/default/grub.d/99-l40s-p2p.cfg
+    sudo update-grub
+    确认更新成功后重启：sudo reboot
+
