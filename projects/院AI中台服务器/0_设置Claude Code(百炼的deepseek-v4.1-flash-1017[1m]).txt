@@ -3,7 +3,7 @@
     claude --version
 
 2、编制~/sh/ds_sh.sh(若未在~/.bashrc设置环境变量Z_DESKTOP_DEFAULT_API_KEY，会提示如何一行脚本完成设置)
-# -----------------------------------------------------ds_sh.sh---------------------------------------------------------
+# -----------------------------------------------------ds_sh.sh(普通模式)---------------------------------------------------------
 RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET=$'\033[0m'
 
 show_hint() {
@@ -34,8 +34,43 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL='deepseek-v4.1-flash-1017[1m]'
 export CLAUDE_CODE_SUBAGENT_MODEL='deepseek-v4.1-flash-1017[1m]'
 export CLAUDE_CODE_EFFORT_LEVEL=max
 export CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432
+claude --permission-mode bypassPermissions
 claude
-# ----------------------------------------------------/ds_sh.sh---------------------------------------------------------
+# ----------------------------------------------------/ds_sh.sh(普通模式)---------------------------------------------------------
+
+# -----------------------------------------------------ds_sh_auto.sh(高风险模式)---------------------------------------------------------
+RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET=$'\033[0m'
+
+show_hint() {
+    echo "${YELLOW}  快速设置（复制粘贴执行，替换 sk-xxx 为你的真实 key）：${RESET}" >&2
+    echo "${YELLOW}  echo 'export Z_DESKTOP_DEFAULT_API_KEY=\"sk-xxx\"' >> ~/.bashrc && source ~/.bashrc${RESET}" >&2
+}
+
+if [ -v Z_DESKTOP_DEFAULT_API_KEY ]; then
+    if [ -n "${Z_DESKTOP_DEFAULT_API_KEY}" ]; then
+        echo "${GREEN}"'${Z_DESKTOP_DEFAULT_API_KEY}'" = ${Z_DESKTOP_DEFAULT_API_KEY}${RESET}"
+    else
+        echo "${RED}"'${Z_DESKTOP_DEFAULT_API_KEY}'" 已设置，但值为空，退出${RESET}" >&2
+        show_hint
+        exit 1
+    fi
+else
+    echo "${RED}"'${Z_DESKTOP_DEFAULT_API_KEY}'" 未设置，退出${RESET}" >&2
+    show_hint
+    exit 1
+fi
+
+export ANTHROPIC_BASE_URL=https://dashscope.aliyuncs.com/apps/anthropic
+export ANTHROPIC_AUTH_TOKEN="${Z_DESKTOP_DEFAULT_API_KEY}"
+export ANTHROPIC_MODEL='deepseek-v4.1-flash-1017[1m]'
+export ANTHROPIC_DEFAULT_OPUS_MODEL='deepseek-v4.1-flash-1017[1m]'
+export ANTHROPIC_DEFAULT_SONNET_MODEL='deepseek-v4.1-flash-1017[1m]'
+export ANTHROPIC_DEFAULT_HAIKU_MODEL='deepseek-v4.1-flash-1017[1m]'
+export CLAUDE_CODE_SUBAGENT_MODEL='deepseek-v4.1-flash-1017[1m]'
+export CLAUDE_CODE_EFFORT_LEVEL=max
+export CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432
+claude --permission-mode bypassPermissions
+# ----------------------------------------------------/ds_sh_auto.sh(高风险模式)---------------------------------------------------------
 
 3、在所需项目文件夹下运行：
     ~/sh/ds_sh.sh
