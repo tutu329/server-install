@@ -599,6 +599,7 @@ PY
         ALTER SYSTEM SET datafile_next = '2G';
 
 七、关于code interpreter工具启动网页或fastapi服务无法正常挂接url的问题（如agent返回类似信息：nginx 静态模式在这个环境里因宿主 AIO 资源耗尽而无法起 worker（io_setup 失败））
+0）原因：仅OceanBase，一个进程就需要25000个AIO资源。
 1）查看AIO是否已经满了（如max=65536 used=65536）
     echo "max=$(cat /proc/sys/fs/aio-max-nr) used=$(cat /proc/sys/fs/aio-nr)"
     sudo docker ps --filter name=zdesktop-app- --format '{{.Names}} {{.Status}}'
