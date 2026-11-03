@@ -609,4 +609,4 @@ PY
     sudo sysctl -p /etc/sysctl.d/99-aio-max-nr.conf
     # 执行后验证
     sudo sysctl fs.aio-nr fs.aio-max-nr
-3）重启z-desktop服务
+3）重启z-desktop服务、重启traefik服务(sudo docker restart zdesktop-traefik)
