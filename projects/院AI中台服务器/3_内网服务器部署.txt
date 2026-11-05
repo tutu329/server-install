@@ -150,7 +150,9 @@
                     bash ./life-agent-offline-stop.sh
                     bash ./life-agent-offline-restart.sh \
                       ../data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
-# -------------------------------内网服务器修正2_rebuld_restart_life_agent.sh的脚本-----------------------------------------
+                5）如果life-agent-oceanbase:1.0.0被更新了，执行下述脚本让life-agent-offline-restart.sh能找到life-agent-oceanbase:offline-runtime-base：
+                    sudo docker tag life-agent-oceanbase:1.0.0 life-agent-oceanbase:offline-runtime-base
+# -------------------------------内网服务器修正life-agent-offline-restart.sh的脚本-----------------------------------------
 #!/usr/bin/env bash
 # 在 life-agent 项目根目录执行：
 # bash ./life-agent-offline-restart.sh ./deploy/ocean_base/data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
@@ -370,7 +372,7 @@ AUTO_GIT_PULL=0 BUILD_RUNTIME=0 CLEAN_APP_RUNNERS=0 RESET_STACK=0 \
 compose_with_cache ps
 printf '\n启动命令已执行。查看应用日志：\n  sudo docker logs --since=2m -f life-agent-app-oceanbase\n'
 printf '\n以后代码更新后再次运行本脚本即可；不必先运行 stop。\n'
-# ------------------------------/内网服务器修正2_rebuld_restart_life_agent.sh的脚本-----------------------------------------
+# ------------------------------/内网服务器修正life-agent-offline-restart.sh的脚本-----------------------------------------
 
 # -------------------------------内网服务器life-agent-offline-stop.sh脚本-----------------------------------------
 #!/usr/bin/env bash
