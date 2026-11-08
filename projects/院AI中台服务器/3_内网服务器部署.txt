@@ -157,16 +157,19 @@
 # -------------------------------内网服务器修正life-agent-offline-restart.sh的脚本-----------------------------------------
 #!/usr/bin/env bash
 # 在 life-agent 项目根目录执行：
-# bash ./life-agent-offline-restart.sh ./deploy/ocean_base/data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
-# 每次从宿主机项目代码构建新镜像；不安装或更新 Python / 系统依赖。
+# bash ./life-agent-offline-restart.sh
+# 也可将词表文件路径作为第一个参数。
+# 每次从当前项目代码构建镜像，复用本地基础镜像中的 Python / 系统 / Playwright 依赖。
+# 不调用旧启动脚本，不校验旧脚本版本，不因 requirements.txt 或 Dockerfile 变化而停止。
+# 注意：依赖声明变化不会安装新依赖；更新依赖时需导入完整镜像并指定 OFFLINE_BASE_IMAGE。
+# 可选：RUN_MIGRATION=1 执行数据库迁移；默认不迁移。
 set -Eeuo pipefail
 
 PROJECT_ROOT="$(cd -- "${PROJECT_ROOT:-$PWD}" && pwd)"
-ORIGINAL="$PROJECT_ROOT/deploy/2_rebuild_restart_life_agent.sh"
 CACHE_KEY=9b5ad71b2ce5302211f9c61530b329a4922fc6a4
 TOKEN_FILE="${1:-$PROJECT_ROOT/deploy/ocean_base/data-gym-cache/$CACHE_KEY}"
-export PROJECT_ROOT
-export COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_ROOT/deploy/ocean_base/docker-compose-traefik.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-$PROJECT_ROOT/deploy/ocean_base/docker-compose-traefik.yml}"
+RUN_MIGRATION="${RUN_MIGRATION:-0}"
 
 if [[ -z "${ENV_FILE:-}" ]]; then
   if [[ -f "$PROJECT_ROOT/.env" ]]; then
@@ -175,26 +178,24 @@ if [[ -z "${ENV_FILE:-}" ]]; then
     ENV_FILE="$PROJECT_ROOT/deploy/ocean_base/.env"
   fi
 fi
-export ENV_FILE
 
-for file in "$ORIGINAL" "$COMPOSE_FILE" "$ENV_FILE" "$TOKEN_FILE" "$PROJECT_ROOT/requirements.txt" "$PROJECT_ROOT/deploy/ocean_base/Dockerfile"; do
+for file in "$COMPOSE_FILE" "$ENV_FILE" "$TOKEN_FILE" "$PROJECT_ROOT/deploy/ocean_base/entrypoint.sh"; do
   [[ -f "$file" ]] || { echo "找不到文件：$file" >&2; exit 1; }
 done
 for cmd in python3 docker sudo; do
   command -v "$cmd" >/dev/null || { echo "缺少命令：$cmd" >&2; exit 1; }
 done
 
-# 临时文件仅存放脚本和挂载配置；词表保留在项目目录内。
 umask 077
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/life-agent-tiktoken.XXXXXX")"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/life-agent-offline.XXXXXX")"
 trap 'rm -rf -- "$WORK_DIR"' EXIT
-export TIKTOKEN_OVERRIDE="$WORK_DIR/tiktoken.override.json"
+TIKTOKEN_OVERRIDE="$WORK_DIR/tiktoken.override.json"
+RUNTIME_COMPOSE="$WORK_DIR/compose.runtime.json"
 
-python3 - "$PROJECT_ROOT" "$TOKEN_FILE" "$WORK_DIR" <<'PY'
+python3 - "$PROJECT_ROOT" "$TOKEN_FILE" "$WORK_DIR" <<'PY_CACHE'
 import hashlib
 import json
 from pathlib import Path
-import shlex
 import sys
 
 root, token, work = map(Path, sys.argv[1:])
@@ -203,31 +204,6 @@ expected = '223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7'
 data = token.read_bytes()
 if hashlib.sha256(data).hexdigest() != expected:
     raise SystemExit('词表 SHA-256 校验失败，请重新下载官方 cl100k_base.tiktoken。')
-
-original = root / 'deploy/2_rebuild_restart_life_agent.sh'
-script = original.read_text()
-# 严格匹配已检查的版本，避免脚本版本不同时误改。
-changes = {
-    'SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"':
-        'SCRIPT_DIR=' + shlex.quote(str(root / 'deploy')),
-    '  compose build "${build_opts[@]}" life-agent':
-        '  echo "代码镜像已由离线启动脚本更新，跳过完整依赖构建"',
-    '  compose up -d oceanbase redis traefik':
-        '  compose up -d --no-build --pull never oceanbase redis traefik',
-    '    compose run --rm life-agent alembic -c alembic_oceanbase.ini upgrade head':
-        '    compose run --rm --no-deps --pull never life-agent alembic -c alembic_oceanbase.ini upgrade head',
-    '  compose up --no-deps --force-recreate life-agent':
-        '  compose up -d --no-build --pull never --no-deps --force-recreate life-agent',
-}
-for old, new in changes.items():
-    if script.count(old) != 1:
-        raise SystemExit(f'原脚本版本不匹配，未启动服务。找不到唯一语句：{old}')
-    script = script.replace(old, new)
-
-old = '  sudo docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"'
-if script.count(old) != 1:
-    raise SystemExit('compose 函数版本不匹配，未启动服务。')
-script = script.replace(old, old.replace(' "$@"', ' -f "$TIKTOKEN_OVERRIDE" "$@"'))
 
 cache = root / 'deploy/ocean_base/data-gym-cache'
 cache.mkdir(parents=True, exist_ok=True)
@@ -245,72 +221,84 @@ config = {'services': {'life-agent': {
     }],
 }}}
 (work / 'tiktoken.override.json').write_text(json.dumps(config, ensure_ascii=False))
-(work / '2_offline_temporary.sh').write_text(script)
 print(f'词表校验通过，已准备持久目录：{cache}')
-print('原脚本和原 Compose 文件均未修改。')
-PY
+PY_CACHE
 
-bash -n "$WORK_DIR/2_offline_temporary.sh"
 sudo -v
 
-compose_with_cache() {
+compose_source() {
   sudo docker compose --env-file "$ENV_FILE" \
     -f "$COMPOSE_FILE" -f "$TIKTOKEN_OVERRIDE" "$@"
 }
 
-# 先验证配置及所需镜像；缺少镜像时停在这里，不尝试联网拉取。
-compose_with_cache config --quiet
-for service in oceanbase redis traefik life-agent; do
-  image_name="$(compose_with_cache config --format json | python3 -c \
-    'import json,sys; print(json.load(sys.stdin)["services"][sys.argv[1]]["image"])' "$service")"
-  if [[ "$service" == "life-agent" ]]; then
-    app_image="$image_name"
-  fi
+compose() {
+  sudo docker compose --env-file "$ENV_FILE" -f "$RUNTIME_COMPOSE" "$@"
+}
+
+# 使用 Compose 解析原配置、相对路径和环境变量，然后生成只负责启动的临时配置。
+# 删除 build 配置，防止启动 / 迁移阶段重新构建原 Dockerfile 的依赖层。
+# 原 Compose、.env、Dockerfile 均不修改；保留原服务的网络、端口、挂载等配置。
+compose_source config --format json > "$WORK_DIR/compose.resolved.json"
+python3 - "$WORK_DIR/compose.resolved.json" "$RUNTIME_COMPOSE" "$WORK_DIR" <<'PY_CONFIG'
+import json
+import re
+from pathlib import Path
+import sys
+
+source, destination, work = map(Path, sys.argv[1:])
+config = json.loads(source.read_text())
+services = config['services']
+required = ['oceanbase', 'redis', 'traefik', 'life-agent']
+images = []
+for name in required:
+    service = services.get(name)
+    if not service or not service.get('image'):
+        raise SystemExit(f'Compose 中缺少服务或 image 配置：{name}')
+    images.append(service['image'])
+
+owner = str(services['life-agent'].get('user', ''))
+if not re.fullmatch(r'[0-9]+:[0-9]+', owner):
+    raise SystemExit('life-agent.user 必须是数字 UID:GID')
+
+for service in services.values():
+    service.pop('build', None)
+    service['pull_policy'] = 'never'
+
+destination.write_text(json.dumps(config, ensure_ascii=False))
+(work / 'required-images.txt').write_text('\n'.join(images) + '\n')
+(work / 'app-image.txt').write_text(services['life-agent']['image'])
+(work / 'app-owner.txt').write_text(owner)
+PY_CONFIG
+
+compose config --quiet
+APP_IMAGE="$(cat "$WORK_DIR/app-image.txt")"
+APP_OWNER="$(cat "$WORK_DIR/app-owner.txt")"
+
+# 所需镜像必须已导入本机；这里不联网拉取。
+while IFS= read -r image_name; do
   sudo docker image inspect "$image_name" >/dev/null 2>&1 || {
     echo "缺少本地镜像：$image_name，请先从外网导出并在内网 docker load。" >&2
     exit 1
   }
-done
+done < "$WORK_DIR/required-images.txt"
 
-# 固定保留依赖基础镜像，避免每次更新都在上次代码层上叠加。
+# 首次运行固定依赖基础镜像；后续始终从这个基础镜像构建，避免代码层逐次叠加。
 BASE_IMAGE="${OFFLINE_BASE_IMAGE:-life-agent-oceanbase:offline-runtime-base}"
 BACKUP_IMAGE="${OFFLINE_BACKUP_IMAGE:-life-agent-oceanbase:offline-previous}"
-[[ "$BASE_IMAGE" != "$app_image" && "$BACKUP_IMAGE" != "$app_image" && "$BASE_IMAGE" != "$BACKUP_IMAGE" ]] || {
+[[ "$BASE_IMAGE" != "$APP_IMAGE" && "$BACKUP_IMAGE" != "$APP_IMAGE" && "$BASE_IMAGE" != "$BACKUP_IMAGE" ]] || {
   echo "基础镜像、备份镜像与应用镜像的名称必须不同。" >&2
   exit 1
 }
 if ! sudo docker image inspect "$BASE_IMAGE" >/dev/null 2>&1; then
-  sudo docker image tag "$app_image" "$BASE_IMAGE"
+  if [[ -n "${OFFLINE_BASE_IMAGE:-}" ]]; then
+    echo "指定的基础镜像不存在：$BASE_IMAGE，请先 docker load 导入。" >&2
+    exit 1
+  fi
+  sudo docker image tag "$APP_IMAGE" "$BASE_IMAGE"
 fi
 
-# .env 中定义的实际运行 UID:GID，无需应用容器处于运行状态。
-APP_OWNER="$(compose_with_cache config --format json | python3 -c '
-import json, re, sys
-owner = str(json.load(sys.stdin)["services"]["life-agent"].get("user", ""))
-if not re.fullmatch(r"[0-9]+:[0-9]+", owner):
-    raise SystemExit("life-agent.user 必须是数字 UID:GID")
-print(owner)
-')"
-
-# 检查依赖声明是否与固定基础镜像一致，不把依赖变化误当作代码更新。
-sudo docker run --rm --pull never --network none --entrypoint python "$BASE_IMAGE" -c '
-import hashlib, json
-from pathlib import Path
-files = ["requirements.txt", "deploy/ocean_base/Dockerfile"]
-print(json.dumps({p: hashlib.sha256((Path("/home/tutu/app") / p).read_bytes()).hexdigest() for p in files}))
-' > "$WORK_DIR/base-manifest.json"
-python3 - "$PROJECT_ROOT" "$WORK_DIR/base-manifest.json" <<'PY_DEPS'
-import hashlib, json, sys
-from pathlib import Path
-root = Path(sys.argv[1])
-base = json.loads(Path(sys.argv[2]).read_text())
-changed = [p for p, digest in base.items() if hashlib.sha256((root / p).read_bytes()).hexdigest() != digest]
-if changed:
-    raise SystemExit("依赖构建文件发生变化，停止代码更新：" + ", ".join(changed) +
-                     "。请在外网构建完整镜像并导入内网，再用 OFFLINE_BASE_IMAGE 指定该完整镜像的独立标签。")
-PY_DEPS
-
-# 这里只清理新镜像内的旧应用文件，不触碰宿主机代码或数据库卷。
+# 不比较 requirements.txt / 原 Dockerfile，也不执行其中的安装指令。
+# COPY 会遵循项目的 .dockerignore；确保需要更新的源码没有被排除。
 cat > "$WORK_DIR/Dockerfile.offline" <<'DOCKERFILE'
 ARG BASE_IMAGE=life-agent-oceanbase:offline-runtime-base
 FROM ${BASE_IMAGE}
@@ -318,36 +306,32 @@ USER root
 ARG APP_OWNER
 RUN rm -rf /home/tutu/app && mkdir -p /home/tutu/app
 COPY --chown=${APP_OWNER} . /home/tutu/app
-COPY deploy/ocean_base/entrypoint.sh /entrypoint.sh
-RUN chown -R ${APP_OWNER} /home/tutu/app \
-    && chmod 755 /home/tutu/app \
-    && chmod 755 /entrypoint.sh
+COPY --chown=${APP_OWNER} deploy/ocean_base/entrypoint.sh /entrypoint.sh
+RUN chown ${APP_OWNER} /home/tutu/app \
+    && chmod 755 /home/tutu/app /entrypoint.sh
 USER ${APP_OWNER}
 WORKDIR /home/tutu/app
 DOCKERFILE
 
-echo "==> 将当前项目代码构建到新镜像（保留已有依赖，不联网安装）"
+echo "==> 更新代码镜像，复用依赖基础镜像：$BASE_IMAGE"
+echo "requirements.txt / Dockerfile 的变化不会阻止更新，也不会自动安装新依赖。"
 sudo docker build --pull=false --network=none \
   --build-arg "BASE_IMAGE=$BASE_IMAGE" --build-arg "APP_OWNER=$APP_OWNER" \
   --iidfile "$WORK_DIR/candidate-image.id" \
   -f "$WORK_DIR/Dockerfile.offline" "$PROJECT_ROOT"
 CANDIDATE_IMAGE="$(sudo cat "$WORK_DIR/candidate-image.id")"
 
-# 按正式服务的 UID:GID 验证应用目录写入及词表。
-# 仅此测试容器禁网；正式服务继续使用原 Compose 的内网 IP 和端口。
+# 在临时容器内验证目录权限和离线词表，不影响正在运行的服务。
 sudo docker run --rm --pull never --network none --entrypoint python \
   --mount "type=bind,source=$PROJECT_ROOT/deploy/ocean_base/data-gym-cache,target=/opt/tiktoken-cache,readonly" \
   --user "$APP_OWNER" \
-  -e TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache "$CANDIDATE_IMAGE" -c \
-  '
+  -e TIKTOKEN_CACHE_DIR=/opt/tiktoken-cache "$CANDIDATE_IMAGE" -c '
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import os
 import tiktoken
 
-# 实际创建目录和文件，以捕获 root 目录归属不正确等权限问题。
-# 测试写入仅发生在这个临时容器里，结束后删除。
 with TemporaryDirectory(prefix=".offline-write-check-", dir="/home/tutu/app") as directory:
     accounts = Path(directory) / "weixin_state" / "accounts"
     accounts.mkdir(parents=True)
@@ -361,17 +345,23 @@ with patch("requests.sessions.Session.request", side_effect=RuntimeError("离线
     print("离线词表验证通过：", encoding.name, encoding.encode("hello world"))
 '
 
-# 只有构建、目录写入和词表验证通过后才替换正式镜像标签，并保留上一个版本。
-sudo docker image tag "$app_image" "$BACKUP_IMAGE"
-sudo docker image tag "$CANDIDATE_IMAGE" "$app_image"
+# 验证通过后再替换应用标签，并保留上一个镜像。
+sudo docker image tag "$APP_IMAGE" "$BACKUP_IMAGE"
+sudo docker image tag "$CANDIDATE_IMAGE" "$APP_IMAGE"
 echo "新代码镜像已准备好；上一个版本保留为：$BACKUP_IMAGE"
 
-# 执行原脚本的临时副本：保留网络检查、存储准备及所有服务启动流程。
-# RUN_MIGRATION 如有设置会继续生效；不执行清理容器或 down 整栈。
-AUTO_GIT_PULL=0 BUILD_RUNTIME=0 CLEAN_APP_RUNNERS=0 RESET_STACK=0 \
-  bash "$WORK_DIR/2_offline_temporary.sh"
+echo "==> 启动基础服务"
+compose up -d --no-build --pull never oceanbase redis traefik
 
-compose_with_cache ps
+if [[ "$RUN_MIGRATION" == "1" ]]; then
+  echo "==> 执行数据库迁移"
+  compose run --rm --no-deps --pull never life-agent \
+    alembic -c alembic_oceanbase.ini upgrade head
+fi
+
+echo "==> 使用新代码镜像重建应用容器"
+compose up -d --no-build --pull never --no-deps --force-recreate life-agent
+compose ps
 printf '\n启动命令已执行。查看应用日志：\n  sudo docker logs --since=2m -f life-agent-app-oceanbase\n'
 printf '\n以后代码更新后再次运行本脚本即可；不必先运行 stop。\n'
 # ------------------------------/内网服务器修正life-agent-offline-restart.sh的脚本-----------------------------------------
