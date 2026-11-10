@@ -1,0 +1,228 @@
+一、官方安装页面
+    https://verl.readthedocs.io/en/latest/start/install.html
+
+二、检查服务器环境
+    1、执行
+        nvidia-smi
+        uname -m
+        cat /etc/os-release
+        sudo docker version
+        free -h
+        df -h
+    2、校验
+        1）建议为镜像、依赖和缓存预留 100～200 GB；模型和检查点另算。
+        2）CUDA 13.x 的常规驱动兼容基线是 580。如果你现在还是 535、550 或 570，先不要继续拉起下面的 CUDA 13 容器，应先确定驱动升级或旧版 verl 的匹配方案。
+        3）`nvidia-smi` 右上角的 CUDA Version 表示驱动支持的 CUDA 版本上限，不是宿主机安装的 Toolkit 版本。本方案使用容器里的 Toolkit。
+
+三、验证 Docker 能使用 GPU——宿主机执行
+    1、使用官方安装页面为 FSDP + vLLM 推荐的 CUDA 基础镜像
+        sudo docker pull nvidia/cuda:13.0.2-devel-ubuntu24.04
+        sudo docker run --rm --gpus all \
+          nvidia/cuda:13.0.2-devel-ubuntu24.04 \
+          nvidia-smi
+    2、如果报：could not select device driver ... with capabilities: [[gpu]]，通常是 NVIDIA Container Toolkit 未安装或未配置。若已经装好 Toolkit，可以执行：
+        sudo nvidia-ctk runtime configure --runtime=docker
+        sudo systemctl restart docker
+    3、如果连 nvidia-ctk 都不存在，先按 NVIDIA 官方安装说明安装 Toolkit，再重试本步：
+        https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+
+四、创建独立的 verl 容器——宿主机执行（这里把代码、虚拟环境、模型、数据、缓存放在宿主机的 ~/verl-workspace 下。若你的大容量磁盘在其他目录，修改第一行即可）
+    VERL_WORKSPACE="$HOME/verl-workspace"
+
+    mkdir -p "$VERL_WORKSPACE"/{models,data,outputs,.cache}
+
+    sudo docker run -d \
+      --name verl-l40s \
+      --gpus all \
+      --shm-size=32g \
+      --ulimit memlock=-1:-1 \
+      --ulimit stack=67108864 \
+      -e UV_CACHE_DIR=/workspace/.cache/uv \
+      -e UV_HTTP_TIMEOUT=300 \
+      -e UV_LINK_MODE=copy \
+      -e HF_HOME=/workspace/.cache/huggingface \
+      -e MODELSCOPE_CACHE=/workspace/.cache/modelscope \
+      -v "$VERL_WORKSPACE:/workspace" \
+      -w /workspace \
+      nvidia/cuda:13.0.2-devel-ubuntu24.04 \
+      sleep infinity
+
+【从下一步开始，命令都在容器内执行】
+五、安装系统依赖和 uv——容器内执行
+    1、进入容器
+        sudo docker exec -it verl-l40s bash
+    2、安装依赖
+        apt-get update
+
+        DEBIAN_FRONTEND=noninteractive apt-get install -y \
+          git \
+          curl \
+          ca-certificates \
+          build-essential \
+          pkg-config \
+          ninja-build \
+          python3 \
+          python3-dev \
+          python3-venv \
+          libnuma1 \
+          libgomp1 \
+          ffmpeg
+    3、安装uv 到 /usr/local/bin，方便以后重新进入容器时直接使用
+        curl -LsSf https://astral.sh/uv/install.sh \
+          | env UV_INSTALL_DIR=/usr/local/bin sh
+    4、检查(预期 Python 为 3.12.x，CUDA Toolkit 为 13.0)
+        python3 --version
+        uv --version
+        nvcc --version
+
+六、下载并安装 verl——容器内执行
+    1、下载和安装verl
+        cd /workspace
+        git clone https://github.com/verl-project/verl.git
+        cd /workspace/verl
+        git rev-parse HEAD
+    2、安装 FSDP + vLLM 对应的完整环境
+        uv sync \
+          --frozen \
+          --all-packages \
+          --python /usr/bin/python3 \
+          --extra vllm \
+          --extra fsdp
+        注：这一步已经包含 verl 本身的安装，不需要再执行 pip install -e .。官方为 FlashAttention 等原生依赖提供了预编译 wheel，但需要能访问对应下载源。
+        首次安装会下载较多依赖。国内网络需要能够访问 GitHub、PyPI、PyTorch 下载站和 verl wheelhouse；单独更换普通 PyPI 镜像未必能覆盖全部依赖。
+
+七、验证依赖、四张 GPU 和实际 CUDA 运算——容器内执行
+    1、保持位于仓库根目录，执行下述验证依赖代码（成功标准：四张卡都输出 BF16 + FlashAttention forward/backward OK。 这比仅检查 import torch 更能发现 CUDA 内核或依赖不匹配的问题）：
+# ------------------------------------------------------验证依赖代码----------------------------------------------------
+cd /workspace/verl
+
+uv run --frozen --all-packages --extra vllm --extra fsdp \
+  python - <<'PY'
+import sys
+from importlib.metadata import version
+
+import torch
+import verl
+import vllm
+import ray
+from flash_attn import flash_attn_func
+
+print("Python:", sys.version)
+for name in ("verl", "torch", "vllm", "ray", "transformers", "flash-attn"):
+    print(f"{name}: {version(name)}")
+
+print("PyTorch CUDA:", torch.version.cuda)
+print("CUDA available:", torch.cuda.is_available())
+print("GPU count:", torch.cuda.device_count())
+
+assert torch.cuda.is_available(), "CUDA 不可用"
+assert torch.cuda.device_count() == 4, "没有识别到全部 4 张 GPU"
+
+for i in range(4):
+    with torch.cuda.device(i):
+        print(
+            f"GPU {i}:",
+            torch.cuda.get_device_name(i),
+            "compute capability:",
+            torch.cuda.get_device_capability(i),
+        )
+
+        # 验证 BF16 矩阵运算
+        x = torch.randn(256, 256, device=f"cuda:{i}", dtype=torch.bfloat16)
+        y = x @ x
+        assert torch.isfinite(y).all().item()
+
+        # 验证 FlashAttention 前向和反向
+        q = torch.randn(
+            1, 128, 4, 64,
+            device=f"cuda:{i}",
+            dtype=torch.bfloat16,
+            requires_grad=True,
+        )
+        out = flash_attn_func(q, q, q, causal=True)
+        out.float().sum().backward()
+        torch.cuda.synchronize()
+        print(f"GPU {i}: BF16 + FlashAttention forward/backward OK")
+
+print("基础环境检查通过")
+PY
+# -----------------------------------------------------/验证依赖代码----------------------------------------------------
+
+八、测试四卡 NCCL 通信——容器内执行（这台 L40S 服务器之前出现过跨卡通信和 IOMMU 问题，因此建议把这一步做完，再启动训练）
+    1、创建下述临时测试脚本
+# -----------------------------------------------------临时测试脚本----------------------------------------------------
+cat > /tmp/verl_nccl_check.py <<'PY'
+import os
+from datetime import timedelta
+
+import torch
+import torch.distributed as dist
+
+local_rank = int(os.environ["LOCAL_RANK"])
+torch.cuda.set_device(local_rank)
+
+dist.init_process_group(
+    backend="nccl",
+    timeout=timedelta(seconds=120),
+)
+
+try:
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+
+    x = torch.full(
+        (1024 * 1024,),
+        float(rank + 1),
+        device=f"cuda:{local_rank}",
+    )
+
+    dist.all_reduce(x)
+    torch.cuda.synchronize()
+
+    expected = world_size * (world_size + 1) / 2
+    assert torch.all(x == expected).item(), "通信结果不正确"
+
+    print(
+        f"rank={rank}, GPU={local_rank}, "
+        f"result={x[0].item()}, NCCL OK",
+        flush=True,
+    )
+finally:
+    dist.destroy_process_group()
+PY
+# -----------------------------------------------------/临时测试脚本----------------------------------------------------
+    2、启动四个进程（成功标准：四个 rank 均输出 result=10.0, NCCL OK。 输出顺序可能不同。）
+        NCCL_DEBUG=INFO \
+        uv run --frozen --all-packages --extra vllm --extra fsdp \
+          python -m torch.distributed.run \
+          --standalone \
+          --nnodes=1 \
+          --nproc-per-node=4 \
+          /tmp/verl_nccl_check.py
+
+        这个测试验证基本通信是否正常，不代表四卡带宽已经达到最佳水平。如果卡住或超时，先检查宿主机：
+            nvidia-smi topo -m
+
+            cat /proc/cmdline
+
+            sudo journalctl -k -b --no-pager \
+              | grep -Ei 'DMAR|IOMMU|DMA.*fault|NVRM|Xid' \
+              | tail -n 80
+        先保留这些输出定位问题，不要直接把禁用 P2P、禁用 IOMMU 等设置全部加上。
+
+九、检查 verl 训练入口——容器内执行
+    cd /workspace/verl
+
+    uv run --frozen --all-packages --extra vllm --extra fsdp \
+      python -m verl.trainer.main_ppo --help
+
+十、以后如何重新进入环境
+    1、在宿主机执行：
+        sudo docker start verl-l40s
+        sudo docker exec -it verl-l40s bash
+    2、在容器内执行：
+        cd /workspace/verl
+    3、之后统一使用这个前缀运行程序：
+        uv run --frozen --all-packages --extra vllm --extra fsdp \
+          python 你的脚本.py
+        （同一套环境保持 vllm + fsdp 这组 extras 一致，避免 uv 因为切换组合反复调整依赖。）
