@@ -3,7 +3,8 @@
 # bash 5_verl_api.sh 0.0.0.0 7877 /workspace/models/Qwen3-8B
 # 第三个参数也可以是宿主机路径/home/zs/models/Qwen3-8B：优先复用挂载，否则复制。
 # 不重建已有训练容器，不安装宿主机Python，不执行uv sync、不升级torch/CUDA。
-# 如旧容器没有-p映射，会创建一个轻量alpine/socat转发容器（首次需下载镜像）。
+# 如旧容器没有-p映射，复用其本机镜像创建Python标准库TCP转发容器。
+# 转发容器不申请GPU、不加载模型；共享已有镜像层，--pull=never禁止下载镜像。
 # 脚本后台启动API，重复运行保留现有API/任务，仅检查或修复转发。
 # 默认数据目录/workspace/verl_api_data，应确保/workspace是宿主机挂载目录。
 set -Eeuo pipefail
@@ -11,7 +12,6 @@ CONTAINER="verl-l40s"
 VERL_DIR="/workspace/verl"
 REMOTE_DIR="/workspace/verl_api"
 STATE_DIR="/workspace/verl_api_data"
-PROXY_IMAGE="alpine/socat:latest"
 if [[ ${1:-} == -h || ${1:-} == --help ]]; then
     printf '用法: bash %s [服务IP=0.0.0.0] [端口=7877] [模型path=/workspace/models/Qwen3-8B]\n' "$0"
     exit 0
@@ -132,19 +132,117 @@ if [[ "$MODE" != host ]]; then
         read -r NETWORK TARGET < <("${DOCKER[@]}" inspect -f '{{range $name,$net := .NetworkSettings.Networks}}{{printf "%s %s\n" $name $net.IPAddress}}{{end}}' "$CONTAINER" | head -n 1)
         [[ -n "${NETWORK:-}" && -n "${TARGET:-}" ]] || { echo "无法取得容器bridge地址，请检查网络。" >&2; exit 2; }
         PROXY="verl-api-forward-$PORT"
+        # .Image是本机精确镜像ID，不访问镜像仓库，也不复制模型或训练环境。
+        PROXY_IMAGE="$("${DOCKER[@]}" inspect -f '{{.Image}}' "$CONTAINER")"
+        FORWARD_SPEC="python-v1|$PROXY_IMAGE|$NETWORK|$TARGET|$SERVICE_IP|$PORT"
+        REUSE=no
         if "${DOCKER[@]}" inspect "$PROXY" >/dev/null 2>&1; then
             OWNER="$("${DOCKER[@]}" inspect -f '{{index .Config.Labels "com.verl-api.target"}}' "$PROXY")"
             [[ "$OWNER" == "$CONTAINER" ]] || { echo "同名容器不属于本脚本，未修改。" >&2; exit 2; }
-            "${DOCKER[@]}" rm -f "$PROXY" >/dev/null
+            EXISTING_SPEC="$("${DOCKER[@]}" inspect -f '{{index .Config.Labels "com.verl-api.forward-spec"}}' "$PROXY")"
+            if [[ "$EXISTING_SPEC" == "$FORWARD_SPEC" ]] && \
+               [[ $("${DOCKER[@]}" inspect -f '{{.State.Running}}' "$PROXY") == true ]]; then
+                REUSE=yes
+                echo "复用现有端口转发容器$PROXY。"
+            fi
         fi
-        if ! "${DOCKER[@]}" image inspect "$PROXY_IMAGE" >/dev/null 2>&1; then
-            "${DOCKER[@]}" pull "$PROXY_IMAGE" || { echo "转发镜像下载失败；可联网机器docker save后到此docker load，再重跑脚本。容器内API已启动。" >&2; exit 1; }
+        if [[ "$REUSE" != yes ]]; then
+            echo "检查已有本机镜像中的Python，仅使用本地镜像，不下载..."
+            # 只需标准库，独立检查基础镜像；原容器可写层的.venv不一定在镜像中。
+            # shellcheck disable=SC2016 # Python路径探测在新容器的sh中展开。
+            if ! PROXY_PY="$("${DOCKER[@]}" run --rm --pull=never --network none \
+                -e NVIDIA_VISIBLE_DEVICES=void -e CUDA_VISIBLE_DEVICES= \
+                --security-opt no-new-privileges --cap-drop ALL --entrypoint /bin/sh \
+                "$PROXY_IMAGE" -c '
+for candidate in python3 python /usr/bin/python3 /usr/local/bin/python3 /opt/conda/bin/python; do
+    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import asyncio,sys; assert sys.version_info >= (3,8)" >/dev/null 2>&1; then
+        command -v "$candidate"
+        exit 0
+    fi
+done
+exit 1
+')"; then
+                echo "原镜像中未找到Python 3.8+（容器可写层可能后来安装过Python）。API仍在运行；本脚本没有下载任何转发镜像。" >&2
+                exit 1
+            fi
+            # 透明TCP双向转发：不解析HTTP、不缓冲完整响应，支持SSE和大文件上传。
+            # stdin不用于传脚本，避免docker -d导致内容未送达；代码直接作为-c参数。
+            PROXY_CODE="$(cat <<'PYPROXY'
+import asyncio
+import contextlib
+import sys
+
+target, port = sys.argv[1], int(sys.argv[2])
+
+async def copy(reader, writer):
+    while True:
+        data = await reader.read(65536)
+        if not data:
+            if writer.can_write_eof():
+                writer.write_eof()
+                await writer.drain()
+            return
+        writer.write(data)
+        await writer.drain()
+
+async def forward(reader, writer):
+    upstream = None
+    tasks = []
+    try:
+        remote, upstream = await asyncio.wait_for(asyncio.open_connection(target, port), 10)
+        tasks = [asyncio.create_task(copy(reader, upstream)), asyncio.create_task(copy(remote, writer))]
+        await asyncio.gather(*tasks)
+    except (OSError, asyncio.TimeoutError) as exc:
+        print('Forward connection ended: ' + str(exc), flush=True)
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        for stream in (writer, upstream):
+            if stream is not None:
+                stream.close()
+                with contextlib.suppress(Exception):
+                    await stream.wait_closed()
+
+async def main():
+    # 固定容器内监听端口17877，宿主机端口由-p控制；目标仍为API的PORT。
+    server = await asyncio.start_server(forward, '0.0.0.0', 17877)
+    print('TCP forward ready: :17877 -> %s:%s' % (target, port), flush=True)
+    async with server:
+        await server.serve_forever()
+
+asyncio.run(main())
+PYPROXY
+)"
+            # 新实现预检成功后才替换旧转发；不操作verl训练容器。
+            if "${DOCKER[@]}" inspect "$PROXY" >/dev/null 2>&1; then
+                "${DOCKER[@]}" rm -f "$PROXY" >/dev/null
+            fi
+            echo "创建端口转发容器$PROXY（复用已有镜像，不占GPU）。"
+            "${DOCKER[@]}" run -d --pull=never --name "$PROXY" --restart unless-stopped \
+                --network "$NETWORK" -p "$SERVICE_IP:$PORT:17877" \
+                -e NVIDIA_VISIBLE_DEVICES=void -e CUDA_VISIBLE_DEVICES= \
+                --label "com.verl-api.target=$CONTAINER" --label "com.verl-api.forward-spec=$FORWARD_SPEC" \
+                --security-opt no-new-privileges --cap-drop ALL \
+                --log-opt max-size=10m --log-opt max-file=2 --entrypoint "$PROXY_PY" \
+                "$PROXY_IMAGE" -u -c "$PROXY_CODE" "$TARGET" "$PORT" >/dev/null
+            # 即使宿主机没有curl，也验证转发进程及其本地端口到API的完整链路。
+            READY=no
+            for (( attempt=1; attempt<=10; attempt++ )); do
+                if "${DOCKER[@]}" exec "$PROXY" "$PROXY_PY" -c "$HEALTH_CODE" 127.0.0.1 17877 >/dev/null 2>&1; then
+                    READY=yes
+                    break
+                fi
+                sleep 1
+            done
+            if [[ "$READY" != yes ]]; then
+                echo "转发启动失败；API仍在运行，转发容器日志如下：" >&2
+                "${DOCKER[@]}" logs --tail 60 "$PROXY" >&2 || true
+                exit 1
+            fi
         fi
-        echo "原容器无-p映射，创建轻量TCP转发容器$PROXY。"
-        "${DOCKER[@]}" run -d --name "$PROXY" --restart unless-stopped --network "$NETWORK" \
-            -p "$SERVICE_IP:$PORT:$PORT" --label "com.verl-api.target=$CONTAINER" \
-            --security-opt no-new-privileges --cap-drop ALL \
-            "$PROXY_IMAGE" "TCP-LISTEN:$PORT,fork,reuseaddr" "TCP:$TARGET:$PORT" >/dev/null
     fi
 fi
 ACCESS_IP="$SERVICE_IP"
