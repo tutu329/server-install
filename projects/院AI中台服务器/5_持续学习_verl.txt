@@ -228,7 +228,7 @@ PY
         （同一套环境保持 vllm + fsdp 这组 extras 一致，避免 uv 因为切换组合反复调整依赖。）
 
 十一、最小训练测试 ——宿主机执行(注意先要有/home/zs/models/Qwen3-8B/模型)
-# --------------------------------------------------最小训练测试的完整指令--------------------------------------------------
+# --------------------------------------------------最小训练测试的完整指令(全参数)--------------------------------------------------
 # ① 在容器中创建模型目录
 sudo docker exec verl-l40s mkdir -p /workspace/models/Qwen3-8B &&
 
@@ -353,4 +353,286 @@ uv run --frozen --all-packages \
     -m verl.trainer.sft_trainer \
     "${SFT_ARGS[@]}"
 '
-# -------------------------------------------------/最小训练测试的完整指令--------------------------------------------------
+# -------------------------------------------------/最小训练测试的完整指令(全参数)--------------------------------------------------
+
+# --------------------------------------------------最小训练测试的完整指令(lora)--------------------------------------------------
+# ① 在容器中创建模型目录
+sudo docker exec verl-l40s mkdir -p /workspace/models/Qwen3-8B &&
+
+# ② 将宿主机模型复制到容器
+# -L：跟随源文件中的符号链接，复制实际文件内容
+sudo docker cp -L \
+  /home/zs/models/Qwen3-8B/. \
+  verl-l40s:/workspace/models/Qwen3-8B/ &&
+
+# ③ 在容器内准备测试数据，并启动训练
+sudo docker exec -it \
+  -w /workspace/verl \
+  -e CUDA_VISIBLE_DEVICES=0,1,2,3 \
+  verl-l40s \
+  bash -lc '
+# 任一命令失败，停止后续执行。
+set -e
+
+# 确认容器内模型存在。
+test -f /workspace/models/Qwen3-8B/config.json
+
+# ---------- 1. 准备测试数据 ----------
+# 与前面的全参数版本相同：8 条重复的短对话。
+# 仅用于验证 LoRA 的前向、反向和参数更新，不用于评估训练效果。
+#
+# uv extras 保持和安装时一致。
+# 虽然保留 --extra vllm，但本次 SFT 不会启动 vLLM 推理服务。
+uv run --frozen --all-packages \
+  --extra vllm --extra fsdp \
+  python - << "PY"
+import pandas as pd
+
+messages = [
+    {"role": "user", "content": "1+1等于几？"},
+    {"role": "assistant", "content": "1+1等于2。"},
+    {"role": "user", "content": "谢谢。"},
+]
+
+pd.DataFrame({
+    "messages": [messages] * 8
+}).to_parquet(
+    "/tmp/sft_lora_smoke.parquet",
+    index=False,
+)
+PY
+
+# ---------- 2. 配置 LoRA SFT ----------
+# Bash 数组：每个元素作为一个参数传给 verl。
+SFT_ARGS=(
+    # ===== 模型与 LoRA =====
+
+    # 起点模型：容器内的完整、未量化模型。
+    model.path=/workspace/models/Qwen3-8B
+
+    # 【LoRA rank】
+    # 大于 0 即启用 LoRA，冻结基座参数，只训练新增的 LoRA 矩阵。
+    # 注意当前 FSDP 路径用 model.lora_rank，不是 model.lora.rank。
+    #
+    # 常见候选：8、16、32、64；这里以 16 起步。
+    # 在目标层相同时，LoRA 参数量近似正比于 rank。
+    # 更大的 rank 增加适配容量和开销，但不保证效果更好。
+    model.lora_rank=16
+
+    # 【LoRA alpha】
+    # 普通 LoRA 的有效权重：
+    # W_effective = W_base + (alpha / rank) * B * A
+    #
+    # 当前 alpha=32、rank=16，因此缩放系数为 2。
+    # alpha 不是学习率；它与学习率共同影响适配器的更新效果。
+    # 比较不同 rank 时，可以先保持 alpha/rank 不变：
+    # 例如 rank=8 配 alpha=16，rank=32 配 alpha=64。
+    model.lora_alpha=32
+
+    # 【LoRA 目标层】
+    # all-linear：给线性层添加 LoRA，原始权重仍保持冻结。
+    # Qwen3 中主要覆盖：
+    # 注意力：q_proj、k_proj、v_proj、o_proj
+    # MLP：gate_proj、up_proj、down_proj
+    # PEFT 对普通 HF 模型的 all-linear 通常排除输出头。
+    #
+    # 若想缩小适配器，可把下面这行替换为：
+    # "model.target_modules=[q_proj,v_proj]"
+    #
+    # 减少目标层通常能减少可训练参数，但可能限制适配效果。
+    # 它不会按同样比例减少基座模型和激活占用的显存。
+    model.target_modules=all-linear
+
+    # null：新建 LoRA。
+    # 如果继续训练已有 PEFT adapter，可改为 adapter 所在目录。
+    # 加载已有 adapter 时，结构以其 adapter_config.json 为准。
+    model.lora_adapter_path=null
+
+    # ===== 精度与显存 =====
+
+    # 【参数存储精度】
+    # 保留 FP32 参数存储，沿用 FSDP 默认的 BF16 混合精度计算。
+    # 这不表示所有前向、反向算子都使用 FP32。
+    #
+    # 当前 FSDP 实现中新建 LoRA 参数会与基座存储 dtype 对齐。
+    # 因此改成 bf16，不只是压缩冻结基座，还会改变 LoRA 参数精度；
+    # 普通 AdamW 的状态精度也会受到影响。
+    # 先用 fp32 建立稳定的对比基线，再单独评估精度优化。
+    engine.model_dtype=fp32
+
+    # 【梯度检查点】
+    # True：减少激活显存，代价是反向时重算部分前向过程。
+    # 即使基座被冻结，LoRA 训练仍需要保存或重算中间激活。
+    #
+    # 长序列先保持 True。
+    # 如果显存充足，可尝试 False，比较训练速度和显存峰值。
+    model.enable_gradient_checkpointing=True
+
+    # 去掉 padding 对应的无效计算，与下面 no_padding 配合。
+    model.use_remove_padding=True
+
+    # 【分布式策略】
+    # 使用 FSDP2 分片基座和相关训练状态。
+    engine.strategy=fsdp2
+
+    # -1：自动选择分片组大小。
+    # 当前单机四进程、没有序列并行，使用四卡分片。
+    engine.fsdp_size=-1
+
+    # 不启用序列并行，本例数据并行规模为 4。
+    engine.ulysses_sequence_parallel_size=1
+
+    # 【CPU offload】
+    # False：不在训练过程中把参数、梯度、优化器状态卸载到 CPU。
+    # 确有显存压力时可尝试 True，但会增加系统内存和传输开销。
+    # 对四卡 LoRA，建议先保持 False。
+    engine.offload_policy=False
+
+    # 【编译优化】
+    # 两步测试关闭 torch.compile，避免编译时间盖过训练时间。
+    # 长时间训练可再比较 True 的稳态吞吐与兼容性。
+    engine.use_torch_compile=False
+
+    # ===== 数据与 batch =====
+
+    data.train_files=/tmp/sft_lora_smoke.parquet
+
+    # 本次无验证集；正式训练应配置独立的验证数据。
+    data.val_files=null
+
+    # 【全局 batch】
+    # 每次参数更新，总共处理 4 条样本。
+    data.train_batch_size=4
+
+    # 【每卡 micro batch】
+    # 每张 GPU 每次前向/反向处理 1 条样本。
+    #
+    # 固定 batch、没有序列并行时：
+    # 梯度累积次数 = 全局 batch / (数据并行卡数 × 每卡 micro batch)
+    #
+    # 当前：4 / (4 × 1) = 1，不需要多次累积。
+    # 全局 batch=16、每卡 micro batch=1：累积 4 次。
+    # 全局 batch=16、每卡 micro batch=2：累积 2 次。
+    #
+    # 提高 micro batch 通常能改善 GPU 利用率，但增加激活显存。
+    # 修改后应保证全局 batch 可以被上述乘积整除。
+    data.micro_batch_size_per_gpu=1
+
+    # 【动态分批】
+    # False：按固定样本数划分 micro batch，便于理解和验证。
+    #
+    # 真实数据长度差异大时，可测试 True，并设置：
+    # data.max_token_len_per_gpu=2048 或 4096 等起始值。
+    # 此时按 token 预算组织 micro batch，需要重新评估显存；
+    # 不能再简单套用上面的固定 micro batch 累积公式。
+    data.use_dynamic_bsz=False
+
+    data.pad_mode=no_padding
+
+    # 【序列长度】
+    # 每条完整对话的 token 上限，包括问题、答案和聊天模板。
+    # 正式数据可根据长度分布改成 512、1024、2048 等。
+    #
+    # 增大上限不会把这里的短样本自动变成长文本；
+    # 实际样本长度增长，才会增加计算量和激活显存。
+    data.max_length=128
+
+    # 超长样本报错，避免测试时悄悄截掉答案。
+    data.truncation=error
+
+    # 【数据加载进程】
+    # 0：在训练进程内加载，不启动额外子进程。
+    # 正式训练如发现数据准备成为瓶颈，可测试 2 或 4。
+    # 这是每个训练进程的 worker 数，四卡会相应倍增。
+    data.num_workers=0
+
+    # ===== 优化器与学习率 =====
+
+    optim.optimizer=AdamW
+
+    # 【学习率】
+    # LoRA SFT 先用 1e-4，比前面全参数训练的 1e-5 更大。
+    # 真实任务可以对比 5e-5、1e-4、2e-4。
+    #
+    # 学习率大：可能学得快，也更容易波动或过拟合。
+    # 学习率小：更新更保守，但可能需要更多训练步数。
+    # 根据验证集与实际任务选择，不只看训练 loss。
+    optim.lr=1e-4
+
+    # 【权重衰减】
+    # 对实际参与更新的参数施加正则化。
+    # 0 和 0.01 都可作为对比起点，不能替代验证集与早停。
+    optim.weight_decay=0.01
+
+    # 【梯度裁剪】
+    # 限制异常大的梯度，常见起点为 1.0。
+    optim.clip_grad=1.0
+
+    # 【学习率调度】
+    # 两步验证使用恒定学习率，不预热。
+    # 正式训练可以改为 cosine，并设置：
+    # optim.lr_warmup_steps=-1
+    # optim.lr_warmup_steps_ratio=0.03
+    # 表示按总步数的约 3% 进行预热。
+    optim.lr_scheduler_type=constant
+    optim.lr_warmup_steps=0
+    optim.lr_warmup_steps_ratio=0.0
+
+    # cosine 调度下的最低学习率比例。
+    # 例如学习率 1e-4、比例 0.1，对应下限 1e-5。
+    # 当前 constant 模式不会使用此参数。
+    optim.min_lr_ratio=0.1
+
+    # 【优化器实现】
+    # 沿用已经跑通的 foreach:false，减少临时显存开销。
+    # LoRA 优化器状态较小，后续可对比 foreach:true 的速度。
+    "optim.override_optimizer_config={foreach:false}"
+
+    # ===== 训练控制与输出 =====
+
+    # 8 条样本 / 全局 batch 4 = 2 次参数更新。
+    trainer.total_epochs=1
+    trainer.total_training_steps=2
+
+    # 正式训练如果按 epoch 运行：
+    # 将 total_training_steps 改成 null，由数据量和轮数决定步数。
+    # 同时更换真实数据；不能只增加步数就让本例一轮凭空变长。
+    trainer.nnodes=1
+    trainer.n_gpus_per_node=4
+
+    trainer.logger=console
+    trainer.project_name=qwen3-lora-sft
+    trainer.experiment_name=smoke-r16-a32
+
+    # 每次新建训练任务，不自动恢复上次的训练进度。
+    trainer.resume_mode=disable
+
+    # LoRA 测试使用单独目录。
+    trainer.default_local_dir=/workspace/outputs/qwen3-8b-lora-smoke
+
+    # 不进行周期验证和周期保存。
+    # 注意：训练结束时仍然会进入最终保存流程。
+    trainer.test_freq=-1
+    trainer.save_freq=-1
+
+    # 【仅验证，不保存权重】
+    # 最终也不保存模型权重、优化器与 extra 状态。
+    # 配置、tokenizer、LoRA 元信息、数据进度等小文件仍可能写入。
+    #
+    # 正式训练必须修改这一项，否则训练得到的 LoRA 不会保留下来。
+    "checkpoint.save_contents=[]"
+)
+
+# ---------- 3. 启动四卡 LoRA SFT ----------
+# 训练入口和全参数版本相同。
+# 是否启用 LoRA，由 model.lora_rank 等参数决定。
+uv run --frozen --all-packages \
+  --extra vllm --extra fsdp \
+  python -m torch.distributed.run \
+    --standalone \
+    --nproc-per-node=4 \
+    -m verl.trainer.sft_trainer \
+    "${SFT_ARGS[@]}"
+'
+# -------------------------------------------------/最小训练测试的完整指令(lora)--------------------------------------------------
+
