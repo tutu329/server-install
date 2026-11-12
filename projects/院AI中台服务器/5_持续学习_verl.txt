@@ -226,3 +226,131 @@ PY
         uv run --frozen --all-packages --extra vllm --extra fsdp \
           python 你的脚本.py
         （同一套环境保持 vllm + fsdp 这组 extras 一致，避免 uv 因为切换组合反复调整依赖。）
+
+十一、最小训练测试 ——宿主机执行
+# --------------------------------------------------最小训练测试的完整指令--------------------------------------------------
+    # ① 在容器中创建模型目录
+    sudo docker exec verl-l40s mkdir -p /workspace/models/Qwen3-8B &&
+
+    # ② 将宿主机模型复制到容器
+    # -L：跟随源文件中的符号链接，复制实际文件内容
+    sudo docker cp -L \
+      /home/zs/models/Qwen3-8B/. \
+      verl-l40s:/workspace/models/Qwen3-8B/ &&
+
+    # ③ 在容器内准备测试数据，并启动训练
+    # -it：交互式运行，直接查看输出
+    # -w：设置容器内工作目录
+    # -e：设置环境变量，使用编号为 0、1、2、3 的四张 GPU
+    sudo docker exec -it \
+      -w /workspace/verl \
+      -e CUDA_VISIBLE_DEVICES=0,1,2,3 \
+      verl-l40s \
+      bash -lc '
+    # 任一命令失败时，停止后续执行
+    set -e
+
+    # ---------- 准备最小测试数据 ----------
+    # uv 参数：
+    # --frozen：使用已有锁文件，不重新解析依赖版本
+    # --all-packages：包含 uv 工作区中的所有包
+    # --extra vllm --extra fsdp：沿用安装时的依赖组合
+    #
+    # 下面将同一段简短对话重复 8 次，保存为 Parquet 文件。
+    # 仅用于验证训练流程。
+    uv run --frozen --all-packages \
+      --extra vllm --extra fsdp \
+      python - << "PY"
+    import pandas as pd
+
+    messages = [
+        {"role": "user", "content": "1+1等于几？"},
+        {"role": "assistant", "content": "1+1等于2。"},
+        {"role": "user", "content": "谢谢。"},
+    ]
+
+    pd.DataFrame({
+        "messages": [messages] * 8
+    }).to_parquet(
+        "/tmp/sft_smoke.parquet",
+        index=False,
+    )
+    PY
+
+    # ---------- SFT 训练参数 ----------
+    # Bash 数组：每个元素作为一个独立参数传给 verl。
+    SFT_ARGS=(
+        # 起点模型：必须填写容器内路径
+        model.path=/workspace/models/Qwen3-8B
+
+        # 使用 FSDP2，对训练状态进行多卡分片
+        engine.strategy=fsdp2
+
+        # 关闭 torch.compile，减少首次验证时的编译开销
+        engine.use_torch_compile=False
+
+        # 训练数据：上面生成的 8 条对话
+        data.train_files=/tmp/sft_smoke.parquet
+
+        # 全局 batch：每次参数更新共使用 4 条样本
+        data.train_batch_size=4
+
+        # 每卡每次前向/反向处理 1 条样本
+        # 本例：4 张卡 × 每卡 1 条 = 全局 4 条，无需梯度累积
+        data.micro_batch_size_per_gpu=1
+
+        # 使用固定样本数的 micro batch，不按 token 数动态分批
+        data.use_dynamic_bsz=False
+
+        # 每条完整对话的最大长度，包括问题、答案和模板等 token
+        data.max_length=128
+
+        # 不启动额外的数据加载子进程，在各训练进程内加载数据
+        data.num_workers=0
+
+        # 学习率：0.00001
+        optim.lr=1e-5
+
+        # 关闭优化器 foreach 实现，减少临时显存开销
+        "optim.override_optimizer_config={foreach:false}"
+
+        # 遍历训练集 1 轮
+        trainer.total_epochs=1
+
+        # 最多执行 2 次参数更新
+        # 本例：8 条样本 ÷ 全局 batch 4 = 2 步
+        trainer.total_training_steps=2
+
+        # 训练配置中声明每个节点使用 4 张 GPU
+        # 实际启动进程数由下面的 --nproc-per-node=4 指定
+        trainer.n_gpus_per_node=4
+
+        # 日志输出到控制台
+        trainer.logger=console
+
+        # 不恢复已有检查点，每次从 model.path 指定的模型开始
+        trainer.resume_mode=disable
+
+        # 本次测试的输出目录，位于容器内 /tmp
+        trainer.default_local_dir=/tmp/verl-sft-smoke
+
+        # 不保存模型权重、优化器状态和 extra 状态，节省磁盘
+        # 仍会写入少量配置、tokenizer、数据加载进度等文件
+        "checkpoint.save_contents=[]"
+    )
+
+    # ---------- 启动四卡训练 ----------
+    # torch.distributed.run：PyTorch 分布式启动器
+    # --standalone：单机启动，自动建立进程间通信所需的 rendezvous
+    # --nproc-per-node=4：启动 4 个进程，通常每张 GPU 对应一个
+    # -m verl.trainer.sft_trainer：运行 verl 的 SFT 训练入口
+    # "${SFT_ARGS[@]}"：逐项传入上面定义的全部参数
+    uv run --frozen --all-packages \
+      --extra vllm --extra fsdp \
+      python -m torch.distributed.run \
+        --standalone \
+        --nproc-per-node=4 \
+        -m verl.trainer.sft_trainer \
+        "${SFT_ARGS[@]}"
+    '
+# -------------------------------------------------/最小训练测试的完整指令--------------------------------------------------
