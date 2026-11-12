@@ -126,3 +126,41 @@ if [[ "$MODE" != host ]]; then
         if [[ "$MAPPING_OK" != yes ]]; then
             echo "已有不同端口映射: $PUBLISHED；请使用匹配的IP/端口或调整原映射。" >&2; exit 2
         fi
+        echo "复用原端口映射: $PUBLISHED"
+    else
+        # shellcheck disable=SC2016 # Docker Go模板，不是shell变量。
+        read -r NETWORK TARGET < <("${DOCKER[@]}" inspect -f '{{range $name,$net := .NetworkSettings.Networks}}{{printf "%s %s\n" $name $net.IPAddress}}{{end}}' "$CONTAINER" | head -n 1)
+        [[ -n "${NETWORK:-}" && -n "${TARGET:-}" ]] || { echo "无法取得容器bridge地址，请检查网络。" >&2; exit 2; }
+        PROXY="verl-api-forward-$PORT"
+        if "${DOCKER[@]}" inspect "$PROXY" >/dev/null 2>&1; then
+            OWNER="$("${DOCKER[@]}" inspect -f '{{index .Config.Labels "com.verl-api.target"}}' "$PROXY")"
+            [[ "$OWNER" == "$CONTAINER" ]] || { echo "同名容器不属于本脚本，未修改。" >&2; exit 2; }
+            "${DOCKER[@]}" rm -f "$PROXY" >/dev/null
+        fi
+        if ! "${DOCKER[@]}" image inspect "$PROXY_IMAGE" >/dev/null 2>&1; then
+            "${DOCKER[@]}" pull "$PROXY_IMAGE" || { echo "转发镜像下载失败；可联网机器docker save后到此docker load，再重跑脚本。容器内API已启动。" >&2; exit 1; }
+        fi
+        echo "原容器无-p映射，创建轻量TCP转发容器$PROXY。"
+        "${DOCKER[@]}" run -d --name "$PROXY" --restart unless-stopped --network "$NETWORK" \
+            -p "$SERVICE_IP:$PORT:$PORT" --label "com.verl-api.target=$CONTAINER" \
+            --security-opt no-new-privileges --cap-drop ALL \
+            "$PROXY_IMAGE" "TCP-LISTEN:$PORT,fork,reuseaddr" "TCP:$TARGET:$PORT" >/dev/null
+    fi
+fi
+ACCESS_IP="$SERVICE_IP"
+[[ "$SERVICE_IP" != 0.0.0.0 ]] || ACCESS_IP=127.0.0.1
+if command -v curl >/dev/null; then
+    READY=no
+    for (( attempt=1; attempt<=10; attempt++ )); do
+        if curl --noproxy '*' --fail --silent --max-time 3 "http://$ACCESS_IP:$PORT/healthz" >/dev/null; then READY=yes; break; fi
+        sleep 1
+    done
+    [[ "$READY" == yes ]] || { echo "容器API正常，但宿主端口验证失败，请检查转发容器及防火墙。" >&2; exit 1; }
+fi
+echo "服务就绪：外部访问 http://<服务器实际IP>:$PORT"
+echo "Swagger：/docs；给前端AI的完整规范：/api-spec；机器Schema：/openapi.json"
+echo "读取Key：sudo docker exec $CONTAINER cat $STATE_DIR/api_key"
+echo "API日志：sudo docker exec $CONTAINER tail -f $STATE_DIR/server.log"
+echo "训练情况：GET /api/v1/jobs/{id}/metrics、/logs、/events（需Bearer Key）"
+echo "持久目录：$STATE_DIR；启动PID记录：$STATE_DIR/server_process.json"
+echo "更新代码前先结束活跃任务，再依据PID记录停止API，重新执行此脚本。"
