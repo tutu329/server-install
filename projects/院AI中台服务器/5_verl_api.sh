@@ -2,10 +2,11 @@
 # Linux宿主机运行；与5_verl_api.py放在同一目录，只输入三个位置参数。
 # bash 5_verl_api.sh 0.0.0.0 7877 /workspace/models/Qwen3-8B
 # 第三个参数也可以是宿主机路径/home/zs/models/Qwen3-8B：优先复用挂载，否则复制。
-# v4：仅使用Docker原生网络；没有自写TCP转发，不使用nsenter，不创建转发容器。
-# host网络：第二个参数直接决定监听端口；改变IP/port会优雅重启API（不重启容器）。
+# v5：每次执行都停止现有API及本数据目录的任务，无条件部署同目录py并重启API。
+# 训练/推理/数据处理/排队任务会取消；保留数据、历史日志、已有检查点和API Key。
+# host网络：第二个参数直接决定监听端口；不重启容器，不创建TCP转发。
 # bridge网络：先创建-p IP:PORT:PORT映射；缺少映射则明确报错，不暗中创建转发。
-# 本脚本不重建训练容器。host模式的一次性迁移应在训练任务结束后进行。
+# 新代码先在容器内做语法检查；停止任务不保证生成新的检查点。
 # 不安装宿主机Python，不执行uv sync，不升级torch/CUDA。
 # 默认数据目录/workspace/verl_api_data，应确保/workspace是宿主机挂载目录。
 set -Eeuo pipefail
@@ -98,104 +99,264 @@ fi
 "${DOCKER[@]}" exec "$CONTAINER" "$PY" -c 'import pandas,pyarrow,transformers,peft; print("数据处理和LoRA依赖已就绪")'
 INNER_IP="0.0.0.0"
 [[ "$MODE" != host ]] || INNER_IP="$SERVICE_IP"
-CHECK_IP="127.0.0.1"
-[[ "$INNER_IP" == 0.0.0.0 ]] || CHECK_IP="$INNER_IP"
-HEALTH_CODE='import json,sys,urllib.request; o=urllib.request.build_opener(urllib.request.ProxyHandler({})); assert json.load(o.open("http://"+sys.argv[1]+":"+sys.argv[2]+"/healthz",timeout=2))["service"]=="verl-api"'
-if "${DOCKER[@]}" exec "$CONTAINER" "$PY" -c "$HEALTH_CODE" "$CHECK_IP" "$PORT" >/dev/null 2>&1; then
-    "${DOCKER[@]}" exec "$CONTAINER" "$PY" -c '
-import json,sys,pathlib
-p=pathlib.Path(sys.argv[1])/"server_process.json"
-if not p.exists(): raise SystemExit("已有API缺少启动记录，请检查现有进程")
-if json.loads(p.read_text())["model_path"]!=str(pathlib.Path(sys.argv[2]).resolve()):
-    raise SystemExit("现有API起点模型不同；其他模型请通过/models/register登记")
-' "$STATE_DIR" "$MODEL"
-    echo "API已经运行，复用现有服务；端口=$PORT，网络=$MODE。"
-else
-    # 已有worker可能继续读取同一源码，不在此情况下覆盖不同版本的文件。
-    LOCAL_HASH="$(sha256sum "$HERE/5_verl_api.py" | cut -d' ' -f1)"
-    "${DOCKER[@]}" exec -i "$CONTAINER" "$PY" - "$STATE_DIR" "$REMOTE_DIR/5_verl_api.py" "$LOCAL_HASH" <<'PYCHECKCODE'
-import hashlib
-from pathlib import Path
-import sqlite3
-import sys
-root, path, expected = sys.argv[1:]
-source = Path(path)
-if not source.exists() or hashlib.sha256(source.read_bytes()).hexdigest() == expected:
-    sys.exit(0)
-database = Path(root) / 'state.sqlite3'
-if database.exists():
-    with sqlite3.connect('file:%s?mode=ro' % database, uri=True) as db:
-        active = db.execute("SELECT id,state FROM objects WHERE kind='job' AND state IN ('queued','starting','running','loading','ready','stopping')").fetchall()
-    if active:
-        sys.exit('存在未结束任务，不能覆盖不同版本的API源码；请使用原版本py，或在任务结束后更新。')
-PYCHECKCODE
-    # 同一数据目录只允许一个API；在host模式变更监听端口时，优雅关闭旧API。
-    # PID和创建时间都核对，避免误杀被系统复用的PID；不停止独立训练worker。
-    "${DOCKER[@]}" exec -i "$CONTAINER" "$PY" - "$STATE_DIR" "$REMOTE_DIR/5_verl_api.py" "$INNER_IP" "$PORT" "$MODEL" <<'PYRESTART'
+# 每次都上传，不做新旧版本比较。暂存文件避免覆盖仍被旧worker读取的源码。
+STAGED="$REMOTE_DIR/.5_verl_api.deploy.$$.${RANDOM}.py"
+cleanup_stage() {
+    "${DOCKER[@]}" exec "$CONTAINER" rm -f -- "$STAGED" >/dev/null 2>&1 || true
+}
+trap cleanup_stage EXIT
+"${DOCKER[@]}" cp "$HERE/5_verl_api.py" "$CONTAINER:$STAGED"
+echo "准备强制更新：将停止现有API及其训练、推理、数据处理和排队任务。"
+"${DOCKER[@]}" exec -i "$CONTAINER" "$PY" - "$STATE_DIR" "$REMOTE_DIR/5_verl_api.py" "$STAGED" "$INNER_IP" "$PORT" "$MODEL" "$VERL_DIR" <<'PYDEPLOY'
+import datetime
+import fcntl
 import json
 import os
 from pathlib import Path
+import resource
 import signal
+import sqlite3
+import subprocess
 import sys
 import time
+import urllib.request
 
-root, script, bind, port, model = sys.argv[1:]
-record = Path(root) / 'server_process.json'
-if not record.exists():
-    sys.exit(0)
-info = json.loads(record.read_text())
-if info.get('model_path') != str(Path(model).resolve()):
-    sys.exit('此数据目录绑定的起点模型不同；其他模型请使用/models/register添加。')
+root, script, staged, bind, port, model, workdir = sys.argv[1:]
+root, script, staged = Path(root).resolve(), Path(script).resolve(), Path(staged)
+model = str(Path(model).resolve())
+done = {'succeeded', 'failed', 'cancelled', 'interrupted'}
+database = root / 'state.sqlite3'
+record = root / 'server_process.json'
 
-def start_tick(pid):
+# 串行化同一数据目录的部署；语法或模型路径有问题时不停止正在运行的服务。
+deploy_lock = (root / 'deploy.lock').open('a')
+try:
+    fcntl.flock(deploy_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    sys.exit('另一个启动脚本正在更新此API，请等它完成后再运行。')
+compile(staged.read_bytes(), str(script), 'exec')
+
+def connect():
+    return sqlite3.connect(database.as_uri() + '?mode=rw', uri=True, timeout=30)
+
+def jobs():
+    if not database.exists():
+        return []
+    with connect() as db:
+        return [json.loads(r[0]) for r in db.execute(
+            "SELECT payload FROM objects WHERE kind='job'")]
+
+if database.exists():
+    with connect() as db:
+        row = db.execute("SELECT payload FROM objects WHERE id='base' AND kind='model'").fetchone()
+        if row and str(Path(json.loads(row[0])['path']).resolve()) != model:
+            sys.exit('此数据目录base已绑定其他模型路径；请用/models/register添加模型。')
+
+def proc(pid):
     try:
-        text = Path('/proc/%s/stat' % pid).read_text()
-        fields = text[text.rfind(')') + 2:].split()
-        return fields[19] if fields[0] != 'Z' else None
-    except (OSError, IndexError):
+        base = Path('/proc') / str(pid)
+        raw = (base / 'stat').read_text()
+        fields = raw[raw.rfind(')') + 2:].split()
+        if fields[0] in ('Z', 'X'):
+            return None
+        return {'pid': int(pid), 'start': fields[19], 'ppid': int(fields[1]),
+                'group': int(fields[2]), 'session': int(fields[3])}
+    except (OSError, ValueError, IndexError):
         return None
 
-pid = info.get('pid')
-if not info.get('pid_start') or start_tick(pid) != info['pid_start']:
-    sys.exit(0)
-args = Path('/proc/%s/cmdline' % pid).read_bytes().decode().split('\0')
+def snapshot():
+    result = {}
+    for path in Path('/proc').iterdir():
+        if path.name.isdigit():
+            p = proc(path.name)
+            if p:
+                result[p['pid']] = p
+    return result
+
+def same(p):
+    current = proc(p['pid'])
+    return current is not None and current['start'] == p['start']
+
+def send(p, sig):
+    # 只处理已核对启动时间的进程，忽略陈旧PID记录。
+    if same(p):
+        try:
+            os.kill(p['pid'], sig)
+        except ProcessLookupError:
+            pass
+
+initial_jobs = jobs()
+job_ids = {j['id'] for j in initial_jobs}
+targets, servers, sessions = {}, {}, set()
+info = json.loads(record.read_text()) if record.exists() else {}
+scripts = {str(script)}
+if info.get('script'):
+    scripts.add(str(Path(info['script']).resolve()))
+
+def discover():
+    table = snapshot()
+    for p in table.values():
+        pid = p['pid']
+        if pid in (1, os.getpid(), os.getppid()):
+            continue
+        base = Path('/proc') / str(pid)
+        try:
+            # 只读取身份所需环境字段，不打印环境变量或鉴权信息。
+            env = dict(v.split(b'=', 1) for v in (base / 'environ').read_bytes().split(b'\0') if b'=' in v)
+            data_root = Path(os.fsdecode(env.get(b'VERL_API_DATA_DIR', b'/workspace/verl_api_data'))).resolve()
+            if data_root != root:
+                continue
+            mode = env.get(b'VERL_API_MODE', b'serve')
+            args = [os.fsdecode(a) for a in (base / 'cmdline').read_bytes().split(b'\0') if a]
+            # Python程序路径必须是独立argv；不使用pkill -f或模糊字符串匹配。
+            cwd = base / 'cwd'
+            matches = any(str((Path(a) if Path(a).is_absolute() else cwd / a).resolve()) in scripts
+                          for a in args[1:] if a.endswith('.py'))
+            owned_job = os.fsdecode(env.get(b'VERL_API_JOB', b'')) in job_ids
+            if matches or owned_job:
+                targets[pid] = p
+                if matches and mode == b'serve':
+                    servers[pid] = p
+                if mode == b'worker' and p['session'] == pid:
+                    sessions.add(pid)
+        except (FileNotFoundError, ProcessLookupError, PermissionError):
+            continue
+    # 登记PID还需启动时间一致；PID复用不会导致误杀。
+    for j in initial_jobs:
+        p = table.get(j.get('pid'))
+        if p and j.get('pid_start') and p['start'] == str(j['pid_start']):
+            targets[p['pid']] = p
+            if p['session'] == p['pid']:
+                sessions.add(p['pid'])
+    # 即使worker先退出，已记录的后代和独立任务session仍会被清理。
+    changed = True
+    while changed:
+        changed = False
+        live_ids = {pid for pid, p in targets.items()
+                    if pid in table and table[pid]['start'] == p['start']}
+        for pid, p in table.items():
+            if pid in (1, os.getpid(), os.getppid()):
+                continue
+            if p['ppid'] in live_ids or p['session'] in sessions:
+                if pid not in targets or targets[pid]['start'] != p['start']:
+                    targets[pid] = p
+                    changed = True
+
+discover()
+# 先冻结API，禁止继续接收任务和调度排队任务，再快照其后代并强制结束API。
 try:
-    index = next(i for i, value in enumerate(args) if value and str(Path(value).resolve()) == str(Path(script).resolve()))
-    old_bind, old_port = args[index + 1:index + 3]
-except (ValueError, StopIteration):
-    sys.exit('已有进程的启动参数无法确认，未终止该进程。')
-if (old_bind, old_port) == (bind, port):
-    sys.exit('同地址API进程仍在运行，但健康检查未通过，请查看server.log后重试。')
-print('API监听地址从%s:%s改为%s:%s，正在优雅重启API...' % (old_bind, old_port, bind, port), flush=True)
-os.kill(pid, signal.SIGTERM)
-for _ in range(120):
-    if start_tick(pid) != info['pid_start']:
-        sys.exit(0)
-    time.sleep(.25)
-sys.exit('旧API在30秒内未退出，可能仍有进行中的对话；未强制终止，请稍后重试。')
-PYRESTART
-    # 相同代码不重复覆盖，避免独立worker读取期间遇到短暂的不完整文件。
-    REMOTE_HASH="$("${DOCKER[@]}" exec "$CONTAINER" "$PY" -c 'import hashlib,pathlib,sys; p=pathlib.Path(sys.argv[1]); print(hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else "missing")' "$REMOTE_DIR/5_verl_api.py")"
-    if [[ "$REMOTE_HASH" != "$LOCAL_HASH" ]]; then
-        "${DOCKER[@]}" cp "$HERE/5_verl_api.py" "$CONTAINER:$REMOTE_DIR/5_verl_api.py"
-    fi
-    "${DOCKER[@]}" exec "$CONTAINER" "$PY" -m py_compile "$REMOTE_DIR/5_verl_api.py"
-    # shellcheck disable=SC2016 # 参数刻意在容器内bash展开。
-    "${DOCKER[@]}" exec -d -w "$VERL_DIR" "$CONTAINER" bash -c '
-ulimit -s 65536 || true
-exec "$1" -u "$2" "$3" "$4" "$5" >> "$6" 2>&1
-' bash "$PY" "$REMOTE_DIR/5_verl_api.py" "$INNER_IP" "$PORT" "$MODEL" "$STATE_DIR/server.log"
-    READY=no
-    for (( attempt=1; attempt<=40; attempt++ )); do
-        if "${DOCKER[@]}" exec "$CONTAINER" "$PY" -c "$HEALTH_CODE" "$CHECK_IP" "$PORT" >/dev/null 2>&1; then READY=yes; break; fi
-        sleep 1
-    done
-    if [[ "$READY" != yes ]]; then
-        echo "API启动未成功，最近日志：" >&2
-        "${DOCKER[@]}" exec "$CONTAINER" tail -n 80 "$STATE_DIR/server.log"
-        exit 1
-    fi
-fi
+    for p in servers.values():
+        send(p, signal.SIGSTOP)
+    discover()
+finally:
+    for p in servers.values():
+        send(p, signal.SIGKILL)
+
+# 补入旧API停止前最后一刻登记的任务，覆盖调度与读取任务表之间的时间差。
+known = {j['id'] for j in initial_jobs}
+initial_jobs.extend(j for j in jobs() if j['id'] not in known)
+job_ids.update(j['id'] for j in initial_jobs)
+
+# worker可以短暂清理资源；不响应TERM的训练rank/vLLM子进程随后强制KILL。
+terminated = set()
+deadline = time.monotonic() + 3
+while True:
+    discover()
+    live = [p for p in targets.values() if same(p)]
+    for p in live:
+        identity = (p['pid'], p['start'])
+        if identity not in terminated:
+            send(p, signal.SIGTERM)
+            send(p, signal.SIGCONT)
+            terminated.add(identity)
+    if not live or time.monotonic() >= deadline:
+        break
+    time.sleep(.1)
+deadline = time.monotonic() + 5
+while True:
+    discover()
+    live = [p for p in targets.values() if same(p)]
+    if not live:
+        break
+    for p in live:
+        send(p, signal.SIGKILL)
+    if time.monotonic() >= deadline:
+        sys.exit('仍有任务进程未退出，未覆盖旧代码或启动新API；请检查容器进程。')
+    time.sleep(.1)
+
+# 若有无法识别的API仍持有服务锁，停止部署，不假报重启成功。
+server_lock = (root / 'server.lock').open('a')
+try:
+    fcntl.flock(server_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    sys.exit('服务锁仍被占用，未覆盖源码或启动新API。')
+
+# 进程退出后更新持久状态，防止新API重新调度旧队列。
+cancelled = 0
+was_active = {j['id'] for j in initial_jobs if j['state'] not in done}
+if database.exists():
+    with connect() as db:
+        db.execute('BEGIN IMMEDIATE')
+        for ident, kind, value in db.execute(
+                "SELECT id,kind,payload FROM objects WHERE kind IN ('job','chat')").fetchall():
+            obj = json.loads(value)
+            if obj['state'] in done and not (ident in was_active and obj['state'] == 'failed'):
+                continue
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            fields = {'state': 'cancelled', 'finished_at': now,
+                      'error': {'code': 'SERVICE_RESTART', 'message': '启动脚本强制更新服务，已取消此任务'}}
+            if kind == 'job':
+                fields['wait_reason'] = None
+            obj.update(fields, updated_at=now)
+            db.execute('UPDATE objects SET state=?,payload=? WHERE id=?',
+                       ('cancelled', json.dumps(obj, ensure_ascii=False), ident))
+            db.execute('INSERT INTO events(ref,kind,ts,payload) VALUES(?,?,?,?)',
+                       (ident, 'state', now, json.dumps(fields, ensure_ascii=False)))
+            cancelled += 1
+print('旧API和任务进程已停止；已取消%d条未完成任务/对话记录。' % cancelled, flush=True)
+
+# 无条件原子替换；不会让启动中的解释器读到只复制了一半的源码。
+os.chmod(staged, 0o644)
+os.replace(staged, script)
+if record.exists():
+    record.unlink()
+env = dict(os.environ, VERL_API_DATA_DIR=str(root), VERL_API_MODE='serve', PYTHONUNBUFFERED='1')
+env.pop('VERL_API_JOB', None)
+soft, hard = resource.getrlimit(resource.RLIMIT_STACK)
+try:
+    resource.setrlimit(resource.RLIMIT_STACK, (64 * 1024 * 1024, hard))
+except (OSError, ValueError):
+    pass
+fcntl.flock(server_lock, fcntl.LOCK_UN)
+server_lock.close()
+with (root / 'server.log').open('a') as log:
+    log.write('\n=== 强制部署并启动API %s ===\n' % datetime.datetime.now(datetime.timezone.utc).isoformat())
+    log.flush()
+    child = subprocess.Popen([sys.executable, '-u', str(script), bind, port, model],
+                             cwd=workdir, env=env, stdin=subprocess.DEVNULL,
+                             stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+check_ip = '127.0.0.1' if bind == '0.0.0.0' else bind
+for _ in range(40):
+    if child.poll() is not None:
+        break
+    try:
+        with opener.open('http://%s:%s/healthz' % (check_ip, port), timeout=1) as response:
+            health = json.load(response)
+        started = json.loads(record.read_text())
+        p = proc(child.pid)
+        if (health.get('service') == 'verl-api' and started.get('pid') == child.pid
+                and p and str(started.get('pid_start')) == p['start']):
+            print('已使用本次上传的5_verl_api.py启动新API，PID=%d。' % child.pid, flush=True)
+            break
+    except (OSError, ValueError):
+        pass
+    time.sleep(1)
+else:
+    sys.exit('新API健康检查超时，请查看server.log。')
+if child.poll() is not None:
+    sys.exit('新API已退出（exit=%s），请查看server.log。' % child.returncode)
+PYDEPLOY
 ACCESS_IP="$SERVICE_IP"
 [[ "$SERVICE_IP" != 0.0.0.0 ]] || ACCESS_IP=127.0.0.1
 if command -v curl >/dev/null; then
@@ -212,4 +373,4 @@ echo "读取Key：sudo docker exec $CONTAINER cat $STATE_DIR/api_key"
 echo "API日志：sudo docker exec $CONTAINER tail -f $STATE_DIR/server.log"
 echo "训练情况：GET /api/v1/jobs/{id}/metrics、/logs、/events（需Bearer Key）"
 echo "持久目录：$STATE_DIR；启动PID记录：$STATE_DIR/server_process.json"
-echo "更新代码前先结束活跃任务，再依据PID记录停止API，重新执行此脚本。"
+echo "每次运行本脚本都会取消现有任务、覆盖同目录py并重启API；已有数据和检查点保留。"
