@@ -726,6 +726,6 @@ uv run --frozen --all-packages \
     1、获取key。在API服务启动后，在宿主机执行：
         sudo docker exec verl-l40s cat /workspace/verl_api_data/api_key
     2、在Z-Desktop（或其他code agent）中，执行指令：
-        我已启动了一个基于verl的API服务，请根据该服务"http://172.19.80.144/api-spec"返回的接口规范内容，帮我编制一个基于该verl的API服务的前端网页。
+        我已启动了一个基于verl的API服务，服务IP(API_IP)为172.19.80.144、端口(API_PORT)为7877，请根据该服务"http://API_IP:API_PORT/api-spec"返回的接口规范内容，帮我编制一个基于该verl的API服务的前端网页。
         这个接口服务后台提供的key为：xxxxxx
         我们先讨论下可行性和方案，我确认后再实施。
