@@ -3,8 +3,8 @@
 # bash 5_verl_api.sh 0.0.0.0 7877 /workspace/models/Qwen3-8B
 # 第三个参数也可以是宿主机路径/home/zs/models/Qwen3-8B：优先复用挂载，否则复制。
 # 不重建已有训练容器，不安装宿主机Python，不执行uv sync、不升级torch/CUDA。
-# 如旧容器没有-p映射，复用其本机镜像创建Python标准库TCP转发容器。
-# 转发容器不申请GPU、不加载模型；共享已有镜像层，--pull=never禁止下载镜像。
+# v3：旧容器没有-p映射时，使用sudo nsenter复用运行中容器的Python做宿主机TCP转发。
+# 不新建/下载镜像，不安装宿主机Python，不加载模型；需要宿主机util-linux的nsenter。
 # 脚本后台启动API，重复运行保留现有API/任务，仅检查或修复转发。
 # 默认数据目录/workspace/verl_api_data，应确保/workspace是宿主机挂载目录。
 set -Eeuo pipefail
@@ -128,51 +128,75 @@ if [[ "$MODE" != host ]]; then
         fi
         echo "复用原端口映射: $PUBLISHED"
     else
-        # shellcheck disable=SC2016 # Docker Go模板，不是shell变量。
-        read -r NETWORK TARGET < <("${DOCKER[@]}" inspect -f '{{range $name,$net := .NetworkSettings.Networks}}{{printf "%s %s\n" $name $net.IPAddress}}{{end}}' "$CONTAINER" | head -n 1)
-        [[ -n "${NETWORK:-}" && -n "${TARGET:-}" ]] || { echo "无法取得容器bridge地址，请检查网络。" >&2; exit 2; }
-        PROXY="verl-api-forward-$PORT"
-        # .Image是本机精确镜像ID，不访问镜像仓库，也不复制模型或训练环境。
-        PROXY_IMAGE="$("${DOCKER[@]}" inspect -f '{{.Image}}' "$CONTAINER")"
-        FORWARD_SPEC="python-v1|$PROXY_IMAGE|$NETWORK|$TARGET|$SERVICE_IP|$PORT"
-        REUSE=no
-        if "${DOCKER[@]}" inspect "$PROXY" >/dev/null 2>&1; then
-            OWNER="$("${DOCKER[@]}" inspect -f '{{index .Config.Labels "com.verl-api.target"}}' "$PROXY")"
-            [[ "$OWNER" == "$CONTAINER" ]] || { echo "同名容器不属于本脚本，未修改。" >&2; exit 2; }
-            EXISTING_SPEC="$("${DOCKER[@]}" inspect -f '{{index .Config.Labels "com.verl-api.forward-spec"}}' "$PROXY")"
-            if [[ "$EXISTING_SPEC" == "$FORWARD_SPEC" ]] && \
-               [[ $("${DOCKER[@]}" inspect -f '{{.State.Running}}' "$PROXY") == true ]]; then
-                REUSE=yes
-                echo "复用现有端口转发容器$PROXY。"
-            fi
+        # Linux宿主机保留自身network namespace，仅进入运行中容器的mount/PID空间。
+        # 因而可使用容器可写层及挂载中的Python，在宿主机监听端口；没有新镜像。
+        NSENTER_PATH="$(command -v nsenter || true)"
+        [[ -n "$NSENTER_PATH" ]] || { echo "宿主机缺少nsenter（util-linux）；API仍在运行。" >&2; exit 2; }
+        ROOT_CMD=()
+        if (( EUID != 0 )); then
+            command -v sudo >/dev/null || { echo "端口转发需要sudo运行nsenter。" >&2; exit 2; }
+            ROOT_CMD=(sudo)
+            "${ROOT_CMD[@]}" -v
         fi
-        if [[ "$REUSE" != yes ]]; then
-            echo "检查已有本机镜像中的Python，仅使用本地镜像，不下载..."
-            # 只需标准库，独立检查基础镜像；原容器可写层的.venv不一定在镜像中。
-            # shellcheck disable=SC2016 # Python路径探测在新容器的sh中展开。
-            if ! PROXY_PY="$("${DOCKER[@]}" run --rm --pull=never --network none \
-                -e NVIDIA_VISIBLE_DEVICES=void -e CUDA_VISIBLE_DEVICES= \
-                --security-opt no-new-privileges --cap-drop ALL --entrypoint /bin/sh \
-                "$PROXY_IMAGE" -c '
-for candidate in python3 python /usr/bin/python3 /usr/local/bin/python3 /opt/conda/bin/python; do
-    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" -c "import asyncio,sys; assert sys.version_info >= (3,8)" >/dev/null 2>&1; then
-        command -v "$candidate"
-        exit 0
-    fi
-done
-exit 1
-')"; then
-                echo "原镜像中未找到Python 3.8+（容器可写层可能后来安装过Python）。API仍在运行；本脚本没有下载任何转发镜像。" >&2
-                exit 1
-            fi
-            # 透明TCP双向转发：不解析HTTP、不缓冲完整响应，支持SSE和大文件上传。
-            # stdin不用于传脚本，避免docker -d导致内容未送达；代码直接作为-c参数。
-            PROXY_CODE="$(cat <<'PYPROXY'
+        CONTAINER_PID="$("${DOCKER[@]}" inspect -f '{{.State.Pid}}' "$CONTAINER")"
+        [[ "$CONTAINER_PID" =~ ^[1-9][0-9]*$ ]] || { echo "未取得运行中容器PID。" >&2; exit 2; }
+        HOST_NET="$(readlink /proc/self/ns/net)"
+        ENTER=("${ROOT_CMD[@]}" "$NSENTER_PATH" --target "$CONTAINER_PID" --mount --pid --root --wd --)
+        # 这里有意不加--net，否则监听端口仍落在容器里。
+        echo "检查运行中容器的Python和宿主机网络（不使用原始镜像）..."
+        if ! "${ENTER[@]}" "$PY" -I -c 'import asyncio,fcntl,os,sys; assert os.readlink("/proc/self/ns/net")==sys.argv[1], "未保留宿主机网络"; print("已使用运行中容器Python:",sys.executable)' "$HOST_NET"; then
+            echo "nsenter检查失败，以上为原始错误；需要本机Linux Docker及sudo权限。API仍在运行。" >&2
+            exit 1
+        fi
+        # shellcheck disable=SC2016 # Docker Go模板，不是shell变量。
+        TARGET="$("${DOCKER[@]}" inspect -f '{{range .NetworkSettings.Networks}}{{if .IPAddress}}{{println .IPAddress}}{{end}}{{end}}' "$CONTAINER" | head -n 1)"
+        [[ -n "$TARGET" ]] || { echo "容器没有可供宿主机连接的IPv4地址。" >&2; exit 2; }
+        FORWARD_FILE="$STATE_DIR/port_forward.py"
+        # 写入独立运行时辅助文件；主API的5_verl_api.py不变。
+        "${DOCKER[@]}" exec -i "$CONTAINER" "$PY" -I -c 'import os,pathlib,sys; p=pathlib.Path(sys.argv[1]); q=p.with_suffix(".tmp"); q.write_bytes(sys.stdin.buffer.read()); q.chmod(0o600); os.replace(q,p)' "$FORWARD_FILE" <<'PYFORWARD'
 import asyncio
 import contextlib
+import fcntl
+import json
+import os
+from pathlib import Path
+import signal
+import socket
 import sys
+import time
+import traceback
+import urllib.request
 
-target, port = sys.argv[1], int(sys.argv[2])
+mode, bind, port_text, target, root_text, host_net = sys.argv[1:]
+port = int(port_text)
+root = Path(root_text)
+record = root / ('port_forward_%s.json' % port)
+lock_path = root / ('port_forward_%s.lock' % port)
+log_path = root / ('port_forward_%s.log' % port)
+spec = {'version': 3, 'bind': bind, 'port': port, 'target': target, 'host_net': host_net}
+
+def start_tick(pid):
+    try:
+        text = Path('/proc/%s/stat' % pid).read_text()
+        fields = text[text.rfind(')') + 2:].split()
+        return fields[19] if fields[0] != 'Z' else None
+    except (OSError, IndexError):
+        return None
+
+def load_record():
+    try:
+        return json.loads(record.read_text())
+    except (OSError, ValueError):
+        return {}
+
+def live(info):
+    return bool(info.get('pid_start') and start_tick(info.get('pid')) == info['pid_start'])
+
+def health(host):
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    with opener.open('http://%s:%s/healthz' % (host, port), timeout=4) as response:
+        if json.load(response).get('service') != 'verl-api':
+            raise RuntimeError('目标端口不是verl-api')
 
 async def copy(reader, writer):
     while True:
@@ -206,43 +230,106 @@ async def forward(reader, writer):
                 with contextlib.suppress(Exception):
                     await stream.wait_closed()
 
-async def main():
-    # 固定容器内监听端口17877，宿主机端口由-p控制；目标仍为API的PORT。
-    server = await asyncio.start_server(forward, '0.0.0.0', 17877)
-    print('TCP forward ready: :17877 -> %s:%s' % (target, port), flush=True)
+async def serve(listener):
+    server = await asyncio.start_server(forward, sock=listener)
+    print('TCP forward ready: %s:%s -> %s:%s' % (bind, port, target, port), flush=True)
     async with server:
         await server.serve_forever()
 
-asyncio.run(main())
-PYPROXY
-)"
-            # 新实现预检成功后才替换旧转发；不操作verl训练容器。
-            if "${DOCKER[@]}" inspect "$PROXY" >/dev/null 2>&1; then
-                "${DOCKER[@]}" rm -f "$PROXY" >/dev/null
-            fi
-            echo "创建端口转发容器$PROXY（复用已有镜像，不占GPU）。"
-            "${DOCKER[@]}" run -d --pull=never --name "$PROXY" --restart unless-stopped \
-                --network "$NETWORK" -p "$SERVICE_IP:$PORT:17877" \
-                -e NVIDIA_VISIBLE_DEVICES=void -e CUDA_VISIBLE_DEVICES= \
-                --label "com.verl-api.target=$CONTAINER" --label "com.verl-api.forward-spec=$FORWARD_SPEC" \
-                --security-opt no-new-privileges --cap-drop ALL \
-                --log-opt max-size=10m --log-opt max-file=2 --entrypoint "$PROXY_PY" \
-                "$PROXY_IMAGE" -u -c "$PROXY_CODE" "$TARGET" "$PORT" >/dev/null
-            # 即使宿主机没有curl，也验证转发进程及其本地端口到API的完整链路。
-            READY=no
-            for (( attempt=1; attempt<=10; attempt++ )); do
-                if "${DOCKER[@]}" exec "$PROXY" "$PROXY_PY" -c "$HEALTH_CODE" 127.0.0.1 17877 >/dev/null 2>&1; then
-                    READY=yes
-                    break
-                fi
-                sleep 1
-            done
-            if [[ "$READY" != yes ]]; then
-                echo "转发启动失败；API仍在运行，转发容器日志如下：" >&2
-                "${DOCKER[@]}" logs --tail 60 "$PROXY" >&2 || true
-                exit 1
-            fi
+def main():
+    if mode == 'status':
+        info = load_record()
+        if not live(info) or info.get('spec') != spec:
+            raise RuntimeError('转发进程尚未就绪或配置不匹配')
+        if os.readlink('/proc/self/ns/net') != host_net:
+            raise RuntimeError('健康检查未在宿主机网络执行')
+        health('127.0.0.1' if bind == '0.0.0.0' else bind)
+        print('宿主机端口转发健康检查通过。')
+        return
+    if mode != 'ensure':
+        raise RuntimeError('不支持的内部操作')
+    if os.readlink('/proc/self/ns/net') != host_net:
+        raise RuntimeError('当前进程不在宿主机网络，拒绝启动')
+    health(target)
+    lock = lock_path.open('a')
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        info = load_record()
+        if live(info) and info.get('spec') == spec:
+            print('复用正在运行的宿主机端口转发。')
+            return
+        # 只停止持有此服务状态记录且创建时间匹配的旧转发进程。
+        if not live(info):
+            raise RuntimeError('转发锁已占用但状态不可确认，请稍后重试')
+        os.kill(info['pid'], signal.SIGTERM)
+        for _ in range(50):
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                time.sleep(0.1)
+        else:
+            raise RuntimeError('旧转发尚未退出，未强制终止')
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind((bind, port))  # 先绑定再后台化：端口冲突直接显示给调用者。
+    listener.listen(128)
+    listener.setblocking(False)
+    if log_path.exists() and log_path.stat().st_size > 10 * 1024 * 1024:
+        log_path.replace(log_path.with_suffix('.log.1'))
+    log = log_path.open('a', buffering=1)
+    child = os.fork()
+    if child:
+        print('已启动宿主机端口转发；容器内PID: %s' % child)
+        return
+    os.setsid()
+    signal.signal(signal.SIGHUP, signal.SIG_IGN)
+    with open(os.devnull, 'rb') as null:
+        os.dup2(null.fileno(), 0)
+    os.dup2(log.fileno(), 1)
+    os.dup2(log.fileno(), 2)
+    info = {'pid': os.getpid(), 'pid_start': start_tick(os.getpid()), 'spec': spec}
+    temp = record.with_suffix('.tmp')
+    temp.write_text(json.dumps(info))
+    temp.chmod(0o600)
+    temp.replace(record)
+    try:
+        asyncio.run(serve(listener))
+    finally:
+        # lock对象保持存活，进程退出时内核自动释放文件锁。
+        lock.close()
+
+try:
+    main()
+except Exception:
+    traceback.print_exc()
+    sys.exit(1)
+PYFORWARD
+        # 清理前两版脚本创建的转发容器，仅限本脚本带所有权标签的对象。
+        LEGACY_PROXY="verl-api-forward-$PORT"
+        if "${DOCKER[@]}" inspect "$LEGACY_PROXY" >/dev/null 2>&1; then
+            OWNER="$("${DOCKER[@]}" inspect -f '{{index .Config.Labels "com.verl-api.target"}}' "$LEGACY_PROXY")"
+            [[ "$OWNER" == "$CONTAINER" ]] || { echo "同名转发容器不属于本脚本，未修改。" >&2; exit 2; }
+            "${DOCKER[@]}" rm -f "$LEGACY_PROXY" >/dev/null
         fi
+        echo "启动宿主机$SERVICE_IP:$PORT转发，复用运行中容器的Python..."
+        "${ENTER[@]}" "$PY" -I -u "$FORWARD_FILE" ensure "$SERVICE_IP" "$PORT" "$TARGET" "$STATE_DIR" "$HOST_NET"
+        READY=no
+        for (( attempt=1; attempt<=10; attempt++ )); do
+            if "${ENTER[@]}" "$PY" -I "$FORWARD_FILE" status "$SERVICE_IP" "$PORT" "$TARGET" "$STATE_DIR" "$HOST_NET" >/dev/null 2>&1; then
+                READY=yes
+                break
+            fi
+            sleep 1
+        done
+        if [[ "$READY" != yes ]]; then
+            "${DOCKER[@]}" exec "$CONTAINER" tail -n 60 "$STATE_DIR/port_forward_$PORT.log" >&2 || true
+            echo "宿主机转发检查失败，原API仍在运行。" >&2
+            exit 1
+        fi
+        echo "转发日志：sudo docker exec $CONTAINER tail -f $STATE_DIR/port_forward_$PORT.log"
+        echo "容器重启后，重新执行本脚本以恢复API和转发。"
     fi
 fi
 ACCESS_IP="$SERVICE_IP"
