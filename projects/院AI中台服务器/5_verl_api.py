@@ -43,7 +43,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 SCRIPT = Path(__file__).resolve()
 ROOT = Path(os.environ.get("VERL_API_DATA_DIR", "/workspace/verl_api_data")).resolve()
 MODEL_DEFAULT = "/workspace/models/Qwen3-8B"
@@ -116,6 +116,14 @@ base和外部注册模型继续受保护；已被其他模型/检查点依赖的
 删除记录成功后，原列表不再返回该记录、按ID访问返回404；原始任务的历史来源ID可能保留为追溯信息。
 文件部分删除失败时保留记录，标记不完整；不会把未成功删除的对象从数据库消失。重新预览可重试剩余部分。
 清理审核计划和操作结果保留；SQLite页可能复用，删除历史不保证数据库文件立即缩小。
+
+### 进程占用核验（v1.1.1）
+调度、卸载和删除使用统一job_process_status：status=live/unknown/exited。
+僵尸Z和已退出X进程不算占用；进程组存在本身不证明任务存活。
+通过PID+启动时间、已验证session或VERL_API_JOB标记确认归属，不输出环境变量内容。
+预检blocked_records/process_blockers附PID、状态、PGID/session和归属依据；unknown仍保护文件，但明确说明无法核验。
+重复卸载终态实例会重新核验；有已证实残留则进入stopping并以pidfd停止，不能误杀复用PID/未知进程。
+卸载返回200表示请求已处理，不等于所有进程已退出；检查state及process_status，停止后重新预检。
 
 ## 认证/网络/通用结构
 首次启动自动生成/workspace/verl_api_data/api_key（文件0600）。无需第四启动参数。
@@ -344,11 +352,137 @@ def alive(job):
     return bool(job.get("pid_start") and proc_start(job.get("pid")) == job["pid_start"])
 
 
+def process_snapshot(pid):
+    text = Path(f"/proc/{int(pid)}/stat").read_text()
+    fields = text[text.rfind(")") + 2:].split()
+    return dict(pid=int(pid), state=fields[0], ppid=int(fields[1]),
+                pgid=int(fields[2]), session_id=int(fields[3]), start_time=fields[19])
+
+
+def process_boot_id():
+    try:
+        return Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+    except OSError:
+        return None
+
+
+def process_job_marker(pid, job_id):
+    # Compare only the task marker. Never expose environment contents (keys/secrets).
+    values = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+    return ("VERL_API_JOB=" + job_id).encode() in values
+
+
+def job_process_status(job):
+    """Prove identity separately from existence; zombies never hold task resources."""
+    live, uncertain, ignored = [], [], []
+    pid = job.get("pid")
+    started = job.get("pid_start")
+    boot = process_boot_id()
+    old_boot = job.get("process_boot_id")
+    if old_boot and boot and old_boot != boot:
+        return dict(status="exited", live_processes=[], uncertain_processes=[],
+                    ignored_processes=[{"reason": "previous_boot"}])
+    leader = None
+    leader_unknown = False
+    if pid and started:
+        try:
+            leader = process_snapshot(pid)
+        except (FileNotFoundError, ProcessLookupError):
+            pass
+        except (OSError, ValueError, IndexError):
+            leader_unknown = True
+    leader_matches = bool(leader and leader["start_time"] == str(started))
+    reused = bool(leader and not leader_matches)
+    try:
+        entries = list(Path("/proc").iterdir())
+    except OSError:
+        entries = []
+        uncertain.append({"reason": "proc_inventory_unreadable"})
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        current_pid = int(entry.name)
+        try:
+            info = process_snapshot(current_pid)
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except (OSError, ValueError, IndexError):
+            if current_pid in (pid, job.get("child_pid")):
+                uncertain.append({"pid": current_pid, "reason": "process_stat_unreadable"})
+            continue
+        in_group = bool(pid and info["pgid"] == pid and info["session_id"] == pid)
+        exact_parent = current_pid == pid and leader_matches
+        exact_child = (current_pid == job.get("child_pid") and job.get("child_pid_start")
+                       and info["start_time"] == str(job["child_pid_start"]))
+        candidate = in_group or exact_parent or exact_child
+        if info["state"] in ("Z", "X", "x"):
+            if candidate:
+                ignored.append({**info, "reason": "zombie_or_dead"})
+            continue
+        marker, unreadable = False, False
+        if job.get("id"):
+            try:
+                marker = process_job_marker(current_pid, job["id"])
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+            except OSError:
+                unreadable = True
+        if marker:
+            evidence = "job_environment_marker"
+        elif exact_parent:
+            evidence = "pid_and_start_time"
+        elif exact_child:
+            evidence = "child_pid_and_start_time"
+        elif in_group and leader_matches and int(info["start_time"]) >= int(started):
+            evidence = "verified_worker_session"
+        elif candidate and reused:
+            ignored.append({**info, "reason": "worker_pid_reused"})
+            continue
+        elif candidate:
+            uncertain.append({**info, "reason": "identity_unverified" if not unreadable else "identity_unreadable"})
+            continue
+        else:
+            continue
+        # Recheck identity after reading environ, which can race process exit/reuse.
+        try:
+            again = process_snapshot(current_pid)
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except (OSError, ValueError, IndexError):
+            uncertain.append({**info, "reason": "identity_recheck_failed"})
+            continue
+        if again["start_time"] != info["start_time"] or again["state"] in ("Z", "X", "x"):
+            continue
+        live.append({**again, "evidence": evidence})
+    if leader_unknown and not any(x.get("pid") == pid for x in uncertain):
+        uncertain.append({"pid": pid, "reason": "worker_identity_unreadable"})
+    return dict(status="live" if live else "unknown" if uncertain else "exited",
+                live_processes=live, uncertain_processes=uncertain, ignored_processes=ignored)
+
+
 def stop_process(job, sig=signal.SIGTERM):
-    if alive(job):
-        with contextlib.suppress(ProcessLookupError):
-            if os.getpgid(job["pid"]) == job["pid"]:
-                os.killpg(job["pid"], sig)
+    report = job_process_status(job)
+    actions = []
+    for info in report["live_processes"]:
+        fd = None
+        try:
+            # pidfd pins the process; never signal an unverified/reused whole group.
+            check(hasattr(os, "pidfd_open") and hasattr(signal, "pidfd_send_signal"),
+                  "当前平台不支持安全进程终止(pidfd)", "PROCESS_IDENTITY_UNVERIFIED", 409)
+            fd = os.pidfd_open(info["pid"])
+            current = process_snapshot(info["pid"])
+            if current["start_time"] != info["start_time"] or current["state"] in ("Z", "X", "x"):
+                continue
+            signal.pidfd_send_signal(fd, sig)
+            actions.append({"pid": info["pid"], "signal": int(sig), "sent": True})
+        except (FileNotFoundError, ProcessLookupError):
+            pass
+        except (OSError, Error) as e:
+            actions.append({"pid": info["pid"], "sent": False, "error": str(e)})
+        finally:
+            if fd is not None:
+                os.close(fd)
+    return {**report, "signal_actions": actions}
 
 
 def subenv(**kw):
@@ -1695,7 +1829,7 @@ def logged_process(db, job, argv, env=None, cwd=None, ready=None):
         env=env,
         cwd=cwd,
     )
-    db.update(job["id"], child_pid=p.pid, command=argv)
+    db.update(job["id"], child_pid=p.pid, child_pid_start=proc_start(p.pid), command=argv)
 
     def drain():
         with Path(job["log_path"]).open("a", encoding="utf-8", buffering=1) as out:
@@ -1964,6 +2098,7 @@ def worker():
             job["id"],
             pid=os.getpid(),
             pid_start=proc_start(os.getpid()),
+            process_boot_id=process_boot_id(),
             started_at=stamp(),
         )
         state(db, job["id"], "loading" if job["job_type"] == "inference" else "running")
@@ -2034,18 +2169,8 @@ def worker():
 
 # Storage v1: only server-discovered artifacts may be removed, never arbitrary paths.
 def storage_process_live(job):
-    if alive(job):
-        return True
-    # A worker may exit before its process-group children release output files.
-    if job.get("pid_start") and isinstance(job.get("pid"), int) and job["pid"] > 1:
-        try:
-            os.killpg(job["pid"], 0)
-            return True
-        except ProcessLookupError:
-            pass
-        except PermissionError:
-            return True
-    return False
+    # Unknown ownership is blocked explicitly, never reported as proven alive.
+    return job_process_status(job)["status"] != "exited"
 
 
 def storage_nested_mounts(path):
@@ -2342,7 +2467,8 @@ class Storage:
             reasons.append("产物包含挂载点，禁止递归删除")
         if result["scan_errors"]:
             reasons.append("扫描不完整，请先处理扫描错误")
-        result.update(deletable=not reasons, blocked_reasons=reasons, active_job_ids=active)
+        result.update(deletable=not reasons, blocked_reasons=reasons, active_job_ids=active,
+                      process_blockers=[{"job_id": jid, **job_process_status(self.db.get(jid, "job"))} for jid in active])
         return result
 
     def scan(self):
@@ -2411,22 +2537,26 @@ class Storage:
         for oid, obj in selected.items():
             if oid == "base" or (obj["kind"] == "model" and not obj.get("export_job_id")):
                 reasons.append({"id": oid, "reason": "基座和外部注册模型受保护"})
-            if obj["kind"] == "job" and (obj["state"] not in DONE | {"deleted"} or storage_process_live(obj)):
-                reasons.append({"id": oid, "reason": "任务未结束或进程仍存活，请先停止任务"})
+            if obj["kind"] == "job":
+                report = job_process_status(obj)
+                if obj["state"] not in DONE | {"deleted"} or report["status"] != "exited":
+                    reasons.append({"id": oid, "reason": "进程归属无法核验" if report["status"] == "unknown"
+                                    else "任务未结束或有已核实的存活进程", "process_status": report})
             if obj["kind"] == "dataset":
                 for dv in self.db.all("dataset_version"):
                     if dv.get("dataset_id") == oid and dv["id"] not in ids:
                         reasons.append({"id": oid, "reason": "仍有数据版本，请一并选择或先删除", "dependent_id": dv["id"]})
         # Check IDs even when an artifact is already missing on disk.
         for j in self.db.all("job"):
-            if j["state"] in DONE | {"deleted"} and not storage_process_live(j):
+            report = job_process_status(j)
+            if j["state"] in DONE | {"deleted"} and report["status"] == "exited":
                 continue
             req = j.get("request", {})
             refs = set(j.get("served_models", []))
             refs.update(v for v in (j.get("dataset_id"), j.get("version_id"), j.get("resumed_from"),
                         req.get("model_id"), req.get("dataset_version_id"), req.get("checkpoint_id")) if v)
             for oid in ids & refs:
-                reasons.append({"id": oid, "reason": "活跃或排队任务仍引用此记录", "dependent_id": j["id"]})
+                reasons.append({"id": oid, "reason": "活跃或排队任务仍引用此记录" if report["status"] != "unknown" else "引用任务的进程归属无法核验", "dependent_id": j["id"], "process_status": report})
         for model in self.db.all("model"):
             if model["id"] not in ids and model.get("state") != "deleted" and model.get("base_model_id") in ids:
                 reasons.append({"id": model["base_model_id"], "reason": "其他模型仍依赖此底座", "dependent_id": model["id"]})
@@ -2835,13 +2965,18 @@ class Manager:
     def cancel(self, id):
         with self.lock:
             j = self.db.get(id, "job")
-            if j["state"] in DONE:
-                return j
-            if j["state"] == "queued":
-                return state(self.db, id, "cancelled", finished_at=stamp())
+            report = job_process_status(j)
+            if report["status"] == "exited":
+                if j["state"] in DONE:
+                    return self.db.update(id, process_status=report)
+                return state(self.db, id, "cancelled", finished_at=stamp(), process_status=report)
+            if report["status"] == "unknown":
+                return self.db.update(id, process_status=report,
+                    wait_reason="进程归属无法核验；未向未知进程发信号，请查看process_status")
+            # Even a terminal record must stop verified remaining children.
             j = state(self.db, id, "stopping", stop_requested_at=time.time())
-            stop_process(j)
-            return j
+            report = stop_process(j)
+            return self.db.update(id, process_status=report)
 
     def schedule(self):
         while not self.closed.wait(0.5):
@@ -2860,7 +2995,8 @@ class Manager:
                         if child and child.poll() is not None:
                             self.children.pop(j["id"], None)
                         if j["state"] in LIVE:
-                            if not alive(j):
+                            process_report = job_process_status(j)
+                            if process_report["status"] == "exited":
                                 state(
                                     self.db,
                                     j["id"],
@@ -2868,18 +3004,22 @@ class Manager:
                                     if j["state"] == "stopping"
                                     else "interrupted",
                                     finished_at=stamp(),
+                                    process_status=process_report,
                                     error={
                                         "code": "PROCESS_LOST",
                                         "message": "进程已退出，详见logs",
                                     },
                                 )
+                            elif process_report["status"] == "unknown":
+                                self.db.update(j["id"], process_status=process_report,
+                                    wait_reason="进程归属无法核验，保留任务及文件保护")
                             elif (
                                 j["state"] == "stopping"
                                 and time.time()
                                 - j.get("stop_requested_at", time.time())
                                 > 20
                             ):
-                                stop_process(j, signal.SIGKILL)
+                                self.db.update(j["id"], process_status=stop_process(j, signal.SIGKILL))
                     jobs = self.db.all("job")
                     active = [j for j in jobs if j["state"] in LIVE]
                     cpu = sum(not j.get("gpu_uuids") for j in active)
@@ -2938,7 +3078,7 @@ class Manager:
                             )
                         self.children[j["id"]] = p
                         updated = self.db.update(
-                            j["id"], pid=p.pid, pid_start=proc_start(p.pid)
+                            j["id"], pid=p.pid, pid_start=proc_start(p.pid), process_boot_id=process_boot_id()
                         )
                         active.append(updated)
                         if not j.get("gpu_uuids"):
