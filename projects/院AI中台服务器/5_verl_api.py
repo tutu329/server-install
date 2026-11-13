@@ -53,144 +53,144 @@ SETTINGS = {
     "gpu_poll_seconds": 1.0,
     "auto_unload_inference": True,
     "max_cpu_jobs": 1,
-    "max_upload_bytes": 5 * 1024 ** 3,
+    "max_upload_bytes": 5 * 1024**3,
 }
 SPEC = r"""
-                    # 5_verl_api.py 完整接口规范 v1.0
+# 5_verl_api.py 完整接口规范 v1.0
 
-                    ## 部署与范围
-                    在已有verl环境的容器中运行，只需IP、PORT、MODEL三个位置参数。
-                    默认0.0.0.0 7877 /workspace/models/Qwen3-8B。浏览器使用真实服务器IP，而非0.0.0.0。
-                    数据目录/workspace/verl_api_data，需由/workspace挂载实现持久化。
-                    代码是一个文件；运行生成数据库、数据集、日志、检查点及模型是正常行为。
-                    单机NVIDIA GPU，FSDP/FSDP2；CPT/SFT均支持full/LoRA；文本模型，以Qwen3-8B为适配基线。
-                    API单worker，重型任务在独立进程；API重启不会主动杀掉训练，按PID+进程创建时间接管。
-                    本版不提供RL/OPD、多节点训练、视觉输入、tool calling或任意shell执行接口。
+## 部署与范围
+在已有verl环境的容器中运行，只需IP、PORT、MODEL三个位置参数。
+默认0.0.0.0 7877 /workspace/models/Qwen3-8B。浏览器使用真实服务器IP，而非0.0.0.0。
+数据目录/workspace/verl_api_data，需由/workspace挂载实现持久化。
+代码是一个文件；运行生成数据库、数据集、日志、检查点及模型是正常行为。
+单机NVIDIA GPU，FSDP/FSDP2；CPT/SFT均支持full/LoRA；文本模型，以Qwen3-8B为适配基线。
+API单worker，重型任务在独立进程；API重启不会主动杀掉训练，按PID+进程创建时间接管。
+本版不提供RL/OPD、多节点训练、视觉输入、tool calling或任意shell执行接口。
 
-                    ## 认证/网络/通用结构
-                    首次启动自动生成/workspace/verl_api_data/api_key（文件0600）。无需第四启动参数。
-                    除/healthz、/api-spec、/openapi.json、/docs、/redoc外均需Authorization: Bearer <KEY>。
-                    Swagger使用Authorize。Key不要放URL；推荐z-desktop后端代理保管Key。
-                    CORS默认允许跨源Bearer请求，不使用cookie；PATCH /api/v1/settings可限制cors_origins。
-                    HTTPS前端需要HTTPS反向代理接入。SSE代理关闭缓冲，读取超时大于15秒。
-                    所有路径都是容器路径；所有时间UTC ISO8601，时长秒，内存byte，功耗瓦，温度摄氏度。
-                    错误统一{error:{code,message,details}}；400配置、401认证、404不存在、409状态冲突、
-                    413上传大小、422参数/数据、503环境/GPU/推理不可用。缺失指标为null，不伪造0。
-                    列表{items,total,offset,limit}；一般成功200，异步任务202返回job对象。
-                    job结构：{id,kind:"job",job_type,state,request,result,error,progress,created_at,updated_at,
-                     gpu_uuids,pid?,started_at?,finished_at?,wait_reason?,log_path,output_dir}。
-                    state：queued -> starting -> running -> succeeded/failed；取消->stopping->cancelled；
-                    失联->interrupted。推理为queued->loading->ready，卸载后cancelled。
-                    对象id不可从名称推测。异步操作轮询GET /api/v1/jobs/{id}或订阅events直到结束。
+## 认证/网络/通用结构
+首次启动自动生成/workspace/verl_api_data/api_key（文件0600）。无需第四启动参数。
+除/healthz、/api-spec、/openapi.json、/docs、/redoc外均需Authorization: Bearer <KEY>。
+Swagger使用Authorize。Key不要放URL；推荐z-desktop后端代理保管Key。
+CORS默认允许跨源Bearer请求，不使用cookie；PATCH /api/v1/settings可限制cors_origins。
+HTTPS前端需要HTTPS反向代理接入。SSE代理关闭缓冲，读取超时大于15秒。
+所有路径都是容器路径；所有时间UTC ISO8601，时长秒，内存byte，功耗瓦，温度摄氏度。
+错误统一{error:{code,message,details}}；400配置、401认证、404不存在、409状态冲突、
+413上传大小、422参数/数据、503环境/GPU/推理不可用。缺失指标为null，不伪造0。
+列表{items,total,offset,limit}；一般成功200，异步任务202返回job对象。
+job结构：{id,kind:"job",job_type,state,request,result,error,progress,created_at,updated_at,
+ gpu_uuids,pid?,started_at?,finished_at?,wait_reason?,log_path,output_dir}。
+state：queued -> starting -> running -> succeeded/failed；取消->stopping->cancelled；
+失联->interrupted。推理为queued->loading->ready，卸载后cancelled。
+对象id不可从名称推测。异步操作轮询GET /api/v1/jobs/{id}或订阅events直到结束。
 
-                    ## 数据准备
-                    POST /api/v1/datasets {name,task_type:"sft"|"cpt"}创建可编辑原始数据集。
-                    POST /api/v1/datasets/{id}/samples {samples:[...]}追加，最多10000条/请求。
-                    GET同路径查看；PUT /samples/{index} {sample:{...}}替换；DELETE /samples/{index}删除。
-                    POST /api/v1/datasets/{id}/upload：multipart字段file，JSON/JSONL/Parquet，CPT另支持TXT/MD。
-                    POST /api/v1/datasets/{id}/import {path:"容器内文件"}先复制快照，返回import job。
-                    JSON应为数组或{samples:[...]}；JSONL每行一条对象。TXT/MD整个文件是一篇CPT文档。
-                    CPT记录：{text:"正文",source_id:"文档ID",metadata:{...}}。
-                    SFT记录：{messages:[{role:"user",content:"问题"},{role:"assistant",content:"答案"}],source_id:"案例ID"}。
-                    兼容instruction/input/output。仅允许system?+user/assistant交替，以assistant结束。
-                    assistant可提供reasoning_content，或content中的完整<think>...</think>；不能同时提供两者。
-                    enable_thinking按样本指定，默认根据是否有非空思考块推断；true必须有思考示范。
-                    metadata不进入正文；本服务不自动生成问答，Word/PDF解析和教师生成可由z-desktop完成。
-                    POST /api/v1/datasets/demo {task_type:"sft"}创建16条不同演示样本。
-                    POST /api/v1/datasets/{id}/prepare {model_id:"base",max_length:1024,validation_ratio:0.05,
-                     seed:42,deduplicate:true,assistant_scope:"all",overlength:"error",on_invalid:"error"}返回prepare job。
-                    成功result={dataset_version_id,report}。版本不可变，训练绑定版本ID。
-                    先去重并按source_id分组划分train/val，再切块，避免同源文档泄漏；缺失source_id用内容hash。
-                    小样本演示设置validation_ratio=0。按分组划分的实际比例可能与设定值不同，报告如实返回。
-                    CPT文末EOS，长文按token切块、保留一个上下文token衔接，不跨文档混拼；首token不监督。
-                    SFT all将每个assistant回合展开为完整历史+当前答案，每条仅当前答案受监督；last只保留末轮。
-                    完整chat_template与generation prompt严格检查token前缀，不忽略Qwen3模板不一致。
-                    overlength=error/drop/truncate；truncate可能裁掉答案尾部，监督为空则报错或按on_invalid跳过。
-                    on_invalid=error/skip；报告统计原始数、重复数、无效数、切分数、token分布，保留前100条错误。
-                    GET /api/v1/dataset-versions及/{id}查询；/{id}/preview?split=train&offset=0&limit=5返回
-                    input_ids/loss_mask/decoded_text/supervised_text。mask与输入对齐，未提前shift，shift由verl做。
-                    /{id}/files/{name}可下载train.parquet、val.parquet、manifest.json、report.json。
+## 数据准备
+POST /api/v1/datasets {name,task_type:"sft"|"cpt"}创建可编辑原始数据集。
+POST /api/v1/datasets/{id}/samples {samples:[...]}追加，最多10000条/请求。
+GET同路径查看；PUT /samples/{index} {sample:{...}}替换；DELETE /samples/{index}删除。
+POST /api/v1/datasets/{id}/upload：multipart字段file，JSON/JSONL/Parquet，CPT另支持TXT/MD。
+POST /api/v1/datasets/{id}/import {path:"容器内文件"}先复制快照，返回import job。
+JSON应为数组或{samples:[...]}；JSONL每行一条对象。TXT/MD整个文件是一篇CPT文档。
+CPT记录：{text:"正文",source_id:"文档ID",metadata:{...}}。
+SFT记录：{messages:[{role:"user",content:"问题"},{role:"assistant",content:"答案"}],source_id:"案例ID"}。
+兼容instruction/input/output。仅允许system?+user/assistant交替，以assistant结束。
+assistant可提供reasoning_content，或content中的完整<think>...</think>；不能同时提供两者。
+enable_thinking按样本指定，默认根据是否有非空思考块推断；true必须有思考示范。
+metadata不进入正文；本服务不自动生成问答，Word/PDF解析和教师生成可由z-desktop完成。
+POST /api/v1/datasets/demo {task_type:"sft"}创建16条不同演示样本。
+POST /api/v1/datasets/{id}/prepare {model_id:"base",max_length:1024,validation_ratio:0.05,
+ seed:42,deduplicate:true,assistant_scope:"all",overlength:"error",on_invalid:"error"}返回prepare job。
+成功result={dataset_version_id,report}。版本不可变，训练绑定版本ID。
+先去重并按source_id分组划分train/val，再切块，避免同源文档泄漏；缺失source_id用内容hash。
+小样本演示设置validation_ratio=0。按分组划分的实际比例可能与设定值不同，报告如实返回。
+CPT文末EOS，长文按token切块、保留一个上下文token衔接，不跨文档混拼；首token不监督。
+SFT all将每个assistant回合展开为完整历史+当前答案，每条仅当前答案受监督；last只保留末轮。
+完整chat_template与generation prompt严格检查token前缀，不忽略Qwen3模板不一致。
+overlength=error/drop/truncate；truncate可能裁掉答案尾部，监督为空则报错或按on_invalid跳过。
+on_invalid=error/skip；报告统计原始数、重复数、无效数、切分数、token分布，保留前100条错误。
+GET /api/v1/dataset-versions及/{id}查询；/{id}/preview?split=train&offset=0&limit=5返回
+input_ids/loss_mask/decoded_text/supervised_text。mask与输入对齐，未提前shift，shift由verl做。
+/{id}/files/{name}可下载train.parquet、val.parquet、manifest.json、report.json。
 
-                    ## 训练与参数
-                    POST /api/v1/jobs/validate与POST /api/v1/jobs使用同一TrainRequest。
-                    示例：{task_type:"sft",finetune:"lora",dataset_version_id:"dv_...",model_id:"base",gpu_ids:[0,1,2,3],
-                     train_batch_size:4,micro_batch_size_per_gpu:1,epochs:1,max_steps:2,
-                     lora:{rank:16,alpha:32,target_modules:"all-linear"}}。
-                    全参默认lr=1e-5，LoRA=1e-4；rank16/alpha32；FP32主参数+引擎默认BF16混合计算；
-                    FSDP2，梯度检查点开启，torch compile关闭，no_padding，静态batch，数据worker=0。
-                    GPU索引/UUID取自/gpus；内部CUDA_VISIBLE_DEVICES使用UUID。GPU数必须兼容并行参数。
-                    global batch需能被DP大小整除；静态micro batch需整除每DP batch；数据需够一个完整batch。
-                    max_steps受epochs限制，不会自动无限重复；validate返回实际步数上限和警告。
-                    高级verl_overrides使用扁平原生字段，如{"engine.offload_policy":true,"optim.weight_decay":0.01}。
-                    优先级：实际verl默认 < 服务常用字段 < verl_overrides；validate返回resolved_config及启动argv。
-                    模型路径、数据路径/长度/custom_cls、GPU数量、输出、logger、resume由服务管理，不能高级覆盖。
-                    未知字段或未实现的后端拒绝；禁止Hydra动态类、插值和自定义代码。
-                    FSDP当前LoRA的dropout/rsLoRA不开放，避免接受但不生效；支持rank/alpha/target/exclude模块。
-                    runtime_env仅限OMP_NUM_THREADS、NCCL_DEBUG、NCCL_P2P_DISABLE、NCCL_IB_DISABLE、
-                    NCCL_SOCKET_IFNAME、NCCL_SHM_DISABLE、NCCL_NET_GDR_LEVEL、NCCL_P2P_LEVEL。
-                    checkpoint保存model/optimizer/extra；save_freq=-1仍保存最后一步；以完整回调确认后登记。
-                    GET /api/v1/jobs?kind=train&state=running，GET /jobs/{id}查询状态。
-                    POST /jobs/{id}/cancel停止整个已登记进程组，20秒后强制终止；不保证临停时新建checkpoint。
-                    POST /jobs/{id}/resume {checkpoint_id,additional_epochs:1}创建新任务，从完整检查点恢复。
-                    恢复使用原数据和GPU数量；max_steps清空，总epochs增加；不是任意step的无损暂停。
+## 训练与参数
+POST /api/v1/jobs/validate与POST /api/v1/jobs使用同一TrainRequest。
+示例：{task_type:"sft",finetune:"lora",dataset_version_id:"dv_...",model_id:"base",gpu_ids:[0,1,2,3],
+ train_batch_size:4,micro_batch_size_per_gpu:1,epochs:1,max_steps:2,
+ lora:{rank:16,alpha:32,target_modules:"all-linear"}}。
+全参默认lr=1e-5，LoRA=1e-4；rank16/alpha32；FP32主参数+引擎默认BF16混合计算；
+FSDP2，梯度检查点开启，torch compile关闭，no_padding，静态batch，数据worker=0。
+GPU索引/UUID取自/gpus；内部CUDA_VISIBLE_DEVICES使用UUID。GPU数必须兼容并行参数。
+global batch需能被DP大小整除；静态micro batch需整除每DP batch；数据需够一个完整batch。
+max_steps受epochs限制，不会自动无限重复；validate返回实际步数上限和警告。
+高级verl_overrides使用扁平原生字段，如{"engine.offload_policy":true,"optim.weight_decay":0.01}。
+优先级：实际verl默认 < 服务常用字段 < verl_overrides；validate返回resolved_config及启动argv。
+模型路径、数据路径/长度/custom_cls、GPU数量、输出、logger、resume由服务管理，不能高级覆盖。
+未知字段或未实现的后端拒绝；禁止Hydra动态类、插值和自定义代码。
+FSDP当前LoRA的dropout/rsLoRA不开放，避免接受但不生效；支持rank/alpha/target/exclude模块。
+runtime_env仅限OMP_NUM_THREADS、NCCL_DEBUG、NCCL_P2P_DISABLE、NCCL_IB_DISABLE、
+NCCL_SOCKET_IFNAME、NCCL_SHM_DISABLE、NCCL_NET_GDR_LEVEL、NCCL_P2P_LEVEL。
+checkpoint保存model/optimizer/extra；save_freq=-1仍保存最后一步；以完整回调确认后登记。
+GET /api/v1/jobs?kind=train&state=running，GET /jobs/{id}查询状态。
+POST /jobs/{id}/cancel停止整个已登记进程组，20秒后强制终止；不保证临停时新建checkpoint。
+POST /jobs/{id}/resume {checkpoint_id,additional_epochs:1}创建新任务，从完整检查点恢复。
+恢复使用原数据和GPU数量；max_steps清空，总epochs增加；不是任意step的无损暂停。
 
-                    ## 训练情况、曲线和日志（前端重要）
-                    GET /api/v1/jobs/{id}/metrics?after=0&limit=1000
-                    返回{items:[{seq,timestamp,step,elapsed_seconds,metrics:{原始verl键值},summary:{loss,validation_loss,
-                     learning_rate,grad_norm,epoch,tokens_per_second,step_seconds}}],next_after}。
-                    after是事件序号，不是step；step为优化器更新步。指标从verl Tracking.log回调提取，非解析进度条。
-                    历史metrics独立持久化；日志事件滚动清理不影响loss全历史。step_seconds是墙钟间隔，可能包括验证/保存。
-                    GET /jobs/{id}/logs?offset=0&limit=65536 返回{text,next_offset,size,eof}。
-                    offset单位byte，最大读取1MiB/次，UTF-8边界安全；日志保存完整stdout/stderr。
-                    GET /jobs/{id}/events?after=0 为SSE；支持Last-Event-ID。事件state/metric/log/checkpoint/heartbeat/reset。
-                    每帧id: seq、event:类型、data:{seq,ref_id,kind,timestamp,payload}。15秒心跳。
-                    最近50000事件可续传；游标过期收到reset，此时重新GET metrics及logs补历史。
-                    GET /api/v1/events同格式用于所有任务。浏览器用fetch流携带Bearer，EventSource不能设置此header。
-                    GET /api/v1/gpus返回{available,timestamp,gpus,error?}；GPU项包含index/uuid/name、显存byte、
-                    利用率%、温度、功耗、时钟、驱动、进程及reserved_by。不可读值null；GPU利用率不同于MFU。
-                    GET /api/v1/gpus/events按gpu_poll_seconds推送快照，不保存GPU历史。
+## 训练情况、曲线和日志（前端重要）
+GET /api/v1/jobs/{id}/metrics?after=0&limit=1000
+返回{items:[{seq,timestamp,step,elapsed_seconds,metrics:{原始verl键值},summary:{loss,validation_loss,
+ learning_rate,grad_norm,epoch,tokens_per_second,step_seconds}}],next_after}。
+after是事件序号，不是step；step为优化器更新步。指标从verl Tracking.log回调提取，非解析进度条。
+历史metrics独立持久化；日志事件滚动清理不影响loss全历史。step_seconds是墙钟间隔，可能包括验证/保存。
+GET /jobs/{id}/logs?offset=0&limit=65536 返回{text,next_offset,size,eof}。
+offset单位byte，最大读取1MiB/次，UTF-8边界安全；日志保存完整stdout/stderr。
+GET /jobs/{id}/events?after=0 为SSE；支持Last-Event-ID。事件state/metric/log/checkpoint/heartbeat/reset。
+每帧id: seq、event:类型、data:{seq,ref_id,kind,timestamp,payload}。15秒心跳。
+最近50000事件可续传；游标过期收到reset，此时重新GET metrics及logs补历史。
+GET /api/v1/events同格式用于所有任务。浏览器用fetch流携带Bearer，EventSource不能设置此header。
+GET /api/v1/gpus返回{available,timestamp,gpus,error?}；GPU项包含index/uuid/name、显存byte、
+利用率%、温度、功耗、时钟、驱动、进程及reserved_by。不可读值null；GPU利用率不同于MFU。
+GET /api/v1/gpus/events按gpu_poll_seconds推送快照，不保存GPU历史。
 
-                    ## 模型、导出、推理实例
-                    GET /api/v1/models为全部登记版本。POST /models/register {name,path,model_kind:"full"|"lora",base_model_id?}。
-                    base是启动模型；同一数据目录重启应保持该路径，其他模型通过register添加。
-                    GET /checkpoints?job_id=...列完整检查点；被保留策略清理的项state=missing。
-                    POST /exports {checkpoint_id,name,format:"auto"|"adapter"|"merged"}返回export job。
-                    全参auto导出HF；LoRA auto/adapter导出PEFT adapter并绑定底座，merged导出合并HF。
-                    导出是CPU任务，需要足够RAM/磁盘；成功result={model_id,path,model_kind}。
-                    GET /models/{id}/files列文件；/files/{relative_path}下载目录内文件。没有任意删除模型接口。
-                    POST /inference {model_id:"base",gpu_ids:[0],tensor_parallel_size:1,dtype:"bfloat16",
-                     gpu_memory_utilization:0.7,max_model_len:8192,max_num_seqs:2,max_lora_rank:64,enforce_eager:true}
-                    返回inference job，等待ready；GET /inference列表，DELETE /inference/{id}卸载。
-                    默认同一卡训练/推理互斥；训练等待当前生成完成后卸载冲突的本系统实例，外部进程不终止。
-                    指定不同GPU可并行。vLLM仅绑定容器127.0.0.1随机内部端口，统一由7877代理并隐藏内部key。
-                    LoRA实例可选择adapter或同一底座对话；不同全参版本可不同GPU加载或顺序卸载对比。
-                    POST /inference/{id}/adapters {model_id}动态加载同底座adapter；DELETE /adapters/{model_id}卸载。
-                    GET /v1/models仅列ready的对话模型；PATCH /api/v1/models/{id}/chat-defaults设置版本默认参数。
+## 模型、导出、推理实例
+GET /api/v1/models为全部登记版本。POST /models/register {name,path,model_kind:"full"|"lora",base_model_id?}。
+base是启动模型；同一数据目录重启应保持该路径，其他模型通过register添加。
+GET /checkpoints?job_id=...列完整检查点；被保留策略清理的项state=missing。
+POST /exports {checkpoint_id,name,format:"auto"|"adapter"|"merged"}返回export job。
+全参auto导出HF；LoRA auto/adapter导出PEFT adapter并绑定底座，merged导出合并HF。
+导出是CPU任务，需要足够RAM/磁盘；成功result={model_id,path,model_kind}。
+GET /models/{id}/files列文件；/files/{relative_path}下载目录内文件。没有任意删除模型接口。
+POST /inference {model_id:"base",gpu_ids:[0],tensor_parallel_size:1,dtype:"bfloat16",
+ gpu_memory_utilization:0.7,max_model_len:8192,max_num_seqs:2,max_lora_rank:64,enforce_eager:true}
+返回inference job，等待ready；GET /inference列表，DELETE /inference/{id}卸载。
+默认同一卡训练/推理互斥；训练等待当前生成完成后卸载冲突的本系统实例，外部进程不终止。
+指定不同GPU可并行。vLLM仅绑定容器127.0.0.1随机内部端口，统一由7877代理并隐藏内部key。
+LoRA实例可选择adapter或同一底座对话；不同全参版本可不同GPU加载或顺序卸载对比。
+POST /inference/{id}/adapters {model_id}动态加载同底座adapter；DELETE /adapters/{model_id}卸载。
+GET /v1/models仅列ready的对话模型；PATCH /api/v1/models/{id}/chat-defaults设置版本默认参数。
 
-                    ## 对话
-                    POST /v1/chat/completions {model:"base",messages:[{role:"user",content:"你好"}],stream:true,
-                     enable_thinking:false,temperature:0.7,max_tokens:2048}。
-                    多轮消息为system/user/assistant文本；历史只需最终回答，不需回传先前思考。
-                    请求显式值 > 版本默认 > 模式预设。默认thinking=true；开启时temperature=.6/top_p=.95/top_k=20/
-                    min_p=0/max_tokens=4096；关闭时temperature=.7/top_p=.8/top_k=20/min_p=0/max_tokens=2048。
-                    其余默认repetition_penalty=1、presence_penalty=0、frequency_penalty=0、seed=null、stop=null。
-                    max_tokens包含思考+答案；finish_reason=length可能尚无最终回答。thinking_token_budget只在后端实际支持时允许。
-                    返回reasoning_content和content分别显示思考/答案；兼容vLLM旧reasoning_content及新reasoning字段。
-                    非流式返回OpenAI风格choices/usage，增加request_id、effective_parameters、timing。
-                    流式data:JSON\n\n，末尾data:[DONE]；增量在choices[].delta；额外metadata帧choices为空，
-                    携带effective_parameters或timing，前端必须容忍空choices。错误帧{error:{code,message}}。
-                    响应header X-Request-ID；GET /api/v1/chat/requests/{id}查询，POST同路径/cancel取消当前生成。
-                    聊天流不支持重放；断连会关闭上游请求。系统只保存调用元信息，不持久保存完整聊天正文。
-                    timing含elapsed_seconds、time_to_first_token_seconds、output_tokens_per_second；缺usage时速度null。
+## 对话
+POST /v1/chat/completions {model:"base",messages:[{role:"user",content:"你好"}],stream:true,
+ enable_thinking:false,temperature:0.7,max_tokens:2048}。
+多轮消息为system/user/assistant文本；历史只需最终回答，不需回传先前思考。
+请求显式值 > 版本默认 > 模式预设。默认thinking=true；开启时temperature=.6/top_p=.95/top_k=20/
+min_p=0/max_tokens=4096；关闭时temperature=.7/top_p=.8/top_k=20/min_p=0/max_tokens=2048。
+其余默认repetition_penalty=1、presence_penalty=0、frequency_penalty=0、seed=null、stop=null。
+max_tokens包含思考+答案；finish_reason=length可能尚无最终回答。thinking_token_budget只在后端实际支持时允许。
+返回reasoning_content和content分别显示思考/答案；兼容vLLM旧reasoning_content及新reasoning字段。
+非流式返回OpenAI风格choices/usage，增加request_id、effective_parameters、timing。
+流式data:JSON\n\n，末尾data:[DONE]；增量在choices[].delta；额外metadata帧choices为空，
+携带effective_parameters或timing，前端必须容忍空choices。错误帧{error:{code,message}}。
+响应header X-Request-ID；GET /api/v1/chat/requests/{id}查询，POST同路径/cancel取消当前生成。
+聊天流不支持重放；断连会关闭上游请求。系统只保存调用元信息，不持久保存完整聊天正文。
+timing含elapsed_seconds、time_to_first_token_seconds、output_tokens_per_second；缺usage时速度null。
 
-                    ## 推荐前端流程
-                    system/capabilities/gpus -> 创建/上传数据 -> prepare -> 预览 -> jobs/validate -> jobs ->
-                    订阅events画loss并用logs显示日志 -> checkpoints -> exports -> inference -> 对话比较。
-                    验收可先datasets/demo，再prepare(max_length=128,validation_ratio=0)，max_steps=2训练。
-                    不要把job返回202当作训练成功；等待state。对比时固定问题、版本和采样参数。
-                    GET /api/v1/config/defaults提供实际verl完整配置。/openapi.json给出每个请求字段类型/范围/默认值。
-                    以下代码中的请求模型和路由即规范的一部分；/api-spec会附加所有请求JSON Schema及路由表。
-                    """
+## 推荐前端流程
+system/capabilities/gpus -> 创建/上传数据 -> prepare -> 预览 -> jobs/validate -> jobs ->
+订阅events画loss并用logs显示日志 -> checkpoints -> exports -> inference -> 对话比较。
+验收可先datasets/demo，再prepare(max_length=128,validation_ratio=0)，max_steps=2训练。
+不要把job返回202当作训练成功；等待state。对比时固定问题、版本和采样参数。
+GET /api/v1/config/defaults提供实际verl完整配置。/openapi.json给出每个请求字段类型/范围/默认值。
+以下代码中的请求模型和路由即规范的一部分；/api-spec会附加所有请求JSON Schema及路由表。
+"""
 
 
 def stamp():
@@ -240,7 +240,7 @@ def atomic(path, value):
 def sha(path):
     h = hashlib.sha256()
     with Path(path).open("rb") as f:
-        for b in iter(lambda: f.read(1024 ** 2), b""):
+        for b in iter(lambda: f.read(1024**2), b""):
             h.update(b)
     return h.hexdigest()
 
@@ -284,7 +284,7 @@ def version(package):
 def proc_start(pid):
     try:
         text = Path(f"/proc/{pid}/stat").read_text()
-        f = text[text.rfind(")") + 2:].split()
+        f = text[text.rfind(")") + 2 :].split()
         return f[19] if f[0] != "Z" else None
     except (OSError, IndexError):
         return None
@@ -313,10 +313,10 @@ class DB:
         with self.connect() as c:
             c.execute("PRAGMA journal_mode=WAL")
             c.executescript("""CREATE TABLE IF NOT EXISTS objects(id TEXT PRIMARY KEY,kind TEXT,state TEXT,payload TEXT,created TEXT);
-                                CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,ref TEXT,kind TEXT,ts TEXT,payload TEXT);
-                                CREATE INDEX IF NOT EXISTS event_ref ON events(ref,seq);
-                                CREATE TABLE IF NOT EXISTS metrics(seq INTEGER PRIMARY KEY,ref TEXT,ts TEXT,payload TEXT);
-                                CREATE INDEX IF NOT EXISTS metric_ref ON metrics(ref,seq);""")
+            CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,ref TEXT,kind TEXT,ts TEXT,payload TEXT);
+            CREATE INDEX IF NOT EXISTS event_ref ON events(ref,seq);
+            CREATE TABLE IF NOT EXISTS metrics(seq INTEGER PRIMARY KEY,ref TEXT,ts TEXT,payload TEXT);
+            CREATE INDEX IF NOT EXISTS metric_ref ON metrics(ref,seq);""")
 
     @contextlib.contextmanager
     def connect(self):
@@ -437,7 +437,7 @@ def settings(db):
 
 def page(rows, offset=0, limit=50):
     return {
-        "items": rows[offset: offset + limit],
+        "items": rows[offset : offset + limit],
         "total": len(rows),
         "offset": offset,
         "limit": limit,
@@ -488,7 +488,7 @@ class PrepareRequest(Schema):
         description="上下文和答案总token上限；改变此值应重新准备数据",
     )
     validation_ratio: float = Field(0.05, ge=0, le=0.5)
-    seed: int = Field(42, ge=0, le=2 ** 31 - 1)
+    seed: int = Field(42, ge=0, le=2**31 - 1)
     deduplicate: bool = True
     assistant_scope: Literal["all", "last"] = "all"
     overlength: Literal["error", "drop", "truncate"] = "error"
@@ -538,7 +538,7 @@ class TrainRequest(Schema):
     max_checkpoints: int | None = Field(
         None, ge=1, description="每任务保留最近N份分片；null全保留，注意磁盘"
     )
-    seed: int = Field(42, ge=0, le=2 ** 31 - 1)
+    seed: int = Field(42, ge=0, le=2**31 - 1)
     verl_overrides: dict[str, Any] = Field(
         default_factory=dict, description="扁平原生配置；覆盖常用字段，管理字段除外"
     )
@@ -573,7 +573,7 @@ class ChatOptions(Schema):
     repetition_penalty: float | None = Field(None, gt=0, le=3)
     presence_penalty: float | None = Field(None, ge=-2, le=2)
     frequency_penalty: float | None = Field(None, ge=-2, le=2)
-    seed: int | None = Field(None, ge=0, le=2 ** 63 - 1)
+    seed: int | None = Field(None, ge=0, le=2**63 - 1)
     stop: str | list[str] | None = None
     thinking_token_budget: int | None = Field(None, ge=1, le=131072)
 
@@ -615,7 +615,7 @@ class SettingsRequest(Schema):
     gpu_poll_seconds: float | None = Field(None, ge=0.5, le=30)
     auto_unload_inference: bool | None = None
     max_cpu_jobs: int | None = Field(None, ge=1, le=4)
-    max_upload_bytes: int | None = Field(None, ge=1024, le=100 * 1024 ** 3)
+    max_upload_bytes: int | None = Field(None, ge=1024, le=100 * 1024**3)
 
 
 def tokenizer(path):
@@ -669,7 +669,7 @@ def normalize(row, task):
             {
                 "role": "user",
                 "content": row["instruction"]
-                           + ("\n\n" + row["input"] if row.get("input") else ""),
+                + ("\n\n" + row["input"] if row.get("input") else ""),
             },
             {"role": "assistant", "content": row.get("output", "")},
         ]
@@ -783,6 +783,10 @@ def append(db, id, records):
 
 
 def sft_tokens(tok, row, scope):
+    # Freeze the selected template for the full/prefix pair. In Transformers 5,
+    # apply_chat_template defaults to BatchEncoding: len(result) counts fields,
+    # not tokens. Always request a flat list explicitly, in both TF4 and TF5.
+    template = tok.get_chat_template()
     targets = [i for i, m in enumerate(row["messages"]) if m["role"] == "assistant"]
     if scope == "last":
         targets = targets[-1:]
@@ -799,7 +803,7 @@ def sft_tokens(tok, row, scope):
                     422,
                 )
                 msg["content"] = (
-                        "<think>\n" + reason + "\n</think>\n\n" + msg["content"]
+                    "<think>\n" + reason + "\n</think>\n\n" + msg["content"]
                 )
             chat.append(msg)
         reason = bool(re.search(r"<think>\s*\S[\s\S]*?</think>", chat[-1]["content"]))
@@ -810,18 +814,58 @@ def sft_tokens(tok, row, scope):
             "INVALID_SAMPLE",
             422,
         )
-        kw = {"tokenize": True, "enable_thinking": thinking}
-        prompt = tok.apply_chat_template(chat[:-1], add_generation_prompt=True, **kw)
-        full = tok.apply_chat_template(chat, add_generation_prompt=False, **kw)
+        kw = {
+            "chat_template": template,
+            "enable_thinking": thinking,
+            "return_dict": False,
+            "return_tensors": None,
+            "padding": False,
+            "truncation": False,
+        }
+        prefix_text = tok.apply_chat_template(
+            chat[:-1], add_generation_prompt=True, tokenize=False, **kw
+        )
+        full_text = tok.apply_chat_template(
+            chat, add_generation_prompt=False, tokenize=False, **kw
+        )
+        prefix_ids = tok.apply_chat_template(
+            chat[:-1], add_generation_prompt=True, tokenize=True, **kw
+        )
+        full_ids = tok.apply_chat_template(
+            chat, add_generation_prompt=False, tokenize=True, **kw
+        )
         check(
-            len(full) > len(prompt) and full[: len(prompt)] == prompt,
+            all(isinstance(ids, list) and all(type(t) is int for t in ids)
+                for ids in (prefix_ids, full_ids)),
+            "模板token化结果必须是一维整数列表",
+            "TEMPLATE_MISMATCH",
+            422,
+        )
+        # apply_chat_template(tokenize=True) internally uses add_special_tokens=False.
+        # Verify that rendering and tokenization agree; never concatenate tokens
+        # or silently trim a prefix to make a mismatching template pass.
+        check(
+            prefix_ids == tok.encode(prefix_text, add_special_tokens=False)
+            and full_ids == tok.encode(full_text, add_special_tokens=False),
+            "模板文本与实际token化结果不一致",
+            "TEMPLATE_MISMATCH",
+            422,
+        )
+        check(
+            full_text.startswith(prefix_text),
+            "完整模板与生成前缀文本不一致，请检查模型模板",
+            "TEMPLATE_MISMATCH",
+            422,
+        )
+        check(
+            len(full_ids) > len(prefix_ids) and full_ids[: len(prefix_ids)] == prefix_ids,
             "完整模板与生成前缀token不一致，请检查模型模板",
             "TEMPLATE_MISMATCH",
             422,
         )
         yield {
-            "input_ids": full,
-            "loss_mask": [0] * len(prompt) + [1] * (len(full) - len(prompt)),
+            "input_ids": full_ids,
+            "loss_mask": [0] * len(prefix_ids) + [1] * (len(full_ids) - len(prefix_ids)),
             "target_turn": i,
             "enable_thinking": thinking,
         }
@@ -834,7 +878,7 @@ def cpt_tokens(tok, row, length):
         ids.append(tok.eos_token_id)
     start = 0
     while start < len(ids) - 1:
-        part = ids[start: start + length]
+        part = ids[start : start + length]
         yield {
             "input_ids": part,
             "loss_mask": [0] + [1] * (len(part) - 1),
@@ -848,7 +892,7 @@ class PreparedDataset:
     """verl custom_cls。mask不在这里shift，首token为0防止样本边界串监督。"""
 
     def __init__(
-            self, parquet_files, tokenizer, config, processor=None, max_samples=-1
+        self, parquet_files, tokenizer, config, processor=None, max_samples=-1
     ):
         import pandas as pd
 
@@ -938,13 +982,13 @@ def prepare_data(db, job):
                 seen.add(digest)
                 source = r["source_id"] or digest
                 score = (
-                        int(
-                            hashlib.sha256(f"{cfg.seed}:{source}".encode()).hexdigest()[
+                    int(
+                        hashlib.sha256(f"{cfg.seed}:{source}".encode()).hexdigest()[
                             :16
-                            ],
-                            16,
-                        )
-                        / 2 ** 64
+                        ],
+                        16,
+                    )
+                    / 2**64
                 )
                 split = "val" if score < cfg.validation_ratio else "train"
                 # 每条原始样本先整体校验，skip不会留下半条多轮对话。
@@ -987,10 +1031,15 @@ def prepare_data(db, job):
                         )
                         buffers[split].clear()
             except Exception as e:
+                if isinstance(e, Error) and e.code == "TEMPLATE_MISMATCH":
+                    # Template/encoding bugs are fatal even when invalid data may
+                    # be skipped. Preserve the response schema and locate the row.
+                    e.message = f"样本index={i}, source_id={raw.get('source_id', '')!r}: {e}"
+                    e.args = (e.message,)
                 report["invalid"] += 1
                 if len(report["issues"]) < 100:
                     report["issues"].append({"raw_index": i, "error": str(e)})
-                if cfg.on_invalid == "error":
+                if cfg.on_invalid == "error" or getattr(e, "code", None) == "TEMPLATE_MISMATCH":
                     raise
             if i % 100 == 0:
                 db.update(job["id"], progress={"processed_samples": i + 1})
@@ -1059,9 +1108,9 @@ def gpu_snapshot(db):
                     index=int(r[0]),
                     uuid=r[1],
                     name=r[2],
-                    memory_total_bytes=num(r[3], 1024 ** 2),
-                    memory_used_bytes=num(r[4], 1024 ** 2),
-                    memory_free_bytes=num(r[5], 1024 ** 2),
+                    memory_total_bytes=num(r[3], 1024**2),
+                    memory_used_bytes=num(r[4], 1024**2),
+                    memory_free_bytes=num(r[5], 1024**2),
                     utilization_gpu_percent=num(r[6]),
                     utilization_memory_percent=num(r[7]),
                     temperature_c=num(r[8]),
@@ -1092,7 +1141,7 @@ def gpu_snapshot(db):
                             {
                                 "pid": int(r[1]),
                                 "name": r[2].strip(),
-                                "memory_used_bytes": num(r[-1], 1024 ** 2),
+                                "memory_used_bytes": num(r[-1], 1024**2),
                             }
                         )
         except Exception as e:
@@ -1153,7 +1202,7 @@ def compose(overrides=None):
     from omegaconf import OmegaConf, open_dict
 
     with initialize_config_dir(
-            config_dir=str(verl_path() / "trainer" / "config"), version_base=None
+        config_dir=str(verl_path() / "trainer" / "config"), version_base=None
     ):
         cfg = hc(config_name="sft_trainer_engine")
     with open_dict(cfg):
@@ -1181,7 +1230,7 @@ def probe():
             from vllm import SamplingParams
 
             budget = (
-                    "thinking_token_budget" in inspect.signature(SamplingParams).parameters
+                "thinking_token_budget" in inspect.signature(SamplingParams).parameters
             )
         except Exception:
             pass
@@ -1340,12 +1389,12 @@ def training_config(db, req, output, environment, resume=None):
     }
     v.update(r.verl_overrides)
     for key in (
-            "data.train_batch_size",
-            "data.micro_batch_size_per_gpu",
-            "engine.ulysses_sequence_parallel_size",
-            "trainer.total_epochs",
-            "model.lora_rank",
-            "model.lora_alpha",
+        "data.train_batch_size",
+        "data.micro_batch_size_per_gpu",
+        "engine.ulysses_sequence_parallel_size",
+        "trainer.total_epochs",
+        "model.lora_rank",
+        "model.lora_alpha",
     ):
         check(type(v[key]) is int, f"{key}必须是整数")
     check(
@@ -1443,7 +1492,7 @@ def verify_model(path, kind):
         )
         for index in p.glob("*.index.json"):
             for name in set(
-                    json.loads(index.read_text()).get("weight_map", {}).values()
+                json.loads(index.read_text()).get("weight_map", {}).values()
             ):
                 check((p / name).is_file(), f"权重分片缺失:{name}")
 
@@ -1474,7 +1523,7 @@ def checkpoint(db, job, step):
             and (p / f"extra_state_world_size_{n}_rank_{r}.pt").is_file()
             for r in range(n)
         )
-                     and all(
+        and all(
             (p / f"data_{r}.pt").is_file()
             for r in range(job["training_config"]["data_parallel_size"])
         ),
@@ -1536,8 +1585,8 @@ def train_rank():
                 values["api/step_wall_seconds"] = wall
                 if isinstance(values.get("train/global_tokens"), (int, float)):
                     values["api/tokens_per_second"] = values[
-                                                          "train/global_tokens"
-                                                      ] / max(wall, 1e-6)
+                        "train/global_tokens"
+                    ] / max(wall, 1e-6)
                 clock[:] = [tick, step]
             summary = metric_summary(values)
             if summary["epoch"] is None:
@@ -1825,10 +1874,10 @@ def inference_worker(db, job):
         def ready():
             try:
                 if (
-                        client.get(
-                            url + "/health", headers={"Authorization": "Bearer " + key}
-                        ).status_code
-                        == 200
+                    client.get(
+                        url + "/health", headers={"Authorization": "Bearer " + key}
+                    ).status_code
+                    == 200
                 ):
                     state(db, job["id"], "ready", ready_at=stamp())
                     return True
@@ -2021,9 +2070,9 @@ class Manager:
     def gpus(self, force=False):
         with self.gpu_lock:
             if (
-                    force
-                    or time.monotonic() - self.gpu_time
-                    >= settings(self.db)["gpu_poll_seconds"]
+                force
+                or time.monotonic() - self.gpu_time
+                >= settings(self.db)["gpu_poll_seconds"]
             ):
                 self.gpu_value = gpu_snapshot(self.db)
                 self.gpu_time = time.monotonic()
@@ -2147,10 +2196,10 @@ class Manager:
                                     },
                                 )
                             elif (
-                                    j["state"] == "stopping"
-                                    and time.time()
-                                    - j.get("stop_requested_at", time.time())
-                                    > 20
+                                j["state"] == "stopping"
+                                and time.time()
+                                - j.get("stop_requested_at", time.time())
+                                > 20
                             ):
                                 stop_process(j, signal.SIGKILL)
                     jobs = self.db.all("job")
@@ -2160,8 +2209,8 @@ class Manager:
                         if j["state"] != "queued":
                             continue
                         if (
-                                not j.get("gpu_uuids")
-                                and cpu >= settings(self.db)["max_cpu_jobs"]
+                            not j.get("gpu_uuids")
+                            and cpu >= settings(self.db)["max_cpu_jobs"]
                         ):
                             continue
                         conflict = [
@@ -2172,17 +2221,17 @@ class Manager:
                         if conflict:
                             for a in conflict:
                                 if (
-                                        j["job_type"] == "train"
-                                        and a["job_type"] == "inference"
-                                        and a["state"] == "ready"
-                                        and settings(self.db)["auto_unload_inference"]
-                                        and not self.chat_counts.get(a["id"], 0)
+                                    j["job_type"] == "train"
+                                    and a["job_type"] == "inference"
+                                    and a["state"] == "ready"
+                                    and settings(self.db)["auto_unload_inference"]
+                                    and not self.chat_counts.get(a["id"], 0)
                                 ):
                                     self.cancel(a["id"])
                             self.db.update(
                                 j["id"],
                                 wait_reason="等待GPU任务释放:"
-                                            + ",".join(a["id"] for a in conflict),
+                                + ",".join(a["id"] for a in conflict),
                             )
                             continue
                         if j.get("gpu_uuids"):
@@ -2190,8 +2239,8 @@ class Manager:
                                 self.db.update(j["id"], wait_reason="等待GPU可用")
                                 continue
                             if any(
-                                    g["uuid"] in j["gpu_uuids"] and g["processes"]
-                                    for g in snap["gpus"]
+                                g["uuid"] in j["gpu_uuids"] and g["processes"]
+                                for g in snap["gpus"]
                             ):
                                 self.db.update(
                                     j["id"], wait_reason="GPU仍有外部或尚未释放的进程"
@@ -2244,7 +2293,7 @@ def chat_params(r, defaults, budget):
     for source in (defaults, explicit):
         for k, v in source.items():
             if k in ChatOptions.model_fields and (
-                    v is not None or k in ("seed", "stop", "thinking_token_budget")
+                v is not None or k in ("seed", "stop", "thinking_token_budget")
             ):
                 p[k] = v
     check(
@@ -2414,16 +2463,16 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
             if method in {"get", "post", "put", "delete", "patch"}
         )
         return (
-                SPEC
-                + "\n\n## 路由表\n```text\n"
-                + routes
-                + "\n```\n\n## 所有字段Schema（由同文件模型生成）\n```json\n"
-                + json.dumps(
-            schema.get("components", {}).get("schemas", {}),
-            ensure_ascii=False,
-            indent=2,
-        )
-                + "\n```\n"
+            SPEC
+            + "\n\n## 路由表\n```text\n"
+            + routes
+            + "\n```\n\n## 所有字段Schema（由同文件模型生成）\n```json\n"
+            + json.dumps(
+                schema.get("components", {}).get("schemas", {}),
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n```\n"
         )
 
     @api.get("/api/v1/system", tags=["环境"])
@@ -2507,7 +2556,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
         async def stream():
             while not await request.is_disconnected():
                 yield (
-                        "event: gpu\ndata: " + js(await asyncio.to_thread(m.gpus)) + "\n\n"
+                    "event: gpu\ndata: " + js(await asyncio.to_thread(m.gpus)) + "\n\n"
                 )
                 await asyncio.sleep(settings(db)["gpu_poll_seconds"])
 
@@ -2551,7 +2600,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/datasets", tags=["数据"])
     def list_datasets(
-            offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)
+        offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)
     ):
         return page(db.all("dataset"), offset, limit)
 
@@ -2565,7 +2614,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/datasets/{id}/samples", tags=["数据"])
     def get_samples(
-            id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=200)
+        id: str, offset: int = Query(0, ge=0), limit: int = Query(20, ge=1, le=200)
     ):
         ds = db.get(id, "dataset")
         p = db.root / "datasets" / id / "raw.jsonl"
@@ -2628,7 +2677,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
         size = 0
         try:
             with p.open("wb") as out:
-                while b := await file.read(1024 ** 2):
+                while b := await file.read(1024**2):
                     size += len(b)
                     check(
                         size <= settings(db)["max_upload_bytes"],
@@ -2685,7 +2734,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/dataset-versions", tags=["数据"])
     def dataset_versions(
-            offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)
+        offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200)
     ):
         return page(db.all("dataset_version"), offset, limit)
 
@@ -2695,10 +2744,10 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/dataset-versions/{id}/preview", tags=["数据"])
     def preview(
-            id: str,
-            split: Literal["train", "val"] = "train",
-            offset: int = Query(0, ge=0),
-            limit: int = Query(5, ge=1, le=20),
+        id: str,
+        split: Literal["train", "val"] = "train",
+        offset: int = Query(0, ge=0),
+        limit: int = Query(5, ge=1, le=20),
     ):
         import pyarrow.parquet as pq
 
@@ -2707,18 +2756,19 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
         result = []
         i = 0
         for batch in pq.ParquetFile(Path(dv["path"]) / f"{split}.parquet").iter_batches(
-                batch_size=64
+            batch_size=64
         ):
             for row in batch.to_pylist():
                 if i < offset:
                     i += 1
                     continue
                 row["decoded_text"] = tok.decode(
-                    row["input_ids"], skip_special_tokens=False
+                    row["input_ids"], skip_special_tokens=False, clean_up_tokenization_spaces=False
                 )
                 row["supervised_text"] = tok.decode(
                     [t for t, mask in zip(row["input_ids"], row["loss_mask"]) if mask],
                     skip_special_tokens=False,
+                    clean_up_tokenization_spaces=False,
                 )
                 result.append(row)
                 if len(result) >= limit:
@@ -2754,17 +2804,17 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/jobs", tags=["任务"])
     def jobs(
-            kind: str | None = None,
-            state: str | None = None,
-            offset: int = Query(0, ge=0),
-            limit: int = Query(50, ge=1, le=200),
+        kind: str | None = None,
+        state: str | None = None,
+        offset: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
     ):
         return page(
             [
                 public(j)
                 for j in db.all("job")
                 if (not kind or j["job_type"] == kind)
-                   and (not state or j["state"] == state)
+                and (not state or j["state"] == state)
             ],
             offset,
             limit,
@@ -2795,7 +2845,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
         body = dict(original["request"])
         body.update(
             epochs=int(original["training_config"]["overrides"]["trainer.total_epochs"])
-                   + r.additional_epochs,
+            + r.additional_epochs,
             max_steps=None,
             name=body["name"] + "-resume",
         )
@@ -2811,7 +2861,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/jobs/{id}/metrics", tags=["监控"])
     def metrics(
-            id: str, after: int = Query(0, ge=0), limit: int = Query(1000, ge=1, le=10000)
+        id: str, after: int = Query(0, ge=0), limit: int = Query(1000, ge=1, le=10000)
     ):
         db.get(id, "job")
         items = db.metric_rows(id, after, limit)
@@ -2819,9 +2869,9 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/jobs/{id}/logs", tags=["监控"])
     def logs(
-            id: str,
-            offset: int = Query(0, ge=0),
-            limit: int = Query(65536, ge=4, le=1048576),
+        id: str,
+        offset: int = Query(0, ge=0),
+        limit: int = Query(65536, ge=4, le=1048576),
     ):
         p = Path(db.get(id, "job")["log_path"])
         if not p.exists():
@@ -2850,14 +2900,14 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
             if cursor and cursor < minimum - 1:
                 cursor = minimum - 1
                 yield (
-                        "event: reset\ndata: "
-                        + js(
-                    {
-                        "next_after": cursor,
-                        "reason": "事件窗口已过，请从metrics/logs补读",
-                    }
-                )
-                        + "\n\n"
+                    "event: reset\ndata: "
+                    + js(
+                        {
+                            "next_after": cursor,
+                            "reason": "事件窗口已过，请从metrics/logs补读",
+                        }
+                    )
+                    + "\n\n"
                 )
             while not await request.is_disconnected():
                 for event in await asyncio.to_thread(db.events, cursor, ref):
@@ -2865,9 +2915,9 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
                     yield f"id: {cursor}\nevent: {event['kind']}\ndata: {js(event)}\n\n"
                 if time.monotonic() - heartbeat >= 15:
                     yield (
-                            "event: heartbeat\ndata: "
-                            + js({"timestamp": stamp(), "after": cursor})
-                            + "\n\n"
+                        "event: heartbeat\ndata: "
+                        + js({"timestamp": stamp(), "after": cursor})
+                        + "\n\n"
                     )
                     heartbeat = time.monotonic()
                 await asyncio.sleep(0.4)
@@ -2889,9 +2939,9 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/checkpoints", tags=["版本"])
     def checkpoints(
-            job_id: str | None = None,
-            offset: int = Query(0, ge=0),
-            limit: int = Query(50, ge=1, le=200),
+        job_id: str | None = None,
+        offset: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
     ):
         return page(
             [c for c in db.all("checkpoint") if not job_id or c["job_id"] == job_id],
@@ -3116,9 +3166,9 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
                 j
                 for j in db.all("job")
                 if j["job_type"] == "inference"
-                   and j["state"] == "ready"
-                   and r.model in j.get("served_models", [])
-                   and (not r.instance_id or j["id"] == r.instance_id)
+                and j["state"] == "ready"
+                and r.model in j.get("served_models", [])
+                and (not r.instance_id or j["id"] == r.instance_id)
             ]
             check(
                 candidates,
@@ -3244,16 +3294,16 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
             m.chat_tasks[id] = asyncio.current_task()
             try:
                 yield (
-                        "data: "
-                        + js(
-                    {
-                        "object": "chat.completion.chunk",
-                        "choices": [],
-                        "request_id": id,
-                        "effective_parameters": params,
-                    }
-                )
-                        + "\n\n"
+                    "data: "
+                    + js(
+                        {
+                            "object": "chat.completion.chunk",
+                            "choices": [],
+                            "request_id": id,
+                            "effective_parameters": params,
+                        }
+                    )
+                    + "\n\n"
                 )
                 async for line in response.aiter_lines():
                     if not line.startswith("data:"):
@@ -3269,7 +3319,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
                     for choice in obj.get("choices", []):
                         delta = choice.get("delta", {})
                         if first is None and (
-                                delta.get("content") or delta.get("reasoning_content")
+                            delta.get("content") or delta.get("reasoning_content")
                         ):
                             first = time.monotonic() - started
                     if obj.get("usage"):
@@ -3281,17 +3331,17 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
                         "上游流提前断开，未收到[DONE]", "STREAM_INCOMPLETE", 503
                     )
                 yield (
-                        "data: "
-                        + js(
-                    {
-                        "object": "chat.completion.chunk",
-                        "choices": [],
-                        "request_id": id,
-                        "timing": timing(first, usage),
-                        "usage": usage,
-                    }
-                )
-                        + "\n\n"
+                    "data: "
+                    + js(
+                        {
+                            "object": "chat.completion.chunk",
+                            "choices": [],
+                            "request_id": id,
+                            "timing": timing(first, usage),
+                            "usage": usage,
+                        }
+                    )
+                    + "\n\n"
                 )
                 yield "data: [DONE]\n\n"
             except asyncio.CancelledError:
@@ -3301,17 +3351,17 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
                 status = "failed"
                 error = str(e)
                 yield (
-                        "data: "
-                        + js(
-                    {
-                        "error": {
-                            "code": getattr(e, "code", "STREAM_FAILED"),
-                            "message": str(e),
-                        },
-                        "request_id": id,
-                    }
-                )
-                        + "\n\ndata: [DONE]\n\n"
+                    "data: "
+                    + js(
+                        {
+                            "error": {
+                                "code": getattr(e, "code", "STREAM_FAILED"),
+                                "message": str(e),
+                            },
+                            "request_id": id,
+                        }
+                    )
+                    + "\n\ndata: [DONE]\n\n"
                 )
             finally:
                 await asyncio.shield(finish(status, timing(first, usage), usage, error))
