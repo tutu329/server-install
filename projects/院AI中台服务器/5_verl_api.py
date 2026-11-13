@@ -29,6 +29,7 @@ import secrets
 import shutil
 import signal
 import socket
+import stat
 import sqlite3
 import subprocess
 import sys
@@ -42,7 +43,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 SCRIPT = Path(__file__).resolve()
 ROOT = Path(os.environ.get("VERL_API_DATA_DIR", "/workspace/verl_api_data")).resolve()
 MODEL_DEFAULT = "/workspace/models/Qwen3-8B"
@@ -56,7 +57,7 @@ SETTINGS = {
     "max_upload_bytes": 5 * 1024**3,
 }
 SPEC = r"""
-# 5_verl_api.py 完整接口规范 v1.0
+# 5_verl_api.py 完整接口规范 v1.1
 
 ## 部署与范围
 在已有verl环境的容器中运行，只需IP、PORT、MODEL三个位置参数。
@@ -66,6 +67,55 @@ SPEC = r"""
 单机NVIDIA GPU，FSDP/FSDP2；CPT/SFT均支持full/LoRA；文本模型，以Qwen3-8B为适配基线。
 API单worker，重型任务在独立进程；API重启不会主动杀掉训练，按PID+进程创建时间接管。
 本版不提供RL/OPD、多节点训练、视觉输入、tool calling或任意shell执行接口。
+
+## 磁盘查看与手动清理（v1.1）
+所有 /api/v1/storage/* 接口沿用 Bearer Key。仅管理容器可见文件；不扫描宿主机其他目录。
+GET /storage/summary：volumes为按设备去重的磁盘total/used/free_bytes，categories为已发现产物分类占用。
+磁盘已用包含其他程序，不等于本API占用。分类统计不含数据库/环境缓存等，跨产物硬链接可能重复计数。
+首次state=not_scanned。POST /storage/scan返回202，后台扫描；轮询summary直到succeeded/failed。
+扫描结果包含scanned_at、error；无需每次页面刷新重新扫描。扫描不跟随符号链接、不读取权重内容。
+GET /storage/artifacts?type=checkpoint&job_id=...&min_bytes=0&sort=size_desc&offset=0&limit=50
+返回items/total/offset/limit/scanned_at。type可为checkpoint/model/residual/dataset_version/snapshot/log/raw_dataset。
+每项有artifact_id/type/path/job_id/object_ids/step、size_bytes、allocated_bytes、file_count、modified_at、
+deletable/blocked_reasons/active_job_ids、scan_errors；删除权限为扫描时快照，不保证之后可删除。
+GET /storage/artifacts/{artifact_id}/files?offset=0&limit=100：实时扫描单个产物，按大小降序返回相对路径、大小。
+预览 POST /storage/cleanup/preview：
+1. {"mode":"selected","artifact_ids":["artifact_..."]} 精确选择完整产物；不接受任意路径。
+2. {"mode":"old_checkpoints","job_id":"job_...","keep_last":2} 保留step最高的2个检查点。
+3. {"mode":"job_outputs","job_id":"job_..."} 删除该任务的检查点/模型/失败输出；日志和loss不删。
+导出模型属于export任务；清理原训练任务不会顺带清理其独立export任务的模型。
+返回计划id、items、executable、estimated_bytes、effects和expires_at(Unix秒)，有效15分钟。
+存在任何阻止项时executable=false，不会偷偷跳过后执行其余项；请重新选择。
+执行 POST /storage/cleanup {"plan_id":"storage_plan_...","confirm":true} 返回202和清理记录id。
+轮询 GET /storage/cleanup/{id}，state=queued/running/succeeded/failed/interrupted；
+items逐项报告成功/失败/error，completed/total是产物数，deleted_bytes是完整删除项分配大小估计。
+free_bytes_delta是数据盘可用空间实测差值，包含并发写入影响，不保证等于deleted_bytes。
+计划一次性使用；重复提交、过期、文件变化或新增依赖返回409，必须重新预览。
+真正unlink/rmtree释放文件，不设回收站；不删除任务历史、数据库、API Key、原始数据、日志和loss。
+保护base、外部注册模型、符号链接目录以及活跃/排队任务引用的产物；不自动停止任务。
+现存LoRA模型的底座和数据版本预览依赖的tokenizer也受保护；历史来源checkpoint关系不阻止独立模型保留。
+清理期间数据/模型文件读取与对象操作、任务创建/验证、adapter加载返回STORAGE_BUSY(409)，已有无关任务继续执行。
+删除检查点state=missing,resumable=false；模型/数据版本state=deleted；storage_state记录删除状态。
+被删除/不完整产物再次用于任务返回ARTIFACT_UNAVAILABLE(409)，记录保留用于追溯。
+服务重启不会自动重放删除；中断清理state=interrupted，重新扫描、预览后才能继续。
+前端顺序：summary→必要时scan→artifacts→files→preview展示影响→用户确认→cleanup→轮询→刷新列表。
+
+### 删除数据对象与历史记录
+GET /storage/records?type=dataset&offset=0&limit=50 提供可选择的对象记录。
+type=dataset/dataset_version/train_job/checkpoint/model/inference/other_job；记录不存在文件时仍可清理。
+POST /storage/cleanup/preview {"mode":"records","record_ids":["dataset_...","dv_...","job_...","ckpt_...","model_..."]}
+返回records（完整最终删除列表）、blocked_records、items（文件清单）、executable、effects。
+执行仍使用 POST /storage/cleanup {"plan_id":"...","confirm":true}，轮询同一状态接口。
+删除数据集需先删除或同时选中其全部数据版本；不会静默级联其他独立任务。
+删除任务时，所属checkpoint、导出模型或准备的数据版本自动明确列入预览，依赖检查仍适用。
+删除训练任务不会删除由独立export任务产生的模型；删除推理历史只允许已结束且进程已退出的实例。
+重要区别：普通selected/job_outputs/old_checkpoints文件清理保留日志和loss；
+records模式删除任务/推理历史会永久删除该任务记录、日志、loss、事件及任务自有目录。
+数据集原始文件仅在records模式明确删除数据集时才可删除。
+base和外部注册模型继续受保护；已被其他模型/检查点依赖的底座不能删除。
+删除记录成功后，原列表不再返回该记录、按ID访问返回404；原始任务的历史来源ID可能保留为追溯信息。
+文件部分删除失败时保留记录，标记不完整；不会把未成功删除的对象从数据库消失。重新预览可重试剩余部分。
+清理审核计划和操作结果保留；SQLite页可能复用，删除历史不保证数据库文件立即缩小。
 
 ## 认证/网络/通用结构
 首次启动自动生成/workspace/verl_api_data/api_key（文件0600）。无需第四启动参数。
@@ -1982,11 +2032,629 @@ def worker():
             f.close()
 
 
+# Storage v1: only server-discovered artifacts may be removed, never arbitrary paths.
+def storage_process_live(job):
+    if alive(job):
+        return True
+    # A worker may exit before its process-group children release output files.
+    if job.get("pid_start") and isinstance(job.get("pid"), int) and job["pid"] > 1:
+        try:
+            os.killpg(job["pid"], 0)
+            return True
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            return True
+    return False
+
+
+def storage_nested_mounts(path):
+    # ismount() alone misses same-filesystem bind mounts on Linux.
+    p = Path(path).absolute()
+    found = []
+    try:
+        for line in Path("/proc/self/mountinfo").read_text().splitlines():
+            fields = line.split()
+            mount = Path(re.sub(r"\\([0-7]{3})", lambda m: chr(int(m[1], 8)), fields[4]))
+            if mount == p or mount.is_relative_to(p):
+                found.append(str(mount))
+    except (OSError, IndexError):
+        # Fail closed for Linux-managed destructive operations if mount inventory fails.
+        return ["无法核验/proc/self/mountinfo"]
+    return found
+
+
+class CleanupPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    artifact_ids: list[str] = Field(default_factory=list, max_length=500)
+    job_id: str | None = None
+    mode: Literal["selected", "old_checkpoints", "job_outputs", "records"] = "selected"
+    record_ids: list[str] = Field(default_factory=list, max_length=500)
+    keep_last: int = Field(2, ge=0)
+
+
+class CleanupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    plan_id: str
+    confirm: Literal[True]
+
+
+def storage_overlap(a, b):
+    a, b = Path(a).resolve(), Path(b).resolve()
+    return a == b or a.is_relative_to(b) or b.is_relative_to(a)
+
+
+def storage_measure(path, details=False):
+    """Metadata-only scan, no symlink traversal; signature detects stale previews."""
+    p = Path(path)
+    result = dict(size_bytes=0, allocated_bytes=0, file_count=0,
+                  modified_at=None, scan_errors=[], has_symlinks=False, has_mounts=False, files=[])
+    digest = hashlib.sha256()
+    seen = set()
+    newest = 0
+
+    def visit(f):
+        nonlocal newest
+        try:
+            st = f.lstat()
+            rel = str(f.relative_to(p)) if f != p else "."
+            digest.update(js([rel, st.st_dev, st.st_ino, st.st_mode, st.st_size,
+                              st.st_mtime_ns, st.st_ctime_ns, st.st_nlink]).encode())
+            newest = max(newest, st.st_mtime)
+            if f.is_dir() and os.path.ismount(f):
+                result["has_mounts"] = True
+            if stat.S_ISLNK(st.st_mode):
+                result["has_symlinks"] = True
+                return
+            if not stat.S_ISREG(st.st_mode):
+                return
+            result["file_count"] += 1
+            if (st.st_dev, st.st_ino) not in seen:
+                result["size_bytes"] += st.st_size
+                result["allocated_bytes"] += st.st_blocks * 512
+                seen.add((st.st_dev, st.st_ino))
+            if details:
+                result["files"].append(dict(path=rel, size_bytes=st.st_size,
+                    allocated_bytes=st.st_blocks * 512, hardlink_count=st.st_nlink))
+        except OSError as e:
+            result["scan_errors"].append(str(e))
+
+    visit(p)
+    if p.is_dir() and not p.is_symlink():
+        def error(e):
+            result["scan_errors"].append(str(e))
+        for root, dirs, files in os.walk(p, followlinks=False, onerror=error):
+            dirs.sort()
+            for name in sorted(dirs + files):
+                visit(Path(root) / name)
+    result["signature"] = digest.hexdigest()
+    result["modified_at"] = datetime.fromtimestamp(newest, timezone.utc).isoformat() if newest else None
+    if not details:
+        result.pop("files")
+    return result
+
+
+class StorageLeaseMiddleware:
+    def __init__(self, app, storage):
+        self.app, self.storage = app, storage
+
+    async def __call__(self, scope, receive, send):
+        path = scope.get("path", "")
+        guarded = scope["type"] == "http" and (
+            any(path.startswith("/api/v1/" + prefix) for prefix in
+                ("datasets", "dataset-versions", "models", "exports", "inference"))
+            or (path.startswith("/api/v1/jobs") and (scope.get("method") == "POST" or path.endswith("/logs"))))
+        if not guarded:
+            return await self.app(scope, receive, send)
+        with self.storage.lease_lock:
+            busy = self.storage.cleaning
+            if not busy:
+                self.storage.readers += 1
+        if busy:
+            from starlette.responses import JSONResponse
+            return await JSONResponse({"error": {"code": "STORAGE_BUSY", "message": "清理进行中，请稍后重试"}},
+                                      status_code=409)(scope, receive, send)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            with self.storage.lease_lock:
+                self.storage.readers -= 1
+
+
+class Storage:
+    def __init__(self, manager):
+        self.m, self.db = manager, manager.db
+        self.lock = threading.RLock()
+        self.scan_state = {"state": "not_scanned", "scanned_at": None, "items": []}
+        self.cleaning = False
+        self.lease_lock = threading.Lock()
+        self.readers = 0
+        self.threads = []
+
+    def recover(self):
+        # Never replay an interrupted destructive operation automatically.
+        for kind in ("storage_plan", "storage_cleanup"):
+            for obj in self.db.all(kind):
+                if obj["state"] in ("running", "queued", "executing"):
+                    self.db.update(obj["id"], state="interrupted",
+                        error="服务重启打断清理；请重新扫描并预览。已删除部分不会恢复。")
+        for kind in ("checkpoint", "model", "dataset_version", "dataset", "job"):
+            for obj in self.db.all(kind):
+                if obj.get("storage_state") == "deleting":
+                    self.db.update(obj["id"], state="missing" if kind == "checkpoint" else "deleted",
+                        storage_state="interrupted", storage_deleted_at=stamp(),
+                        **({"resumable": False} if kind == "checkpoint" else {}))
+
+    def available(self, obj):
+        check(obj.get("storage_state") not in ("deleting", "deleted", "interrupted", "delete_failed")
+              and obj.get("state") not in ("deleted", "missing"),
+              "产物已删除、清理中或不完整: " + obj["id"], "ARTIFACT_UNAVAILABLE", 409)
+        check(Path(obj["path"]).exists(), "产物文件不存在: " + obj["id"], "ARTIFACT_UNAVAILABLE", 409)
+
+    def model_paths(self, id, visited=None):
+        visited = set() if visited is None else visited
+        if id in visited:
+            return []
+        visited.add(id)
+        obj = self.db.get(id, "model")
+        paths = [obj["path"], obj.get("tokenizer_path", obj["path"])]
+        if obj.get("base_model_id"):
+            paths += self.model_paths(obj["base_model_id"], visited)
+        return paths
+
+    def admit(self, request, extra=None):
+        """Called under manager lock at enqueue, not merely at earlier validation."""
+        check(not self.cleaning, "清理进行中，请完成后重试", "STORAGE_BUSY", 409)
+        values = {**request, **(extra or {})}
+        if values.get("dataset_id"):
+            obj = self.db.get(values["dataset_id"], "dataset")
+            check(obj.get("state") != "deleted", "数据集已删除", "ARTIFACT_UNAVAILABLE", 409)
+        for field, kind in (("model_id", "model"), ("dataset_version_id", "dataset_version"),
+                            ("checkpoint_id", "checkpoint"), ("resumed_from", "checkpoint")):
+            if values.get(field):
+                obj = self.db.get(values[field], kind)
+                self.available(obj)
+                if kind == "model":
+                    for path in self.model_paths(obj["id"]):
+                        check(Path(path).exists(), "模型依赖文件不存在", "ARTIFACT_UNAVAILABLE", 409)
+
+    def catalog(self):
+        items = {}
+        def add(path, kind, obj=None, job=None, readonly=False):
+            p = Path(path).absolute()
+            if not p.exists() and not p.is_symlink():
+                return
+            key = "artifact_" + hashlib.sha256(str(p).encode()).hexdigest()[:24]
+            if key in items:
+                if obj:
+                    items[key]["object_ids"].append(obj["id"])
+                items[key]["readonly"] |= readonly
+                return
+            items[key] = dict(artifact_id=key, type=kind, path=str(p),
+                job_id=job, object_ids=[obj["id"]] if obj else [], readonly=readonly,
+                step=obj.get("step") if obj else None)
+        models = self.db.all("model")
+        for obj in models:
+            add(obj["path"], "model", obj, obj.get("export_job_id"),
+                readonly=obj["id"] == "base" or not obj.get("export_job_id"))
+        for obj in self.db.all("checkpoint"):
+            add(obj["path"], "checkpoint", obj, obj.get("job_id"))
+        for obj in self.db.all("dataset_version"):
+            add(obj["path"], "dataset_version", obj)
+        for job in self.db.all("job"):
+            out = Path(job["output_dir"])
+            if out.is_dir() and not out.is_symlink():
+                for child in sorted(out.iterdir()):
+                    # Do not create a parent residual encompassing a known nested artifact.
+                    if not any(storage_overlap(child, a["path"]) for a in items.values()):
+                        add(child, "residual", job=job["id"])
+            if job.get("version_id"):
+                add(self.db.root / "dataset_versions" / job["version_id"],
+                    "dataset_version", job=job["id"])
+                for a in items.values():
+                    if a["path"] == str(self.db.root / "dataset_versions" / job["version_id"]):
+                        a["job_id"] = job["id"]
+            if job.get("snapshot"):
+                add(job["snapshot"], "snapshot", job=job["id"])
+            if job.get("log_path"):
+                add(job["log_path"], "log", job=job["id"], readonly=True)
+        for obj in self.db.all("dataset"):
+            add(self.db.root / "datasets" / obj["id"], "raw_dataset", obj, readonly=True)
+        return items
+
+    def blockers(self, a, deleting_records=()):
+        p = Path(a["path"])
+        reasons, active = [], []
+        root = self.db.root.resolve()
+        allowed = any(p.resolve().is_relative_to(root / name)
+                      for name in (("jobs", "dataset_versions", "snapshots", "uploads", "datasets")
+                                   if a.get("record_delete") else ("jobs", "dataset_versions", "snapshots", "uploads")))
+        if a["readonly"] or not allowed:
+            reasons.append("基座/外部注册模型、原始数据和日志只读；仅清理API管理的产物")
+        mounts = storage_nested_mounts(p)
+        if mounts:
+            reasons.append("目标包含挂载点或无法核验挂载: " + ", ".join(mounts))
+        # Reject symlink ancestors and targets, including links within the data root.
+        if any(q.is_symlink() for q in [p, *p.parents] if q != root.parent):
+            reasons.append("路径包含符号链接，禁止删除")
+        for obj in self.db.all("model"):
+            if obj.get("state") == "deleted" or obj["id"] in deleting_records:
+                continue
+            if obj["id"] == "base" or not obj.get("export_job_id"):
+                if any(storage_overlap(p, q) for q in self.model_paths(obj["id"])):
+                    reasons.append("与受保护模型或其tokenizer/底座重叠: " + obj["id"])
+            elif obj["id"] not in a["object_ids"]:
+                deps = [obj.get("tokenizer_path", obj["path"])]
+                if obj.get("base_model_id"):
+                    deps += self.model_paths(obj["base_model_id"])
+                if any(storage_overlap(p, q) for q in deps):
+                    reasons.append("仍被模型依赖: " + obj["id"])
+        for obj in self.db.all("checkpoint"):
+            if obj["id"] not in deleting_records and obj.get("state") not in ("missing", "deleted") and Path(obj["path"]).exists():
+                for key in ("base_model_id", "model_id"):
+                    if obj.get(key) and any(storage_overlap(p, q) for q in self.model_paths(obj[key])):
+                        reasons.append("检查点恢复/导出仍依赖此模型: " + obj["id"])
+        for obj in self.db.all("dataset_version"):
+            if obj.get("state") != "deleted" and obj["id"] not in a["object_ids"] and obj["id"] not in deleting_records:
+                if obj.get("tokenizer_path") and storage_overlap(p, obj["tokenizer_path"]):
+                    reasons.append("仍被数据预览的tokenizer引用: " + obj["id"])
+        for job in self.db.all("job"):
+            if job["state"] in DONE | {"deleted"} and not storage_process_live(job):
+                continue
+            paths = [job["output_dir"]]
+            if job.get("dataset_id"):
+                paths.append(str(root / "datasets" / job["dataset_id"]))
+            if job.get("snapshot"):
+                paths.append(job["snapshot"])
+            if job.get("version_id"):
+                paths.append(str(root / "dataset_versions" / job["version_id"]))
+            req = job.get("request", {})
+            ids = set(job.get("served_models", []))
+            if req.get("model_id"):
+                ids.add(req["model_id"])
+            for mid in ids:
+                paths += self.model_paths(mid)
+            for ref in (req.get("checkpoint_id"), req.get("dataset_version_id"), job.get("resumed_from")):
+                if ref:
+                    obj = self.db.get(ref)
+                    paths.append(obj["path"])
+                    if obj["kind"] == "checkpoint":
+                        for key in ("base_model_id", "model_id"):
+                            if obj.get(key):
+                                paths += self.model_paths(obj[key])
+            if any(storage_overlap(p, q) for q in paths):
+                active.append(job["id"])
+        if active:
+            reasons.append("任务正在使用或排队引用该产物")
+        if any(self.m.chat_counts.values()):
+            reasons.append("推理请求/adapter加载进行中，请稍后重试")
+        with self.lease_lock:
+            if self.readers:
+                reasons.append("文件读取或对象操作请求进行中，请稍后重试")
+        return reasons, active
+
+    def inspect(self, a, details=False, deleting_records=()):
+        result = {**a, **storage_measure(a["path"], details)}
+        reasons, active = self.blockers(a, deleting_records)
+        if result["has_symlinks"]:
+            reasons.append("目录内包含符号链接，第一版禁止删除")
+        if result["has_mounts"]:
+            reasons.append("产物包含挂载点，禁止递归删除")
+        if result["scan_errors"]:
+            reasons.append("扫描不完整，请先处理扫描错误")
+        result.update(deletable=not reasons, blocked_reasons=reasons, active_job_ids=active)
+        return result
+
+    def scan(self):
+        with self.lock:
+            if self.scan_state["state"] == "running":
+                return self.summary()
+            self.scan_state.update(state="running", started_at=stamp(), error=None)
+        def run():
+            try:
+                items = [self.inspect(a) for a in self.catalog().values()]
+                with self.lock:
+                    self.scan_state = dict(state="succeeded", scanned_at=stamp(), items=items, error=None)
+            except Exception as e:
+                with self.lock:
+                    self.scan_state.update(state="failed", error=str(e))
+        t = threading.Thread(target=run, daemon=True)
+        self.threads.append(t)
+        t.start()
+        return self.summary()
+
+    def summary(self):
+        with self.lock:
+            snap = dict(self.scan_state)
+        items = snap.pop("items")
+        categories = {}
+        for a in items:
+            c = categories.setdefault(a["type"], dict(size_bytes=0, allocated_bytes=0, count=0))
+            for k in ("size_bytes", "allocated_bytes"):
+                c[k] += a[k]
+            c["count"] += 1
+        volumes = {}
+        for path in [str(self.db.root), *[a["path"] for a in items]]:
+            try:
+                device = str(Path(path).stat().st_dev)
+                if device not in volumes:
+                    d = shutil.disk_usage(path)
+                    volumes[device] = dict(device=device, path=path, total_bytes=d.total,
+                        used_bytes=d.used, free_bytes=d.free)
+            except OSError:
+                pass
+        return {**snap, "volumes": list(volumes.values()), "categories": categories,
+                "artifact_count": len(items), "cleanup_running": self.cleaning,
+                "note": "分类统计仅覆盖已发现产物；不同产物间硬链接可能重复计数；实际释放量以磁盘变化为准。"}
+
+    def record_selection(self, ids):
+        check(ids, "请选择record_ids", status=422)
+        selected = {i: self.db.get(i) for i in dict.fromkeys(ids)}
+        allowed = {"dataset", "dataset_version", "job", "checkpoint", "model"}
+        check(all(o["kind"] in allowed for o in selected.values()), "不支持此对象类型", status=422)
+        # A task owns its checkpoints/export or prepared version; show expansion explicitly.
+        for obj in list(selected.values()):
+            if obj["kind"] == "job":
+                for kind, key in (("checkpoint", "job_id"), ("model", "export_job_id")):
+                    for child in self.db.all(kind):
+                        if child.get(key) == obj["id"]:
+                            selected[child["id"]] = child
+                if obj.get("version_id"):
+                    for dv in self.db.all("dataset_version"):
+                        if dv["id"] == obj["version_id"]:
+                            selected[dv["id"]] = dv
+        return selected
+
+    def record_blockers(self, selected):
+        reasons = []
+        ids = set(selected)
+        for oid, obj in selected.items():
+            if oid == "base" or (obj["kind"] == "model" and not obj.get("export_job_id")):
+                reasons.append({"id": oid, "reason": "基座和外部注册模型受保护"})
+            if obj["kind"] == "job" and (obj["state"] not in DONE | {"deleted"} or storage_process_live(obj)):
+                reasons.append({"id": oid, "reason": "任务未结束或进程仍存活，请先停止任务"})
+            if obj["kind"] == "dataset":
+                for dv in self.db.all("dataset_version"):
+                    if dv.get("dataset_id") == oid and dv["id"] not in ids:
+                        reasons.append({"id": oid, "reason": "仍有数据版本，请一并选择或先删除", "dependent_id": dv["id"]})
+        # Check IDs even when an artifact is already missing on disk.
+        for j in self.db.all("job"):
+            if j["state"] in DONE | {"deleted"} and not storage_process_live(j):
+                continue
+            req = j.get("request", {})
+            refs = set(j.get("served_models", []))
+            refs.update(v for v in (j.get("dataset_id"), j.get("version_id"), j.get("resumed_from"),
+                        req.get("model_id"), req.get("dataset_version_id"), req.get("checkpoint_id")) if v)
+            for oid in ids & refs:
+                reasons.append({"id": oid, "reason": "活跃或排队任务仍引用此记录", "dependent_id": j["id"]})
+        for model in self.db.all("model"):
+            if model["id"] not in ids and model.get("state") != "deleted" and model.get("base_model_id") in ids:
+                reasons.append({"id": model["base_model_id"], "reason": "其他模型仍依赖此底座", "dependent_id": model["id"]})
+        for ck in self.db.all("checkpoint"):
+            if ck["id"] not in ids and ck["state"] not in ("missing", "deleted"):
+                for key in ("base_model_id", "model_id"):
+                    if ck.get(key) in ids:
+                        reasons.append({"id": ck[key], "reason": "检查点恢复/导出仍依赖此模型", "dependent_id": ck["id"]})
+        if any(self.m.chat_counts.values()):
+            reasons.append({"id": None, "reason": "推理请求或adapter操作尚未结束"})
+        with self.lease_lock:
+            if self.readers:
+                reasons.append({"id": None, "reason": "文件读取或对象操作尚未结束"})
+        return reasons
+
+    def record_items(self, selected):
+        paths = []
+        root = self.db.root.resolve()
+        for obj in selected.values():
+            kind = obj["kind"]
+            if kind == "dataset":
+                p = root / "datasets" / obj["id"]
+            elif kind == "job":
+                p = root / "jobs" / obj["id"]
+            else:
+                p = Path(obj["path"])
+            if p.exists() or p.is_symlink():
+                paths.append((p, obj))
+            if kind == "job":
+                # Source copies and failed prepare outputs are also owned by the task.
+                extras = [obj.get("snapshot")]
+                if obj.get("version_id"):
+                    extras.append(str(root / "dataset_versions" / obj["version_id"]))
+                for extra in extras:
+                    if extra and (Path(extra).exists() or Path(extra).is_symlink()):
+                        paths.append((Path(extra), obj))
+        # Collapse a task directory and its child checkpoints into one deletion target.
+        roots = []
+        for p, obj in sorted(paths, key=lambda pair: len(pair[0].parts)):
+            parent = next((a for a in roots if p == Path(a["path"]) or p.is_relative_to(Path(a["path"]))), None)
+            if parent:
+                if obj["id"] not in parent["object_ids"]:
+                    parent["object_ids"].append(obj["id"])
+            else:
+                roots.append(dict(artifact_id="artifact_" + hashlib.sha256(str(p).encode()).hexdigest()[:24],
+                    type="record_files", path=str(p), object_ids=[obj["id"]],
+                    job_id=obj["id"] if obj["kind"] == "job" else obj.get("job_id"),
+                    step=obj.get("step"), readonly=False, record_delete=True))
+        return roots
+
+    def records_preview(self, request):
+        with self.m.lock:
+            check(not self.cleaning, "清理进行中", "STORAGE_BUSY", 409)
+            selected = self.record_selection(request.record_ids)
+            blocked = self.record_blockers(selected)
+            items = [self.inspect(a, deleting_records=set(selected)) for a in self.record_items(selected)]
+            records = [dict(id=o["id"], kind=o["kind"], name=o.get("name", o.get("request", {}).get("name")),
+                job_type=o.get("job_type"), state=o["state"],
+                signature=hashlib.sha256(js(o).encode()).hexdigest()) for o in selected.values()]
+            return self.db.add("storage_plan", dict(mode="records", requested_record_ids=request.record_ids,
+                records=records, blocked_records=blocked, items=items, expires_at=time.time()+900,
+                executable=not blocked and all(a["deletable"] for a in items),
+                estimated_bytes=sum(a["allocated_bytes"] for a in items if a["deletable"]),
+                effects=["永久删除所列记录及文件，不进入回收站",
+                         "删除任务/推理历史时，同时删除其日志、loss和事件；普通文件清理仍保留这些历史",
+                         "任务所属检查点、导出模型或准备的数据版本会明确列入本计划",
+                         "不会连带删除其他独立任务；依赖阻止项须先处理"]), state="ready")
+
+    def recheck_records(self, plan):
+        selected = self.record_selection(plan["requested_record_ids"])
+        check(set(selected) == {r["id"] for r in plan["records"]}, "关联记录变化，请重新预览", "PLAN_STALE", 409)
+        check(not self.record_blockers(selected), "记录被使用或存在依赖，请重新预览", "ARTIFACT_IN_USE", 409)
+        for r in plan["records"]:
+            check(hashlib.sha256(js(selected[r["id"]]).encode()).hexdigest() == r["signature"],
+                  "记录发生变化，请重新预览", "PLAN_STALE", 409)
+        current = {a["artifact_id"]: a for a in self.record_items(selected)}
+        check(set(current) == {a["artifact_id"] for a in plan["items"]}, "文件清单变化，请重新预览", "PLAN_STALE", 409)
+        return current
+
+    def remove_records(self, plan):
+        # Only commit metadata deletion when every planned file deletion succeeded.
+        with self.db.connect() as c:
+            c.execute("BEGIN IMMEDIATE")
+            for record in plan["records"]:
+                oid = record["id"]
+                if record["kind"] == "job":
+                    c.execute("DELETE FROM metrics WHERE ref=?", (oid,))
+                    c.execute("DELETE FROM events WHERE ref=?", (oid,))
+                c.execute("DELETE FROM objects WHERE id=?", (oid,))
+        self.db.emit(plan["id"], "storage_records_deleted", {"record_ids": [r["id"] for r in plan["records"]]})
+
+
+    def preview(self, request):
+        if request.mode == "records":
+            return self.records_preview(request)
+        with self.m.lock:
+            check(not self.cleaning, "清理进行中", "STORAGE_BUSY", 409)
+            catalog = self.catalog()
+            if request.mode == "selected":
+                check(request.artifact_ids, "请选择artifact_ids", status=422)
+                check(all(i in catalog for i in request.artifact_ids), "产物不存在，请重新扫描", "NOT_FOUND", 404)
+                chosen = [catalog[i] for i in dict.fromkeys(request.artifact_ids)]
+            else:
+                check(request.job_id, "此模式需要job_id", status=422)
+                self.db.get(request.job_id, "job")
+                chosen = [a for a in catalog.values() if a["job_id"] == request.job_id
+                          and a["type"] in ("checkpoint", "model", "residual")]
+                if request.mode == "old_checkpoints":
+                    chosen = sorted([a for a in chosen if a["type"] == "checkpoint"],
+                        key=lambda a: a["step"] or 0, reverse=True)[request.keep_last:]
+            check(chosen, "没有匹配的清理产物", "EMPTY_SELECTION", 422)
+            for i, a in enumerate(chosen):
+                check(not any(storage_overlap(a["path"], b["path"]) for b in chosen[:i]),
+                      "清理目标重叠，请分别选择", "OVERLAPPING_ARTIFACTS", 409)
+            items = [self.inspect(a) for a in chosen]
+            return self.db.add("storage_plan", dict(items=items, expires_at=time.time() + 900,
+                executable=all(a["deletable"] for a in items),
+                estimated_bytes=sum(a["allocated_bytes"] for a in items if a["deletable"]),
+                effects=["永久删除文件，不进入回收站", "保留任务记录、日志、loss和API Key",
+                         "删除检查点后不能恢复/重新导出；已独立导出的模型保留",
+                         "删除模型或数据版本后，相应加载/训练/预览不可用"]), state="ready")
+
+    def execute(self, request):
+        with self.m.lock:
+            check(not self.cleaning, "已有清理进行中", "STORAGE_BUSY", 409)
+            plan = self.db.get(request.plan_id, "storage_plan")
+            check(plan["state"] == "ready" and plan["expires_at"] > time.time(),
+                  "计划已使用或过期，请重新预览", "PLAN_EXPIRED", 409)
+            check(plan["executable"], "预览包含禁止删除项，请重新选择", "ARTIFACT_IN_USE", 409)
+            deleting_records = {r["id"] for r in plan.get("records", [])}
+            catalog = self.recheck_records(plan) if plan.get("mode") == "records" else self.catalog()
+            for old in plan["items"]:
+                check(old["artifact_id"] in catalog, "产物发生变化，请重新预览", "PLAN_STALE", 409)
+                current = self.inspect(catalog[old["artifact_id"]], deleting_records=deleting_records)
+                check(current["deletable"], js(current["blocked_reasons"]), "ARTIFACT_IN_USE", 409)
+                check(current["signature"] == old["signature"] and current["object_ids"] == old["object_ids"],
+                      "文件或引用已变化，请重新预览", "PLAN_STALE", 409)
+            with self.lease_lock:
+                check(not self.readers, "文件读取或对象操作进行中", "STORAGE_BUSY", 409)
+                self.cleaning = True
+            try:
+                result = self.db.add("storage_cleanup", dict(plan_id=plan["id"], items=[],
+                    completed=0, total=len(plan["items"]), deleted_bytes=0), state="queued")
+                self.db.update(plan["id"], state="executing", cleanup_id=result["id"])
+                t = threading.Thread(target=self._delete, args=(result["id"], plan), daemon=True)
+                self.threads.append(t)
+                t.start()
+                return result
+            except BaseException:
+                with self.lease_lock:
+                    self.cleaning = False
+                raise
+
+
+    def _delete(self, id, plan):
+        results = []
+        before = shutil.disk_usage(self.db.root).free
+        try:
+            self.db.update(id, state="running")
+            for a in plan["items"]:
+                item = dict(artifact_id=a["artifact_id"], path=a["path"], state="failed", deleted_bytes=0)
+                touched = False
+                try:
+                    with self.m.lock:
+                        current = self.inspect(a, deleting_records={r["id"] for r in plan.get("records", [])})
+                        check(current["deletable"] and current["signature"] == a["signature"],
+                              "产物变化或被占用，停止删除该项", "PLAN_STALE", 409)
+                        p = Path(a["path"])
+                        # Tombstone before unlink; interruption must never leave a usable record.
+                        for oid in a["object_ids"]:
+                            obj = self.db.get(oid)
+                            self.db.update(oid, storage_state="deleting",
+                                state="missing" if obj["kind"] == "checkpoint" else "deleted",
+                                **({"resumable": False} if obj["kind"] == "checkpoint" else {}))
+                        touched = True
+                        relative = p.relative_to(self.db.root.resolve())
+                        fd = os.open(self.db.root.resolve(), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                        try:
+                            for component in relative.parts[:-1]:
+                                child_fd = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
+                                os.close(fd)
+                                fd = child_fd
+                            name = relative.parts[-1]
+                            info = os.stat(name, dir_fd=fd, follow_symlinks=False)
+                            check(not stat.S_ISLNK(info.st_mode), "目标变成符号链接", "PLAN_STALE", 409)
+                            if stat.S_ISDIR(info.st_mode):
+                                check(shutil.rmtree.avoids_symlink_attacks,
+                                      "此平台不支持安全递归删除", "UNSUPPORTED_PLATFORM", 503)
+                                shutil.rmtree(name, dir_fd=fd)
+                            else:
+                                os.unlink(name, dir_fd=fd)
+                        finally:
+                            os.close(fd)
+                        for oid in a["object_ids"]:
+                            self.db.update(oid, storage_state="deleted", storage_deleted_at=stamp())
+                        item.update(state="succeeded", deleted_bytes=a["allocated_bytes"])
+                except Exception as e:
+                    item["error"] = str(e)
+                    if touched:
+                        for oid in a["object_ids"]:
+                            self.db.update(oid, storage_state="delete_failed")
+                results.append(item)
+                self.db.update(id, items=results, completed=len(results),
+                    deleted_bytes=sum(r["deleted_bytes"] for r in results))
+            status = "succeeded" if all(r["state"] == "succeeded" for r in results) else "failed"
+            if status == "succeeded" and plan.get("mode") == "records":
+                with self.m.lock:
+                    self.remove_records(plan)
+            self.db.update(id, state=status, finished_at=stamp(),
+                free_bytes_delta=shutil.disk_usage(self.db.root).free - before,
+                note="deleted_bytes为完整删除项的分配大小；free_bytes_delta含其他并发磁盘活动。")
+            self.db.update(plan["id"], state=status)
+        except Exception as e:
+            self.db.update(id, state="failed", error=str(e), items=results)
+            self.db.update(plan["id"], state="failed")
+        finally:
+            with self.lease_lock:
+                self.cleaning = False
+            self.scan()
+
+
+
 class Manager:
     def __init__(self, model_path, root=ROOT):
         self.db = DB(root)
         self.model_path = str(Path(model_path).resolve())
         self.lock = threading.RLock()
+        self.storage = Storage(self)
         self.gpu_lock = threading.Lock()
         self.probe_lock = threading.Lock()
         self.children = {}
@@ -2045,6 +2713,7 @@ class Manager:
                 "started_at": stamp(),
             },
         )
+        self.storage.recover()
         self.thread = threading.Thread(target=self.schedule, daemon=True)
         self.thread.start()
 
@@ -2052,6 +2721,8 @@ class Manager:
         self.closed.set()
         if self.thread:
             self.thread.join(timeout=10)
+        for thread in self.storage.threads:
+            thread.join()
         if self.filelock:
             self.filelock.close()
 
@@ -2079,6 +2750,11 @@ class Manager:
             return self.gpu_value
 
     def job(self, kind, request, **kw):
+        with self.lock:
+            self.storage.admit(request, kw)
+            return self._job(kind, request, **kw)
+
+    def _job(self, kind, request, **kw):
         id = ident("job")
         p = self.db.root / "jobs" / id
         p.mkdir(parents=True)
@@ -2103,6 +2779,8 @@ class Manager:
         return obj
 
     def validate(self, r, resume=None):
+        with self.lock:
+            self.storage.admit(r.model_dump())
         cfg = training_config(
             self.db,
             r.model_dump(),
@@ -2364,6 +3042,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
         description="完整接口规范/api-spec；请求字段、默认值、范围见本OpenAPI。",
     )
     app.state.manager = m
+    app.add_middleware(StorageLeaseMiddleware, storage=m.storage)
     bearer = HTTPBearer(auto_error=False)
 
     def auth(credentials=Depends(bearer)):
@@ -2475,6 +3154,73 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
             + "\n```\n"
         )
 
+    @api.get("/api/v1/storage/records", tags=["存储管理"])
+    def storage_records(
+        type: Literal["dataset", "dataset_version", "train_job", "checkpoint", "model", "inference", "other_job"] | None = None,
+        offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
+    ):
+        items = []
+        for kind in ("dataset", "dataset_version", "job", "checkpoint", "model"):
+            for obj in db.all(kind):
+                category = ({"train": "train_job", "inference": "inference"}.get(obj.get("job_type"), "other_job")
+                            if kind == "job" else kind)
+                if type and category != type:
+                    continue
+                protected = obj["id"] == "base" or (kind == "model" and not obj.get("export_job_id"))
+                items.append(dict(id=obj["id"], type=category, state=obj["state"],
+                    name=obj.get("name", obj.get("request", {}).get("name")),
+                    created_at=obj["created_at"], protected=protected,
+                    job_id=obj.get("job_id", obj.get("export_job_id")),
+                    dataset_id=obj.get("dataset_id"), storage_state=obj.get("storage_state")))
+        items.sort(key=lambda o: o["created_at"], reverse=True)
+        return page(items, offset, limit)
+
+    @api.get("/api/v1/storage/summary", tags=["存储管理"])
+    def storage_summary():
+        return m.storage.summary()
+
+    @api.post("/api/v1/storage/scan", status_code=202, tags=["存储管理"])
+    def storage_scan():
+        return m.storage.scan()
+
+    @api.get("/api/v1/storage/artifacts", tags=["存储管理"])
+    def storage_artifacts(
+        type: str | None = None, job_id: str | None = None,
+        min_bytes: int = Query(0, ge=0),
+        sort: Literal["size_desc", "modified_desc"] = "size_desc",
+        offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200),
+    ):
+        with m.storage.lock:
+            items = list(m.storage.scan_state["items"])
+            scanned_at = m.storage.scan_state["scanned_at"]
+        items = [a for a in items if (not type or a["type"] == type)
+                 and (not job_id or a["job_id"] == job_id) and a["size_bytes"] >= min_bytes]
+        items.sort(key=lambda a: a["size_bytes"] if sort == "size_desc"
+                   else (a["modified_at"] or ""), reverse=True)
+        return {**page(items, offset, limit), "scanned_at": scanned_at,
+                "note": "缓存统计；deletable仅供展示，执行时会重新检查"}
+
+    @api.get("/api/v1/storage/artifacts/{id}/files", tags=["存储管理"])
+    def storage_files(id: str, offset: int = Query(0, ge=0),
+                      limit: int = Query(100, ge=1, le=1000)):
+        catalog = m.storage.catalog()
+        check(id in catalog, "产物不存在", "NOT_FOUND", 404)
+        item = m.storage.inspect(catalog[id], details=True)
+        files = sorted(item.pop("files"), key=lambda f: f["size_bytes"], reverse=True)
+        return {"artifact": item, **page(files, offset, limit)}
+
+    @api.post("/api/v1/storage/cleanup/preview", tags=["存储管理"])
+    def storage_preview(r: CleanupPreviewRequest):
+        return m.storage.preview(r)
+
+    @api.post("/api/v1/storage/cleanup", status_code=202, tags=["存储管理"])
+    def storage_cleanup(r: CleanupRequest):
+        return m.storage.execute(r)
+
+    @api.get("/api/v1/storage/cleanup/{id}", tags=["存储管理"])
+    def storage_cleanup_status(id: str):
+        return db.get(id, "storage_cleanup")
+
     @api.get("/api/v1/system", tags=["环境"])
     def system():
         d = shutil.disk_usage(db.root)
@@ -2572,31 +3318,33 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.post("/api/v1/datasets/demo", tags=["数据"])
     def demo(r: DemoRequest):
-        ds = db.add(
-            "dataset",
-            {
-                "name": r.task_type + "-demo",
-                "task_type": r.task_type,
-                "sample_count": 0,
-            },
-        )
-        data = [
-            {
-                "messages": [
-                    {"role": "user", "content": f"{i}+1等于几？"},
-                    {"role": "assistant", "content": f"{i}+1等于{i + 1}。"},
-                ],
-                "source_id": f"demo-{i}",
-                "enable_thinking": False,
-            }
-            if r.task_type == "sft"
-            else {
-                "text": f"这是第{i + 1}份演示资料。项目编号DEMO-{i:03d}，用于检查文本训练流程，不代表真实业务资料。",
-                "source_id": f"demo-{i}",
-            }
-            for i in range(16)
-        ]
-        return append(db, ds["id"], data)
+        with m.lock:
+            check(not m.storage.cleaning, "清理进行中", "STORAGE_BUSY", 409)
+            ds = db.add(
+                "dataset",
+                {
+                    "name": r.task_type + "-demo",
+                    "task_type": r.task_type,
+                    "sample_count": 0,
+                },
+            )
+            data = [
+                {
+                    "messages": [
+                        {"role": "user", "content": f"{i}+1等于几？"},
+                        {"role": "assistant", "content": f"{i}+1等于{i + 1}。"},
+                    ],
+                    "source_id": f"demo-{i}",
+                    "enable_thinking": False,
+                }
+                if r.task_type == "sft"
+                else {
+                    "text": f"这是第{i + 1}份演示资料。项目编号DEMO-{i:03d}，用于检查文本训练流程，不代表真实业务资料。",
+                    "source_id": f"demo-{i}",
+                }
+                for i in range(16)
+            ]
+            return append(db, ds["id"], data)
 
     @api.get("/api/v1/datasets", tags=["数据"])
     def list_datasets(
@@ -2610,7 +3358,10 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.post("/api/v1/datasets/{id}/samples", tags=["数据"])
     def add_samples(id: str, r: SamplesRequest):
-        return append(db, id, r.samples)
+        with m.lock:
+            check(not m.storage.cleaning, "清理进行中", "STORAGE_BUSY", 409)
+            check(db.get(id, "dataset")["state"] != "deleted", "数据集已删除或不完整", "ARTIFACT_UNAVAILABLE", 409)
+            return append(db, id, r.samples)
 
     @api.get("/api/v1/datasets/{id}/samples", tags=["数据"])
     def get_samples(
@@ -2628,22 +3379,25 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
         }
 
     def edit(id, index, value):
-        ds = db.get(id, "dataset")
-        check(0 <= index < ds["sample_count"], "样本索引不存在", "NOT_FOUND", 404)
-        if value is not None:
-            value = normalize(value, ds["task_type"])
-        with dslock(db, id) as p:
-            temp = p / "edit.tmp"
-            count = 0
-            with temp.open("w", encoding="utf-8") as out:
-                for i, row in enumerate(rows(p / "raw.jsonl")):
-                    if i == index:
-                        row = value
-                    if row is not None:
-                        out.write(js(row) + "\n")
-                        count += 1
-            temp.replace(p / "raw.jsonl")
-            return db.update(id, sample_count=count)
+        with m.lock:
+            check(not m.storage.cleaning, "清理进行中", "STORAGE_BUSY", 409)
+            check(db.get(id, "dataset")["state"] != "deleted", "数据集已删除或不完整", "ARTIFACT_UNAVAILABLE", 409)
+            ds = db.get(id, "dataset")
+            check(0 <= index < ds["sample_count"], "样本索引不存在", "NOT_FOUND", 404)
+            if value is not None:
+                value = normalize(value, ds["task_type"])
+            with dslock(db, id) as p:
+                temp = p / "edit.tmp"
+                count = 0
+                with temp.open("w", encoding="utf-8") as out:
+                    for i, row in enumerate(rows(p / "raw.jsonl")):
+                        if i == index:
+                            row = value
+                        if row is not None:
+                            out.write(js(row) + "\n")
+                            count += 1
+                temp.replace(p / "raw.jsonl")
+                return db.update(id, sample_count=count)
 
     @api.put("/api/v1/datasets/{id}/samples/{index}", tags=["数据"])
     def edit_sample(id: str, index: int, r: EditRequest):
@@ -2655,6 +3409,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     def import_check(id, ext):
         ds = db.get(id, "dataset")
+        check(ds["state"] != "deleted", "数据集已删除或删除未完成", "ARTIFACT_UNAVAILABLE", 409)
         check(
             ext in (".txt", ".md", ".json", ".jsonl", ".parquet"),
             "不支持文件格式",
@@ -2691,9 +3446,11 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
             raise
         finally:
             await file.close()
-        return public(
-            m.job("import", {"filename": file.filename}, dataset_id=id, snapshot=str(p))
-        )
+        try:
+            return public(m.job("import", {"filename": file.filename}, dataset_id=id, snapshot=str(p)))
+        except BaseException:
+            p.unlink(missing_ok=True)
+            raise
 
     @api.post("/api/v1/datasets/{id}/import", status_code=202, tags=["数据"])
     def import_file(id: str, r: ImportRequest):
@@ -2715,22 +3472,25 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.post("/api/v1/datasets/{id}/prepare", status_code=202, tags=["数据"])
     def prepare(id: str, r: PrepareRequest):
-        ds = db.get(id, "dataset")
-        db.get(r.model_id, "model")
-        check(ds["sample_count"] > 0, "数据集为空", "EMPTY_DATASET", 422)
-        dest = db.root / "snapshots" / (ident("snapshot") + ".jsonl")
-        dest.parent.mkdir(exist_ok=True)
-        with dslock(db, id) as p:
-            shutil.copyfile(p / "raw.jsonl", dest)
-        return public(
-            m.job(
-                "prepare",
-                r.model_dump(),
-                dataset_id=id,
-                snapshot=str(dest),
-                version_id=ident("dv"),
+        with m.lock:
+            check(not m.storage.cleaning, "清理进行中", "STORAGE_BUSY", 409)
+            check(db.get(id, "dataset")["state"] != "deleted", "数据集已删除或不完整", "ARTIFACT_UNAVAILABLE", 409)
+            ds = db.get(id, "dataset")
+            db.get(r.model_id, "model")
+            check(ds["sample_count"] > 0, "数据集为空", "EMPTY_DATASET", 422)
+            dest = db.root / "snapshots" / (ident("snapshot") + ".jsonl")
+            dest.parent.mkdir(exist_ok=True)
+            with dslock(db, id) as p:
+                shutil.copyfile(p / "raw.jsonl", dest)
+            return public(
+                m.job(
+                    "prepare",
+                    r.model_dump(),
+                    dataset_id=id,
+                    snapshot=str(dest),
+                    version_id=ident("dv"),
+                )
             )
-        )
 
     @api.get("/api/v1/dataset-versions", tags=["数据"])
     def dataset_versions(
@@ -2752,6 +3512,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
         import pyarrow.parquet as pq
 
         dv = db.get(id, "dataset_version")
+        m.storage.available(dv)
         tok = tokenizer(dv["tokenizer_path"])
         result = []
         i = 0
@@ -2965,18 +3726,20 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.post("/api/v1/models/register", tags=["版本"])
     def register(r: RegisterRequest):
-        p = str(Path(r.path).expanduser().resolve())
-        verify_model(p, r.model_kind)
-        tp = p
-        if r.model_kind == "lora":
-            check(r.base_model_id, "adapter需base_model_id")
-            base = db.get(r.base_model_id, "model")
-            check(base["model_kind"] == "full", "底座需完整模型")
-            tp = base.get("tokenizer_path", base["path"])
-        return db.add(
-            "model",
-            {**r.model_dump(), "path": p, "tokenizer_path": tp, "chat_defaults": {}},
-        )
+        with m.lock:
+            check(not m.storage.cleaning, "清理进行中", "STORAGE_BUSY", 409)
+            p = str(Path(r.path).expanduser().resolve())
+            verify_model(p, r.model_kind)
+            tp = p
+            if r.model_kind == "lora":
+                check(r.base_model_id, "adapter需base_model_id")
+                base = db.get(r.base_model_id, "model")
+                check(base["model_kind"] == "full", "底座需完整模型")
+                tp = base.get("tokenizer_path", base["path"])
+            return db.add(
+                "model",
+                {**r.model_dump(), "path": p, "tokenizer_path": tp, "chat_defaults": {}},
+            )
 
     @api.patch("/api/v1/models/{id}/chat-defaults", tags=["对话"])
     def chat_defaults(id: str, r: ChatOptions):
@@ -2991,7 +3754,9 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
 
     @api.get("/api/v1/models/{id}/files", tags=["版本"])
     def model_files(id: str):
-        p = Path(db.get(id, "model")["path"])
+        model = db.get(id, "model")
+        m.storage.available(model)
+        p = Path(model["path"])
         return {
             "model_id": id,
             "items": [
@@ -3009,6 +3774,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
     @api.post("/api/v1/inference", status_code=202, tags=["推理"])
     def load_inference(r: InferenceRequest):
         model = db.get(r.model_id, "model")
+        m.storage.available(model)
         verify_model(model["path"], model["model_kind"])
         check(r.tensor_parallel_size == len(r.gpu_ids), "TP大小应等于选定GPU数")
         check(
@@ -3062,6 +3828,7 @@ def create_app(model_path=MODEL_DEFAULT, manager=None):
         with m.lock:
             inst = get_instance(id)
             model = db.get(r.model_id, "model")
+            m.storage.admit(r.model_dump())
             check(
                 model["model_kind"] == "lora"
                 and model["base_model_id"] == inst["base_model_id"],
