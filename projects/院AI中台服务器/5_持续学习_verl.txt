@@ -27,12 +27,16 @@
         https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
 
 四、创建独立的 verl 容器——宿主机执行（这里把代码、虚拟环境、模型、数据、缓存放在宿主机的 ~/verl-workspace 下。若你的大容量磁盘在其他目录，修改第一行即可）
+    本段用于以后从零创建环境。使用 host 网络，使后续 API 的监听端口直接成为宿主机端口。
+    端口不在本步骤写死；7877 或其他空闲端口，在第十二节启动 API 时指定。
+
     VERL_WORKSPACE="$HOME/verl-workspace"
 
     mkdir -p "$VERL_WORKSPACE"/{models,data,outputs,.cache}
 
     sudo docker run -d \
       --name verl-l40s \
+      --network host \
       --gpus all \
       --shm-size=32g \
       --ulimit memlock=-1:-1 \
@@ -46,6 +50,15 @@
       -w /workspace \
       nvidia/cuda:13.0.2-devel-ubuntu24.04 \
       sleep infinity
+
+    网络与持久化说明：
+        1）这是 Linux Docker 的 host 网络：容器与宿主机共用网络和端口，不需要 -p 映射，也不需要自写 TCP 转发、socat 或 nsenter。
+        2）创建容器不会自动启动 API；完成后续安装步骤，再在第十二节运行 5_verl_api.sh。
+        3）API 监听 0.0.0.0:7877 时，外部使用 http://服务器实际IP:7877 访问。0.0.0.0 是监听地址，不是浏览器访问地址。
+        4）以后修改 API 端口只需修改启动参数；端口须未被其他服务占用，宿主机防火墙须允许实际使用的端口。
+        5）此参数只对新建容器生效，不会修改已经存在的 bridge 容器。已有同名容器时，本创建命令会报名称冲突；不要直接删除仍有用的旧容器。
+        6）本日志是从零安装流程，不需要为了本次创建而执行 docker commit 或 docker rename。
+        7）/workspace 中的代码、虚拟环境、模型、数据和缓存位于宿主机挂载目录；第五节安装的系统包和 /usr/local/bin/uv 位于容器可写层，重新从基础镜像创建容器时仍需安装。
 
 【从下一步开始，命令都在容器内执行】
 五、安装系统依赖和 uv——容器内执行
@@ -637,4 +650,74 @@ uv run --frozen --all-packages \
 # -------------------------------------------------/最小训练测试的完整指令(lora)--------------------------------------------------
 
 十二、支持cpt和sft的verl的fastapi接口系统和接口规范说明
-    详见：5_verl_api.sh和5_verl_api.py
+    1、文件准备——宿主机操作
+        将 5_verl_api.sh 和 5_verl_api.py 放在宿主机同一个目录，例如 ~/sh。
+        使用新版 5_verl_api.sh：文件头说明“仅使用Docker原生网络”，不包含自写 TCP 转发。
+        Python 服务在 verl-l40s 容器内，使用 /workspace/verl/.venv/bin/python 运行，不需要在宿主机安装 Python。
+        sh 会在容器现有虚拟环境中补齐缺少的 Web 接口依赖；不会重装训练环境。
+        完整接口规范写在 5_verl_api.py 中，服务启动后也可通过 /api-spec、/openapi.json 和 /docs 获取。
+
+    2、确认模型和执行位置
+        如果已经执行第十一节，容器内应已有 /workspace/models/Qwen3-8B。
+        也可以把模型事先放入宿主机 $VERL_WORKSPACE/models/Qwen3-8B，对应同一个容器路径。
+        若仍在容器的交互式 shell 中，先执行 exit 回到宿主机，再执行本节的 sh 命令。
+
+    3、确认 host 网络——宿主机执行
+        sudo docker inspect verl-l40s --format '{{.HostConfig.NetworkMode}}'
+        预期输出：host。
+
+    4、启动 API——宿主机执行；只需三个参数：服务IP、服务port、起点模型path
+        cd ~/sh
+
+        VERL_API_BIND_IP="0.0.0.0"
+        VERL_API_PORT=7877
+        VERL_API_MODEL="/workspace/models/Qwen3-8B"
+
+        bash 5_verl_api.sh "$VERL_API_BIND_IP" "$VERL_API_PORT" "$VERL_API_MODEL"
+
+        上述写法等价于：
+            bash 5_verl_api.sh 0.0.0.0 7877 /workspace/models/Qwen3-8B
+
+        三个参数都省略时使用以上默认值：
+            bash 5_verl_api.sh
+
+        第三个参数也可填写宿主机已有模型目录，如 /home/zs/models/Qwen3-8B；脚本优先复用挂载，必要时复制模型。
+        服务在后台运行，启动脚本返回终端后 API 仍继续运行。
+
+    5、以后改用其他端口——宿主机执行
+        例如改为 8888（保持使用上面同一终端中设置的服务IP和模型路径）：
+            VERL_API_PORT=8888
+            bash 5_verl_api.sh "$VERL_API_BIND_IP" "$VERL_API_PORT" "$VERL_API_MODEL"
+
+        在新的终端中，也可以直接写完整命令：
+            bash ~/sh/5_verl_api.sh 0.0.0.0 8888 /workspace/models/Qwen3-8B
+
+        在 host 模式下，新版 sh 会按参数优雅重启 API 来切换地址，不重建容器。
+        这是切换同一个 API 服务的端口，不是同时创建第二套服务；旧端口不再提供该 API。
+        若仍有进行中的长对话导致旧 API 未能退出，脚本会报错，等待请求结束后重试。
+
+    6、检查与访问
+        在上述设置了 VERL_API_PORT 的同一宿主机终端中，验证 HTTP 入口：
+            curl --noproxy '*' "http://127.0.0.1:${VERL_API_PORT}/healthz"
+
+        上面的本机检查对应服务IP为0.0.0.0或127.0.0.1；若指定了其他网卡IP，请改用该IP检查。
+        外部浏览器使用服务器实际IP和当前端口：
+            http://服务器实际IP:当前端口/docs          Swagger接口调试
+            http://服务器实际IP:当前端口/api-spec      给前端AI的完整接口规范
+            http://服务器实际IP:当前端口/openapi.json  机器可读接口Schema
+
+        读取认证Key：
+            sudo docker exec verl-l40s cat /workspace/verl_api_data/api_key
+
+        业务接口请求携带 Authorization: Bearer <Key>；Swagger页面可通过Authorize输入。
+        查看API日志：
+            sudo docker exec verl-l40s tail -f /workspace/verl_api_data/server.log
+
+        训练任务信息、loss历史、日志和实时事件分别通过 /api/v1/jobs/{id}、
+        /api/v1/jobs/{id}/metrics、/api/v1/jobs/{id}/logs、/api/v1/jobs/{id}/events 获取。
+        /healthz 成功仅表明 API HTTP 入口正常；训练是否成功仍需查看实际任务状态和日志。
+
+    7、以后重新启动
+        宿主机或容器重启后，在宿主机重新运行：
+            bash ~/sh/5_verl_api.sh 0.0.0.0 7877 /workspace/models/Qwen3-8B
+        如果希望继续使用8888，将第二个参数改为8888即可。脚本会先启动已停止的 verl-l40s 容器，再启动 API。
