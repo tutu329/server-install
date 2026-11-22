@@ -639,4 +639,8 @@ PY
         2）测试
             cd ~/life-agent
             ~/.venvs/life-agent-monitor/bin/python -m agent.monitor.agent_monitor_client
-            （agent_monitor_client会提醒输入manage_api_keys返回的api_key）
+            （agent_monitor_client会提醒输入manage_api_keys返回的api_key，执行下述指令即可：
+                read -rsp '请输入 monitor 的 api_key：' SYSTEM_API_KEY
+                   echo
+                   export SYSTEM_API_KEY
+            ）
