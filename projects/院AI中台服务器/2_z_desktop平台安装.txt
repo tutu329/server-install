@@ -624,5 +624,18 @@ PY
         AGENT_MONITOR_GLOBAL_KEY_ID=这里替换为第2步返回的id
     4、测试z-desktop服务的环境变量已有该key
         sudo docker compose -f "$COMPOSE_FILE" exec life-agent printenv AGENT_MONITOR_GLOBAL_KEY_ID
-    5、独立进程测试（获取所有用户agent的回调ws信息）
-        python -m agent.monitor.agent_monitor_client
+    5、宿主机：进行独立进程测试（获取所有用户agent的回调ws信息）
+        1）安装虚拟环境
+            python3.12 -m venv ~/.venvs/life-agent-monitor
+            source ~/.venvs/life-agent-monitor/bin/activate
+            python -m pip install \
+              'websocket-client==1.9.0' \
+              'pydantic==2.12.5' \
+              'requests==2.32.5' \
+              'colorama==0.4.6' \
+              'python-dotenv==1.2.1' \
+              'tiktoken==0.12.0' \
+              wcwidth
+        2）测试
+            cd ~/life-agent
+            ~/.venvs/life-agent-monitor/bin/python -m agent.monitor.agent_monitor_client
