@@ -621,7 +621,7 @@ PY
           --name developer-agent-monitor
         (在输出的 JSON 里找到 id 和 api_key。把明文 api_key 存入开发者自己的密码管理器，明文只在创建时返回一次。服务端配置使用完整的 id，请避开旁边的 key_prefix 字段。)
     3、把 id 写入部署机的项目根目录 .env
-        AGENT_MONITOR_GLOBAL_KEY_ID=这里替换为第2步返回的id
+        AGENT_MONITOR_GLOBAL_KEY_ID=这里替换为第2步返回的id（注意不是api_key而是id）
     4、测试z-desktop服务的环境变量已有该key
         sudo docker compose -f "$COMPOSE_FILE" exec life-agent printenv AGENT_MONITOR_GLOBAL_KEY_ID
     5、宿主机：进行独立进程测试（获取所有用户agent的回调ws信息）
@@ -639,3 +639,4 @@ PY
         2）测试
             cd ~/life-agent
             ~/.venvs/life-agent-monitor/bin/python -m agent.monitor.agent_monitor_client
+            （agent_monitor_client会提醒输入manage_api_keys返回的api_key）
