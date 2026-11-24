@@ -404,3 +404,14 @@ echo "需要重新启动时，运行 life-agent-offline-restart.sh。"
         2)平时运行: deploy/2_rebuild_restart_life_agent.sh
         3)当执行2_rebuild_restart_life_agent.sh报网络占用错误时: deploy/3_cleanup_zdesktop_app_containers.sh
         4)签发BFF的admin的api_key: 执行deploy/4_create_bff_admin_api_key.sh
+        5）数据库（如有新的持久化内容）的migration(life-agent/下):
+(
+  set -e
+  compose() {
+    sudo docker compose --env-file .env -f deploy/ocean_base/docker-compose-traefik.yml "$@"
+  }
+  app_owner=$(compose config --format json | python3 -c 'import json, sys; print(json.load(sys.stdin)["services"]["life-agent"]["user"])')
+  sudo install -d -m 0700 -o "${app_owner%:*}" -g "${app_owner#*:}" /home/tutu/z-desktop/agent_persistence
+  compose run --rm --no-deps life-agent alembic -c alembic_oceanbase.ini upgrade head
+  compose run --rm --no-deps life-agent alembic -c alembic_oceanbase.ini current
+)
