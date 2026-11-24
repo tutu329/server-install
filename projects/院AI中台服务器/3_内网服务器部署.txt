@@ -125,31 +125,29 @@
              (注意：要在DEFAULT_API_KEY即"平台默认模型"之前)
         5) 设置平台默认模型及参数
         6）下载tiktoken
-            （1）外网电脑上
+            （1）【可省略】外网电脑上
                 mkdir -p data-gym-cache
                 curl -fL \
                   https://openaipublic.blob.core.windows.net/encodings/cl100k_base.tiktoken \
                   -o data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
-            （2）校验文件（结果应为223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7）
+            （2）【可省略】校验文件（结果应为223921b76ee99bde995b7ff738513eef100fb51d18c93597a113bcffe865b2a7）
                 # Linux
                 sha256sum data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
                 # macOS
                 shasum -a 256 data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
-            （3）复制前确保目录和文件分别具有可读权限
+            （3）【可省略】复制前确保目录和文件分别具有可读权限
                 chmod 755 data-gym-cache
                 chmod 644 data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
-            （4）将整个 data-gym-cache 文件夹带到内网服务器，在该文件夹的上级目录执行：
+            （4）【可省略】将整个 data-gym-cache 文件夹带到内网服务器的life-agent/deploy/，在该文件夹的上级目录执行：
                 1）中止2_rebuild_restart_life_agent.sh
                 2）在life-agent/下创建和执行下述脚本:
                     vi life-agent-offline-restart.sh
-                    bash ./life-agent-offline-restart.sh \
-                      ../data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+                    bash ./life-agent-offline-restart.sh
                 3）查看日志
                     sudo docker logs --since=2m -f life-agent-app-oceanbase
                 4）代码若有更新
                     bash ./life-agent-offline-stop.sh
-                    bash ./life-agent-offline-restart.sh \
-                      ../data-gym-cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4
+                    bash ./life-agent-offline-restart.sh
                 5）如果life-agent-oceanbase:1.0.0被更新了，执行下述脚本让life-agent-offline-restart.sh能找到life-agent-oceanbase:offline-runtime-base：
                     sudo docker tag life-agent-oceanbase:1.0.0 life-agent-oceanbase:offline-runtime-base
                         注1，外网机重新编译的指令为(life-agent/下): sudo docker compose --env-file .env -f deploy/ocean_base/docker-compose-traefik.yml build life-agent
