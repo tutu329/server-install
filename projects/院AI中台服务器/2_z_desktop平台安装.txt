@@ -612,7 +612,7 @@ PY
     sudo sysctl fs.aio-nr fs.aio-max-nr
 3）重启z-desktop服务、重启traefik服务(sudo docker restart zdesktop-traefik)
 
-七、开发人员获取所有用户agent回调ws信息的设置（life-agent/下）
+八、开发人员获取所有用户agent回调ws信息的设置（life-agent/下）
     1、COMPOSE_FILE=deploy/ocean_base/docker-compose-traefik.yml
     2、签发专用key
         sudo docker compose -f "$COMPOSE_FILE" exec life-agent \
