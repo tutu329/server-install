@@ -153,7 +153,8 @@
                 5）如果life-agent-oceanbase:1.0.0被更新了，执行下述脚本让life-agent-offline-restart.sh能找到life-agent-oceanbase:offline-runtime-base：
                     sudo docker tag life-agent-oceanbase:1.0.0 life-agent-oceanbase:offline-runtime-base
                         注1，外网机重新编译的指令为(life-agent/下): sudo docker compose --env-file .env -f deploy/ocean_base/docker-compose-traefik.yml build life-agent
-                        注2，外网手动重新编译镜像后，直接运行2_rebuild_restart_life_agent.sh即可。
+                        注2，进入容器查看：sudo docker compose --env-file .env -f deploy/ocean_base/docker-compose-traefik.yml exec -it life-agent bash
+                        注3，外网手动重新编译镜像后，直接运行2_rebuild_restart_life_agent.sh即可。
 # -------------------------------内网服务器修正life-agent-offline-restart.sh的脚本-----------------------------------------
 #!/usr/bin/env bash
 # 在 life-agent 项目根目录执行：
